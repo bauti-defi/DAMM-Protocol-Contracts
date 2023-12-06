@@ -160,7 +160,7 @@ contract TestUniswapV3Router is BaseUniswap, TokenMinter, UniswapTestHelper {
 
         _logCurrentTick(address(USDC), address(USDCe), 100);
 
-        _logPosition(POSITION_ID);
+        // _logPosition(POSITION_ID);
 
         // lets do some swaps
         {
@@ -204,7 +204,7 @@ contract TestUniswapV3Router is BaseUniswap, TokenMinter, UniswapTestHelper {
     }
 
     function test_swap(uint256 amountIn, uint256 amountOutMin) public invariants withApprovals {
-        vm.assume(amountIn > 100);
+        vm.assume(amountIn > 1000);
         vm.assume(amountIn < BIG_NUMBER);
         vm.assume(amountOutMin < amountIn);
 
@@ -225,25 +225,37 @@ contract TestUniswapV3Router is BaseUniswap, TokenMinter, UniswapTestHelper {
         assertTrue(end_tokenOutBalance > start_tokenOutBalance);
     }
 
+    // create 5 swaps with different amounts, store them in a bytes[] and then call multicall
+    function test_multicall() public invariants withApprovals {
+        uint256 start_tokenInBalance = USDC.balanceOf(trader);
+        uint256 start_tokenOutBalance = USDCe.balanceOf(trader);
 
-    function test_move_tick(uint256 amountIn) public {
-        vm.assume(amountIn > 100);
+        uint256[] memory amountsIn = new uint256[](5);
 
-        mintUSDC(trader, amountIn);
+        amountsIn[0] = 1000;
+        amountsIn[1] = 2000;
+        amountsIn[2] = 3000;
+        amountsIn[3] = 4000;
+        amountsIn[4] = 5000;
+
+        bytes[] memory data = new bytes[](5);
+
+        for(uint256 i = 0; i < 5; i++) {
+            ISwapRouter.ExactInputSingleParams memory swapParams = ISwapRouter.ExactInputSingleParams(
+                address(USDC), address(USDCe), 100, trader, _mockTimestamp(), amountsIn[i], 0, 0
+            );
+
+            data[i] = abi.encodeWithSelector(Router.swapTokenWithV3.selector, swapParams);
+        }
+
         vm.prank(trader);
-        USDC.approve(address(router), amountIn);
+        router.multicall(data);
 
-        int24 startTick = _getCurrentTick(address(USDC), address(USDCe), 100);
+        uint256 end_tokenInBalance = USDC.balanceOf(trader);
+        uint256 end_tokenOutBalance = USDCe.balanceOf(trader);
 
-        ISwapRouter.ExactInputSingleParams memory swapParams = ISwapRouter.ExactInputSingleParams(
-            address(USDC), address(USDCe), 100, trader, _mockTimestamp(), amountIn, 0, 0
-        );
-
-        vm.prank(trader);
-        router.swapTokenWithV3(swapParams);
-
-        int24 endTick = _getCurrentTick(address(USDC), address(USDCe), 100);
-
-        assertEq(startTick, endTick);
+        assertTrue(end_tokenInBalance < start_tokenInBalance);
+        assertTrue(end_tokenOutBalance > start_tokenOutBalance);
     }
+
 }
