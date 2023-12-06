@@ -43,6 +43,10 @@ contract UniswapTestHelper {
         (, currentTick,,,,,) = _getPool(tokenA, tokenB, fee).slot0();
     }
 
+    function _logCurrentTick(address tokenA, address tokenB, uint24 fee) internal view {
+        console2.logInt(_getCurrentTick(tokenA, tokenB, fee));
+    }
+
     function _mockTimestamp() internal view returns (uint256) {
         return block.timestamp + 5000;
     }

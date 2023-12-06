@@ -15,7 +15,7 @@ import {UniswapTestHelper} from "@test/utils/UniswapTestHelper.sol";
 import {IERC721} from "@openzeppelin-contracts/token/ERC721/IERC721.sol";
 
 contract TestUniswapV3Router is BaseUniswap, TokenMinter, UniswapTestHelper {
-    uint256 constant BIG_NUMBER = 10 ** 4;
+    uint256 constant BIG_NUMBER = 10 ** 8;
 
     address public deployer;
     address public trader;
@@ -153,20 +153,58 @@ contract TestUniswapV3Router is BaseUniswap, TokenMinter, UniswapTestHelper {
     // Nothing being collected since no fees have been accrued
     function test_collect() public invariants withApprovals {
         INonfungiblePositionManager.MintParams memory mintParams =
-            _mintPositionParameter(trader, address(USDC), address(USDCe), 100, 100, 100);
+            _mintPositionParameter(trader, address(USDC), address(USDCe), 100, BIG_NUMBER / 2, BIG_NUMBER / 2);
 
         vm.prank(trader);
         router.mintV3Position(mintParams);
 
+        _logCurrentTick(address(USDC), address(USDCe), 100);
+
+        _logPosition(POSITION_ID);
+
+        // lets do some swaps
+        {
+            address swapper = makeAddr("SWAPPER");
+
+            // give swapper tokens
+            mintUSDC(swapper, BIG_NUMBER * 100);
+            mintUSDCe(swapper, BIG_NUMBER * 100);
+
+            // approve router to spend swapper tokens
+            vm.startPrank(swapper);
+            USDC.approve(address(router), type(uint256).max);
+            USDCe.approve(address(router), type(uint256).max);
+            vm.stopPrank();
+
+            // swap back and fourth
+            for(uint256 i = 0; i < 100; i++) {
+                address tokenIn = (i % 2 == 0) ? address(USDC) : address(USDCe);
+                address tokenOut = (i % 2 == 0) ? address(USDCe) : address(USDC);
+
+                ISwapRouter.ExactInputSingleParams memory swapParams = ISwapRouter.ExactInputSingleParams(
+                    tokenIn, tokenOut, 100, swapper, _mockTimestamp(), 10000, 0, 0
+                );
+
+                vm.prank(swapper);
+                router.swapTokenWithV3(swapParams);
+            }
+        }
+
+        // _logPosition(POSITION_ID);
+
         INonfungiblePositionManager.CollectParams memory collectParams =
-            INonfungiblePositionManager.CollectParams(POSITION_ID, trader, 10, 10);
+            INonfungiblePositionManager.CollectParams(POSITION_ID, trader, 1000, 1000);
 
         vm.prank(trader);
         router.collectV3TokensOwed(collectParams);
+
+        // _logPosition(POSITION_ID);
+
+        _logCurrentTick(address(USDC), address(USDCe), 100);
     }
 
     function test_swap(uint256 amountIn, uint256 amountOutMin) public invariants withApprovals {
-        vm.assume(amountIn > 10);
+        vm.assume(amountIn > 100);
         vm.assume(amountIn < BIG_NUMBER);
         vm.assume(amountOutMin < amountIn);
 
@@ -185,5 +223,27 @@ contract TestUniswapV3Router is BaseUniswap, TokenMinter, UniswapTestHelper {
 
         assertTrue(end_tokenInBalance < start_tokenInBalance);
         assertTrue(end_tokenOutBalance > start_tokenOutBalance);
+    }
+
+
+    function test_move_tick(uint256 amountIn) public {
+        vm.assume(amountIn > 100);
+
+        mintUSDC(trader, amountIn);
+        vm.prank(trader);
+        USDC.approve(address(router), amountIn);
+
+        int24 startTick = _getCurrentTick(address(USDC), address(USDCe), 100);
+
+        ISwapRouter.ExactInputSingleParams memory swapParams = ISwapRouter.ExactInputSingleParams(
+            address(USDC), address(USDCe), 100, trader, _mockTimestamp(), amountIn, 0, 0
+        );
+
+        vm.prank(trader);
+        router.swapTokenWithV3(swapParams);
+
+        int24 endTick = _getCurrentTick(address(USDC), address(USDCe), 100);
+
+        assertEq(startTick, endTick);
     }
 }
