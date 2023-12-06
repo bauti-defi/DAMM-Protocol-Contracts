@@ -2,15 +2,21 @@
 pragma solidity ^0.8.0;
 
 import {INonfungiblePositionManager} from "@src/interfaces/INonfungiblePositionManager.sol";
+import {ISwapRouter} from "@src/interfaces/ISwapRouter.sol";
 
 interface IRouter {
-    error CallerMustBeReceiptient();
-    
+    error InvalidRecipient();
+    error TokenNotWhitelisted();
+
     function uniswapV3PositionManager() external view returns (INonfungiblePositionManager);
 
-    function mintV3Position(INonfungiblePositionManager.MintParams calldata params) external;
+    function uniswapV3SwapRouter() external view returns (ISwapRouter);
 
-    function burnV3Position(uint256 tokenId) external;
+    function owner() external view returns (address);
+
+    function swapTokenWithV3(ISwapRouter.ExactInputSingleParams memory params) external;
+
+    function mintV3Position(INonfungiblePositionManager.MintParams calldata params) external;
 
     function collectV3TokensOwed(INonfungiblePositionManager.CollectParams calldata params) external;
 
@@ -19,5 +25,4 @@ interface IRouter {
 
     function decreaseV3PositionLiquidity(INonfungiblePositionManager.DecreaseLiquidityParams calldata params)
         external;
-
 }
