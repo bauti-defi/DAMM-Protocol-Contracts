@@ -12,7 +12,11 @@ interface IRouter {
 
     function uniswapV3SwapRouter() external view returns (ISwapRouter);
 
+    function tokenWhitelist(address) external view returns (address);
+
     function owner() external view returns (address);
+
+    function isTokenWhitelisted(address token) external view returns (bool);
 
     function swapTokenWithV3(ISwapRouter.ExactInputSingleParams memory params) external;
 
