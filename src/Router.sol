@@ -9,23 +9,23 @@ import {IERC721} from "@openzeppelin-contracts/token/ERC721/IERC721.sol";
 import {TransferHelper} from "@src/lib/TransferHelper.sol";
 import {ReentrancyGuard} from "@src/lib/ReentrancyGuard.sol";
 import {IMulticall} from "@src/interfaces/IMulticall.sol";
+import {IPool} from "@src/interfaces/IPool.sol";
 
 contract Router is IRouter, IMulticall, ReentrancyGuard {
-
-    modifier setCaller {
-        caller = msg.sender;
+    modifier setCaller() {
+        if (caller == address(0)) caller = msg.sender;
         _;
         caller = address(0);
     }
 
     address internal constant SENTINEL_TOKEN = address(0x1);
-    
+
     address internal caller;
 
     INonfungiblePositionManager public immutable uniswapV3PositionManager;
     ISwapRouter public immutable uniswapV3SwapRouter;
+    IPool public immutable aavePool;
     address public immutable owner;
-
 
     mapping(address => address) public tokenWhitelist;
 
@@ -33,11 +33,13 @@ contract Router is IRouter, IMulticall, ReentrancyGuard {
         address _owner,
         address _uniswapV3PositionManager,
         address _uniswapV3SwapRouter,
+        address _aavePool,
         address[] memory _whitelistedTokens
     ) {
         owner = _owner;
         uniswapV3SwapRouter = ISwapRouter(_uniswapV3SwapRouter);
         uniswapV3PositionManager = INonfungiblePositionManager(_uniswapV3PositionManager);
+        aavePool = IPool(_aavePool);
 
         tokenWhitelist[SENTINEL_TOKEN] = SENTINEL_TOKEN;
 
@@ -67,7 +69,7 @@ contract Router is IRouter, IMulticall, ReentrancyGuard {
         }
     }
 
-    function multicall(bytes[] calldata data) external payable override nonReentrant returns (bytes[] memory results)  {
+    function multicall(bytes[] calldata data) external payable override nonReentrant returns (bytes[] memory results) {
         results = new bytes[](data.length);
         for (uint256 i = 0; i < data.length; i++) {
             (bool success, bytes memory result) = address(this).delegatecall(data[i]);
@@ -140,7 +142,11 @@ contract Router is IRouter, IMulticall, ReentrancyGuard {
         }
     }
 
-    function collectV3TokensOwed(INonfungiblePositionManager.CollectParams calldata params) external override setCaller {
+    function collectV3TokensOwed(INonfungiblePositionManager.CollectParams calldata params)
+        external
+        override
+        setCaller
+    {
         if (params.recipient != caller) revert InvalidRecipient();
 
         (address token0, address token1) = _getV3PositionTokenPair(params.tokenId);
@@ -195,12 +201,23 @@ contract Router is IRouter, IMulticall, ReentrancyGuard {
         uniswapV3PositionManager.decreaseLiquidity(params);
     }
 
+    function supplyAAVE(address token, uint256 amount) external override setCaller {
+        _checkTokenIsWhitelisted(token);
+
+        aavePool.supply(token, amount, caller, 0);
+    }
+
+    function withdrawAAVE(address asset, uint256 amount) external override setCaller {
+        _checkTokenIsWhitelisted(asset);
+
+        aavePool.withdraw(asset, amount, caller);
+    }
+
     fallback() external payable {
         revert("Router: invalid fallback");
     }
 
-    receive () external payable {
+    receive() external payable {
         revert("Router: invalid receive");
     }
-
 }

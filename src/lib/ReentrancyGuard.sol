@@ -2,7 +2,6 @@
 pragma solidity ^0.8.23;
 
 abstract contract ReentrancyGuard {
-
     error Reentrance();
 
     enum ReentrancyLock {

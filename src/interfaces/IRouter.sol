@@ -29,4 +29,8 @@ interface IRouter {
 
     function decreaseV3PositionLiquidity(INonfungiblePositionManager.DecreaseLiquidityParams calldata params)
         external;
+
+    function supplyAAVE(address token, uint256 amount) external;
+
+    function withdrawAAVE(address asset, uint256 amount) external;
 }

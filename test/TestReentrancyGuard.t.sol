@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 pragma solidity ^0.8.23;
 
-
 import {Test} from "@forge-std/Test.sol";
 
 import {ReentrancyGuard} from "@src/lib/ReentrancyGuard.sol";
@@ -11,15 +10,12 @@ interface ITester {
 }
 
 contract Caller {
-
     function call_tester() external {
         ITester(msg.sender).test_guard();
     }
-
 }
 
 contract TestReentrancyGuard is ITester, ReentrancyGuard, Test {
-
     Caller caller;
 
     function setUp() public {
@@ -31,4 +27,3 @@ contract TestReentrancyGuard is ITester, ReentrancyGuard, Test {
         caller.call_tester();
     }
 }
-

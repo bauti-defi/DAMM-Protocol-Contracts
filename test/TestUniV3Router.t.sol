@@ -33,7 +33,7 @@ contract TestUniswapV3Router is BaseUniswap, TokenMinter, UniswapTestHelper {
         tokenWhitelist[1] = address(USDCe);
 
         vm.prank(deployer);
-        router = new Router(deployer, address(uniswapV3PositionManager), address(uniswapV3SwapRouter), tokenWhitelist);
+        router = new Router(deployer, address(uniswapV3PositionManager), address(uniswapV3SwapRouter), address(1), tokenWhitelist);
         vm.label(address(router), "ROUTER");
 
         assertEq(router.owner(), deployer);
@@ -177,13 +177,12 @@ contract TestUniswapV3Router is BaseUniswap, TokenMinter, UniswapTestHelper {
             vm.stopPrank();
 
             // swap back and fourth
-            for(uint256 i = 0; i < 100; i++) {
+            for (uint256 i = 0; i < 100; i++) {
                 address tokenIn = (i % 2 == 0) ? address(USDC) : address(USDCe);
                 address tokenOut = (i % 2 == 0) ? address(USDCe) : address(USDC);
 
-                ISwapRouter.ExactInputSingleParams memory swapParams = ISwapRouter.ExactInputSingleParams(
-                    tokenIn, tokenOut, 100, swapper, _mockTimestamp(), 10000, 0, 0
-                );
+                ISwapRouter.ExactInputSingleParams memory swapParams =
+                    ISwapRouter.ExactInputSingleParams(tokenIn, tokenOut, 100, swapper, _mockTimestamp(), 10000, 0, 0);
 
                 vm.prank(swapper);
                 router.swapTokenWithV3(swapParams);
@@ -240,7 +239,7 @@ contract TestUniswapV3Router is BaseUniswap, TokenMinter, UniswapTestHelper {
 
         bytes[] memory data = new bytes[](5);
 
-        for(uint256 i = 0; i < 5; i++) {
+        for (uint256 i = 0; i < 5; i++) {
             ISwapRouter.ExactInputSingleParams memory swapParams = ISwapRouter.ExactInputSingleParams(
                 address(USDC), address(USDCe), 100, trader, _mockTimestamp(), amountsIn[i], 0, 0
             );
@@ -257,5 +256,4 @@ contract TestUniswapV3Router is BaseUniswap, TokenMinter, UniswapTestHelper {
         assertTrue(end_tokenInBalance < start_tokenInBalance);
         assertTrue(end_tokenOutBalance > start_tokenOutBalance);
     }
-
 }
