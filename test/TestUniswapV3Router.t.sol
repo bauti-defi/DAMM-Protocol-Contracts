@@ -5,7 +5,7 @@ import {Test} from "@forge-std/Test.sol";
 
 import {ISwapRouter} from "@src/interfaces/ISwapRouter.sol";
 import {INonfungiblePositionManager} from "@src/interfaces/INonfungiblePositionManager.sol";
-import {Router} from "@src/Router.sol";
+import {UniswapV3Router} from "@src/routers/UniswapV3Router.sol";
 import {TokenWhitelistRegistry} from "@src/base/TokenWhitelistRegistry.sol";
 
 import {BaseUniswap} from "@test/base/BaseUniswap.sol";
@@ -20,7 +20,7 @@ contract TestUniswapV3Router is BaseUniswap, TokenMinter, UniswapTestHelper {
 
     address public deployer;
     address public trader;
-    Router public router;
+    UniswapV3Router public router;
     TokenWhitelistRegistry public tokenWhitelistRegistry;
 
     constructor() UniswapTestHelper(uniswapV3SwapRouter, uniswapV3PositionManager) {}
@@ -36,12 +36,8 @@ contract TestUniswapV3Router is BaseUniswap, TokenMinter, UniswapTestHelper {
 
         vm.startPrank(deployer);
         tokenWhitelistRegistry = new TokenWhitelistRegistry();
-        router = new Router(
-            deployer,
-            address(tokenWhitelistRegistry),
-            address(uniswapV3PositionManager),
-            address(uniswapV3SwapRouter),
-            address(1)
+        router = new UniswapV3Router(
+            deployer, address(tokenWhitelistRegistry), address(uniswapV3PositionManager), address(uniswapV3SwapRouter)
         );
         vm.stopPrank();
 
@@ -259,7 +255,7 @@ contract TestUniswapV3Router is BaseUniswap, TokenMinter, UniswapTestHelper {
                 address(USDC), address(USDCe), 100, trader, _mockTimestamp(), amountsIn[i], 0, 0
             );
 
-            data[i] = abi.encodeWithSelector(Router.swapTokenWithV3.selector, swapParams);
+            data[i] = abi.encodeWithSelector(UniswapV3Router.swapTokenWithV3.selector, swapParams);
         }
 
         vm.prank(trader);
