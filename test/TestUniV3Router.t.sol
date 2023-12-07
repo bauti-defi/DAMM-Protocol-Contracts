@@ -6,6 +6,7 @@ import {Test} from "@forge-std/Test.sol";
 import {ISwapRouter} from "@src/interfaces/ISwapRouter.sol";
 import {INonfungiblePositionManager} from "@src/interfaces/INonfungiblePositionManager.sol";
 import {Router} from "@src/Router.sol";
+import {TokenWhitelistRegistry} from "@src/base/TokenWhitelistRegistry.sol";
 
 import {BaseUniswap} from "@test/base/BaseUniswap.sol";
 import {TokenMinter} from "@test/base/TokenMinter.sol";
@@ -20,34 +21,56 @@ contract TestUniswapV3Router is BaseUniswap, TokenMinter, UniswapTestHelper {
     address public deployer;
     address public trader;
     Router public router;
+    TokenWhitelistRegistry public tokenWhitelistRegistry;
 
     constructor() UniswapTestHelper(uniswapV3SwapRouter, uniswapV3PositionManager) {}
 
     function setUp() public override(BaseUniswap, TokenMinter) {
         super.setUp();
 
+        address pool = address(_getPool(address(USDC), address(USDCe), 100));
+        vm.label(pool, "UniswapPool");
+
         deployer = makeAddr("DEPLOYER");
+        trader = makeAddr("TRADER");
+
+        vm.startPrank(deployer);
+        tokenWhitelistRegistry = new TokenWhitelistRegistry();
+        router = new Router(
+            deployer,
+            address(tokenWhitelistRegistry),
+            address(uniswapV3PositionManager),
+            address(uniswapV3SwapRouter),
+            address(1)
+        );
+        vm.stopPrank();
+
+        vm.label(address(router), "ROUTER");
+        vm.label(address(tokenWhitelistRegistry), "TOKEN_WHITELIST_REGISTRY");
+
+        assertEq(router.owner(), deployer);
+        assertEq(address(router.uniswapV3PositionManager()), address(uniswapV3PositionManager));
+        assertEq(address(router.uniswapV3SwapRouter()), address(uniswapV3SwapRouter));
+        assertEq(USDC.balanceOf(address(router)), 0);
+        assertEq(USDCe.balanceOf(address(router)), 0);
+
+        // should not be whitelisted yet
+        assertFalse(router.isTokenWhitelisted(trader, address(USDC)));
+        assertFalse(router.isTokenWhitelisted(trader, address(USDCe)));
 
         address[] memory tokenWhitelist = new address[](2);
         tokenWhitelist[0] = address(USDC);
         tokenWhitelist[1] = address(USDCe);
 
-        vm.prank(deployer);
-        router = new Router(deployer, address(uniswapV3PositionManager), address(uniswapV3SwapRouter), address(1), tokenWhitelist);
-        vm.label(address(router), "ROUTER");
+        address[] memory routerWhitelist = new address[](2);
+        routerWhitelist[0] = address(router);
+        routerWhitelist[1] = address(router);
 
-        assertEq(router.owner(), deployer);
-        assertEq(address(router.uniswapV3PositionManager()), address(uniswapV3PositionManager));
-        assertEq(address(router.uniswapV3SwapRouter()), address(uniswapV3SwapRouter));
-        assertTrue(router.isTokenWhitelisted(address(USDC)));
-        assertTrue(router.isTokenWhitelisted(address(USDCe)));
-        assertEq(USDC.balanceOf(address(router)), 0);
-        assertEq(USDCe.balanceOf(address(router)), 0);
+        vm.prank(trader);
+        tokenWhitelistRegistry.whitelistTokens(routerWhitelist, tokenWhitelist);
 
-        trader = makeAddr("TRADER");
-
-        address pool = address(_getPool(address(USDC), address(USDCe), 100));
-        vm.label(pool, "UniswapPool");
+        assertTrue(tokenWhitelistRegistry.isTokenWhitelisted(trader, address(router), address(USDC)));
+        assertTrue(tokenWhitelistRegistry.isTokenWhitelisted(trader, address(router), address(USDCe)));
 
         // give trader tokens
         mintUSDC(trader, BIG_NUMBER);
@@ -56,8 +79,8 @@ contract TestUniswapV3Router is BaseUniswap, TokenMinter, UniswapTestHelper {
 
     modifier withApprovals() {
         vm.startPrank(trader);
-        USDC.approve(address(router), BIG_NUMBER);
-        USDCe.approve(address(router), BIG_NUMBER);
+        USDC.approve(address(router), type(uint256).max);
+        USDCe.approve(address(router), type(uint256).max);
         IERC721(address(uniswapV3PositionManager)).setApprovalForAll(address(router), true);
         vm.stopPrank();
         _;
@@ -158,10 +181,6 @@ contract TestUniswapV3Router is BaseUniswap, TokenMinter, UniswapTestHelper {
         vm.prank(trader);
         router.mintV3Position(mintParams);
 
-        _logCurrentTick(address(USDC), address(USDCe), 100);
-
-        // _logPosition(POSITION_ID);
-
         // lets do some swaps
         {
             address swapper = makeAddr("SWAPPER");
@@ -174,6 +193,8 @@ contract TestUniswapV3Router is BaseUniswap, TokenMinter, UniswapTestHelper {
             vm.startPrank(swapper);
             USDC.approve(address(router), type(uint256).max);
             USDCe.approve(address(router), type(uint256).max);
+            tokenWhitelistRegistry.whitelistToken(address(router), address(USDC));
+            tokenWhitelistRegistry.whitelistToken(address(router), address(USDCe));
             vm.stopPrank();
 
             // swap back and fourth
@@ -189,17 +210,11 @@ contract TestUniswapV3Router is BaseUniswap, TokenMinter, UniswapTestHelper {
             }
         }
 
-        // _logPosition(POSITION_ID);
-
         INonfungiblePositionManager.CollectParams memory collectParams =
             INonfungiblePositionManager.CollectParams(POSITION_ID, trader, 1000, 1000);
 
         vm.prank(trader);
         router.collectV3TokensOwed(collectParams);
-
-        // _logPosition(POSITION_ID);
-
-        _logCurrentTick(address(USDC), address(USDCe), 100);
     }
 
     function test_swap(uint256 amountIn, uint256 amountOutMin) public invariants withApprovals {

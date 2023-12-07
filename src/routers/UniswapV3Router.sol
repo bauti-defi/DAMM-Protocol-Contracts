@@ -1,64 +1,26 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 pragma solidity ^0.8.23;
 
-import {IRouter} from "@src/interfaces/IRouter.sol";
 import {INonfungiblePositionManager} from "@src/interfaces/INonfungiblePositionManager.sol";
 import {ISwapRouter} from "@src/interfaces/ISwapRouter.sol";
 import {IERC20} from "@openzeppelin-contracts/token/ERC20/IERC20.sol";
 import {IERC721} from "@openzeppelin-contracts/token/ERC721/IERC721.sol";
 import {TransferHelper} from "@src/lib/TransferHelper.sol";
-import {ReentrancyGuard} from "@src/lib/ReentrancyGuard.sol";
-import {IMulticall} from "@src/interfaces/IMulticall.sol";
-import {IPool} from "@src/interfaces/IPool.sol";
 import {IUniswapV3Router} from "@src/interfaces/IUniswapV3Router.sol";
-import {IAaveV3Router} from "@src/interfaces/IAaveV3Router.sol";
-import {ITokenWhitelistRegistry} from "@src/interfaces/ITokenWhitelistRegistry.sol";
+import {BaseRouter} from "@src/base/BaseRouter.sol";
 
-contract Router is IRouter, IMulticall, IUniswapV3Router, IAaveV3Router, ReentrancyGuard {
-    modifier setCaller() {
-        if (caller == address(0)) caller = msg.sender;
-        _;
-        caller = address(0);
-    }
-
-    address internal caller;
-
-    ITokenWhitelistRegistry public immutable tokenWhitelistRegistry;
+contract UniswapV3Router is BaseRouter, IUniswapV3Router {
     INonfungiblePositionManager public immutable uniswapV3PositionManager;
     ISwapRouter public immutable uniswapV3SwapRouter;
-    IPool public immutable aaveV3Pool;
-    address public immutable owner;
 
     constructor(
         address _owner,
         address _tokenWhitelistRegistry,
         address _uniswapV3PositionManager,
-        address _uniswapV3SwapRouter,
-        address _aaveV3Pool
-    ) {
-        owner = _owner;
-        tokenWhitelistRegistry = ITokenWhitelistRegistry(_tokenWhitelistRegistry);
+        address _uniswapV3SwapRouter
+    ) BaseRouter(_owner, _tokenWhitelistRegistry) {
         uniswapV3SwapRouter = ISwapRouter(_uniswapV3SwapRouter);
         uniswapV3PositionManager = INonfungiblePositionManager(_uniswapV3PositionManager);
-        aaveV3Pool = IPool(_aaveV3Pool);
-    }
-
-    function multicall(bytes[] calldata data) external payable override nonReentrant returns (bytes[] memory results) {
-        results = new bytes[](data.length);
-        for (uint256 i = 0; i < data.length; i++) {
-            (bool success, bytes memory result) = address(this).delegatecall(data[i]);
-
-            if (!success) {
-                // Next 5 lines from https://ethereum.stackexchange.com/a/83577
-                if (result.length < 68) revert();
-                assembly {
-                    result := add(result, 0x04)
-                }
-                revert(abi.decode(result, (string)));
-            }
-
-            results[i] = result;
-        }
     }
 
     function _ensureTokenAllowance(address token, uint256 allowanceRequired) internal {
@@ -70,14 +32,6 @@ contract Router is IRouter, IMulticall, IUniswapV3Router, IAaveV3Router, Reentra
         if (tokenToApprove.allowance(address(this), address(uniswapV3PositionManager)) < allowanceRequired) {
             tokenToApprove.approve(address(uniswapV3PositionManager), type(uint256).max);
         }
-    }
-
-    function isTokenWhitelisted(address user, address token) public view returns (bool) {
-        return tokenWhitelistRegistry.isTokenWhitelisted(user, address(this), token);
-    }
-
-    function _checkTokenIsWhitelisted(address user, address token) internal view {
-        if (!isTokenWhitelisted(user, token)) revert TokenNotWhitelisted();
     }
 
     function _getV3PositionTokenPair(uint256 tokenId) internal view returns (address token0, address token1) {
@@ -204,23 +158,4 @@ contract Router is IRouter, IMulticall, IUniswapV3Router, IAaveV3Router, Reentra
 
         uniswapV3PositionManager.decreaseLiquidity(params);
     }
-
-    function supplyAAVE(address token, uint256 amount) external override setCaller {
-        _checkTokenIsWhitelisted(caller, token);
-
-        aaveV3Pool.supply(token, amount, caller, 0);
-    }
-
-    function withdrawAAVE(address asset, uint256 amount) external override setCaller {
-        _checkTokenIsWhitelisted(caller, asset);
-
-        aaveV3Pool.withdraw(asset, amount, caller);
-    }
-
-    fallback() external payable {
-        revert("Router: invalid fallback");
-    }
-
-    // @notice To receive ETH from WETH and NFT protocols
-    receive() external payable {}
 }
