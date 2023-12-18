@@ -6,10 +6,11 @@ import {ISwapRouter} from "@src/interfaces/ISwapRouter.sol";
 import {IERC20} from "@openzeppelin-contracts/token/ERC20/IERC20.sol";
 import {IERC721} from "@openzeppelin-contracts/token/ERC721/IERC721.sol";
 import {TransferHelper} from "@src/lib/TransferHelper.sol";
-import {IUniswapV3Router} from "@src/interfaces/IUniswapV3Router.sol";
+import {IUniswapV3PositionRouter} from "@src/interfaces/IUniswapV3PositionRouter.sol";
 import {BaseRouter} from "@src/base/BaseRouter.sol";
+import {IUniswapV3SwapRouter} from "@src/interfaces/IUniswapV3SwapRouter.sol";
 
-contract UniswapV3Router is BaseRouter, IUniswapV3Router {
+contract UniswapV3Router is BaseRouter, IUniswapV3PositionRouter, IUniswapV3SwapRouter {
     INonfungiblePositionManager public immutable uniswapV3PositionManager;
     ISwapRouter public immutable uniswapV3SwapRouter;
 
