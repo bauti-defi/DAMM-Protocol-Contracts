@@ -3,7 +3,7 @@ pragma solidity ^0.8.23;
 
 import {IRouter} from "@src/interfaces/IRouter.sol";
 import {IERC20} from "@openzeppelin-contracts/token/ERC20/IERC20.sol";
-import {ReentrancyGuard} from "@src/lib/ReentrancyGuard.sol";
+import {ReentrancyGuard} from "@src/base/ReentrancyGuard.sol";
 import {IMulticall} from "@src/interfaces/IMulticall.sol";
 import {ITokenWhitelistRegistry} from "@src/interfaces/ITokenWhitelistRegistry.sol";
 

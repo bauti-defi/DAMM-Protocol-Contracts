@@ -44,6 +44,7 @@ contract UniswapV3PositionRouter is BaseRouter, IUniswapV3PositionRouter {
         pool.mint(caller, tickLower, tickUpper, liquidity, abi.encode(callback));
     }
 
+    /// @notice Callback triggered by UniswapV3 pool upon minting
     function uniswapV3MintCallback(uint256 amount0Owed, uint256 amount1Owed, bytes calldata data) external {
         MintCallbackData memory decoded = abi.decode(data, (MintCallbackData));
         require(

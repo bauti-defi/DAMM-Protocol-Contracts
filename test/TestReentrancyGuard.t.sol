@@ -3,7 +3,7 @@ pragma solidity ^0.8.23;
 
 import {Test} from "@forge-std/Test.sol";
 
-import {ReentrancyGuard} from "@src/lib/ReentrancyGuard.sol";
+import {ReentrancyGuard} from "@src/base/ReentrancyGuard.sol";
 
 interface ITester {
     function test_guard() external;
