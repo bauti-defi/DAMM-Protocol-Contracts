@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 pragma solidity >=0.6.0;
 
-import "@openzeppelin-contracts/token/ERC20/IERC20.sol";
-
 library TransferHelper {
+
+    bytes4 private constant TRANSFER_FROM_SELECTOR = bytes4(keccak256(bytes("transferFrom(address,address,uint256)")));
+    bytes4 private constant TRANSFER_SELECTOR = bytes4(keccak256(bytes("transfer(address,uint256)")));
+    bytes4 private constant APPROVE_SELECTOR = bytes4(keccak256(bytes("approve(address,uint256)")));
+
     /// @notice Transfers tokens from the targeted address to the given destination
     /// @notice Errors with 'STF' if transfer fails
     /// @param token The contract address of the token to be transferred
@@ -12,7 +15,7 @@ library TransferHelper {
     /// @param value The amount to be transferred
     function safeTransferFrom(address token, address from, address to, uint256 value) internal {
         (bool success, bytes memory data) =
-            token.call(abi.encodeWithSelector(IERC20.transferFrom.selector, from, to, value));
+            token.call(abi.encodeWithSelector(TRANSFER_FROM_SELECTOR, from, to, value));
         require(success && (data.length == 0 || abi.decode(data, (bool))), "STF");
     }
 
@@ -22,7 +25,7 @@ library TransferHelper {
     /// @param to The recipient of the transfer
     /// @param value The value of the transfer
     function safeTransfer(address token, address to, uint256 value) internal {
-        (bool success, bytes memory data) = token.call(abi.encodeWithSelector(IERC20.transfer.selector, to, value));
+        (bool success, bytes memory data) = token.call(abi.encodeWithSelector(TRANSFER_SELECTOR, to, value));
         require(success && (data.length == 0 || abi.decode(data, (bool))), "ST");
     }
 
@@ -32,7 +35,7 @@ library TransferHelper {
     /// @param to The target of the approval
     /// @param value The amount of the given token the target will be allowed to spend
     function safeApprove(address token, address to, uint256 value) internal {
-        (bool success, bytes memory data) = token.call(abi.encodeWithSelector(IERC20.approve.selector, to, value));
+        (bool success, bytes memory data) = token.call(abi.encodeWithSelector(APPROVE_SELECTOR, to, value));
         require(success && (data.length == 0 || abi.decode(data, (bool))), "SA");
     }
 

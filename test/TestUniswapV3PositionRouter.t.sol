@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-pragma solidity ^0.8.23;
+pragma solidity >=0.6.0;
 
 import {Test} from "@forge-std/Test.sol";
 
@@ -76,7 +76,7 @@ contract TestUniswapV3PositionRouter is Test, TokenMinter, BaseUniswap {
         uint256 poolBalance1_start = USDCe.balanceOf(pool);
 
         vm.prank(caller);
-        router.mintPosition(token0, token1, fee, -10, 10, 10_000);
+        router.mintLiquidity(token0, token1, fee, -10, 10, 10_000);
 
         uint256 callerBalance0_end = USDC.balanceOf(caller);
         uint256 callerBalance1_end = USDCe.balanceOf(caller);
@@ -99,9 +99,31 @@ contract TestUniswapV3PositionRouter is Test, TokenMinter, BaseUniswap {
 
         vm.prank(caller);
         vm.expectRevert(IRouter.TokenNotWhitelisted.selector);
-        router.mintPosition(token0, token1, fee, -10, 10, 10_000);
+        router.mintLiquidity(token0, token1, fee, -10, 10, 10_000);
 
         assertEq(callerBalance0_start, USDC.balanceOf(caller));
         assertEq(callerBalance1_start, DAI.balanceOf(caller));
+    }
+
+    function test_burn() public invariants {
+        uint256 poolBalance0_start = USDC.balanceOf(pool);
+        uint256 poolBalance1_start = USDCe.balanceOf(pool);
+
+        vm.prank(caller);
+        router.mintLiquidity(token0, token1, fee, -10, 10, 10_000);
+
+        uint256 callerBalance0_start = USDC.balanceOf(caller);
+        uint256 callerBalance1_start = USDCe.balanceOf(caller);
+
+        vm.prank(caller);
+        router.burnLiquidity(token0, token1, fee, -10, 10, 10_000, 0, 0);
+
+        uint256 callerBalance0_end = USDC.balanceOf(caller);
+        uint256 callerBalance1_end = USDCe.balanceOf(caller);
+        uint256 poolBalance0_end = USDC.balanceOf(pool);
+        uint256 poolBalance1_end = USDCe.balanceOf(pool);
+
+        // assertEq(poolBalance0_end - poolBalance0_start, callerBalance0_start - callerBalance0_end);
+        // assertEq(poolBalance1_end - poolBalance1_start, callerBalance1_start - callerBalance1_end);
     }
 }

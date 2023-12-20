@@ -6,4 +6,4 @@ test-arb:
 	forge test --fork-url ${ARBI_RPC_URL} --etherscan-api-key ${ARBISCAN_API_KEY} --fork-block-number 124240758
 
 hot-test-arb:
-	forge test -vvvv -w --fork-url ${ARBI_RPC_URL} --etherscan-api-key ${ARBISCAN_API_KEY} --fork-block-number 124240758
+	forge test -vvv -w --fork-url ${ARBI_RPC_URL} --etherscan-api-key ${ARBISCAN_API_KEY} --fork-block-number 124240758
