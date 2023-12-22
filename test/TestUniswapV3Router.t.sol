@@ -187,10 +187,8 @@ contract TestUniswapV3Router is BaseUniswap, TokenMinter, UniswapTestHelper {
 
             // approve router to spend swapper tokens
             vm.startPrank(swapper);
-            USDC.approve(address(router), type(uint256).max);
-            USDCe.approve(address(router), type(uint256).max);
-            tokenWhitelistRegistry.whitelistToken(address(router), address(USDC));
-            tokenWhitelistRegistry.whitelistToken(address(router), address(USDCe));
+            USDC.approve(address(uniswapV3SwapRouter), type(uint256).max);
+            USDCe.approve(address(uniswapV3SwapRouter), type(uint256).max);
             vm.stopPrank();
 
             // swap back and fourth
@@ -202,7 +200,7 @@ contract TestUniswapV3Router is BaseUniswap, TokenMinter, UniswapTestHelper {
                     ISwapRouter.ExactInputSingleParams(tokenIn, tokenOut, 100, swapper, _mockTimestamp(), 10000, 0, 0);
 
                 vm.prank(swapper);
-                router.swapTokenWithV3(swapParams);
+                uniswapV3SwapRouter.exactInputSingle(swapParams);
             }
         }
 
@@ -213,58 +211,4 @@ contract TestUniswapV3Router is BaseUniswap, TokenMinter, UniswapTestHelper {
         router.collectV3TokensOwed(collectParams);
     }
 
-    function test_swap(uint256 amountIn, uint256 amountOutMin) public invariants withApprovals {
-        vm.assume(amountIn > 1000);
-        vm.assume(amountIn < BIG_NUMBER);
-        vm.assume(amountOutMin < amountIn);
-
-        uint256 start_tokenInBalance = USDC.balanceOf(trader);
-        uint256 start_tokenOutBalance = USDCe.balanceOf(trader);
-
-        ISwapRouter.ExactInputSingleParams memory swapParams = ISwapRouter.ExactInputSingleParams(
-            address(USDC), address(USDCe), 100, trader, _mockTimestamp(), amountIn, amountOutMin, 0
-        );
-
-        vm.prank(trader);
-        router.swapTokenWithV3(swapParams);
-
-        uint256 end_tokenInBalance = USDC.balanceOf(trader);
-        uint256 end_tokenOutBalance = USDCe.balanceOf(trader);
-
-        assertTrue(end_tokenInBalance < start_tokenInBalance);
-        assertTrue(end_tokenOutBalance > start_tokenOutBalance);
-    }
-
-    // create 5 swaps with different amounts, store them in a bytes[] and then call multicall
-    function test_multicall() public invariants withApprovals {
-        uint256 start_tokenInBalance = USDC.balanceOf(trader);
-        uint256 start_tokenOutBalance = USDCe.balanceOf(trader);
-
-        uint256[] memory amountsIn = new uint256[](5);
-
-        amountsIn[0] = 1000;
-        amountsIn[1] = 2000;
-        amountsIn[2] = 3000;
-        amountsIn[3] = 4000;
-        amountsIn[4] = 5000;
-
-        bytes[] memory data = new bytes[](5);
-
-        for (uint256 i = 0; i < 5; i++) {
-            ISwapRouter.ExactInputSingleParams memory swapParams = ISwapRouter.ExactInputSingleParams(
-                address(USDC), address(USDCe), 100, trader, _mockTimestamp(), amountsIn[i], 0, 0
-            );
-
-            data[i] = abi.encodeWithSelector(UniswapV3Router.swapTokenWithV3.selector, swapParams);
-        }
-
-        vm.prank(trader);
-        router.multicall(data);
-
-        uint256 end_tokenInBalance = USDC.balanceOf(trader);
-        uint256 end_tokenOutBalance = USDCe.balanceOf(trader);
-
-        assertTrue(end_tokenInBalance < start_tokenInBalance);
-        assertTrue(end_tokenOutBalance > start_tokenOutBalance);
-    }
 }
