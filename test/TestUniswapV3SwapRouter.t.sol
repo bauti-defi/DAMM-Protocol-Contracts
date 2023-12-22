@@ -106,7 +106,7 @@ contract TestUniswapV3SwapRouter is BaseUniswap, TokenMinter, UniswapTestHelper 
         );
 
         vm.prank(trader);
-        router.swapTokenWithV3(swapParams);
+        router.swapToken(swapParams);
 
         uint256 end_tokenInBalance = USDC.balanceOf(trader);
         uint256 end_tokenOutBalance = USDCe.balanceOf(trader);
@@ -135,7 +135,7 @@ contract TestUniswapV3SwapRouter is BaseUniswap, TokenMinter, UniswapTestHelper 
                 address(USDC), address(USDCe), 100, trader, _mockTimestamp(), amountsIn[i], 0, 0
             );
 
-            data[i] = abi.encodeWithSelector(UniswapV3SwapRouter.swapTokenWithV3.selector, swapParams);
+            data[i] = abi.encodeWithSelector(UniswapV3SwapRouter.swapToken.selector, swapParams);
         }
 
         vm.prank(trader);

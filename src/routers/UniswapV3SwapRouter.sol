@@ -26,7 +26,7 @@ contract UniswapV3SwapRouter is BaseRouter, IUniswapV3SwapRouter {
         }
     }
 
-    function swapTokenWithV3(ISwapRouter.ExactInputSingleParams memory params) external payable override setCaller {
+    function swapToken(ISwapRouter.ExactInputSingleParams memory params) external payable override setCaller {
         if (params.recipient != caller) revert InvalidRecipient();
 
         // check tokens are whitelisted
