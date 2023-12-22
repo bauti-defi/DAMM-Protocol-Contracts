@@ -10,26 +10,18 @@ import {IUniswapV3PositionRouter} from "@src/interfaces/IUniswapV3PositionRouter
 import {BaseRouter} from "@src/base/BaseRouter.sol";
 import {IUniswapV3SwapRouter} from "@src/interfaces/IUniswapV3SwapRouter.sol";
 
-contract UniswapV3Router is BaseRouter, IUniswapV3PositionRouter, IUniswapV3SwapRouter {
+contract UniswapV3PositionRouter is BaseRouter, IUniswapV3PositionRouter {
     INonfungiblePositionManager public immutable uniswapV3PositionManager;
-    ISwapRouter public immutable uniswapV3SwapRouter;
 
-    constructor(
-        address _owner,
-        address _tokenWhitelistRegistry,
-        address _uniswapV3PositionManager,
-        address _uniswapV3SwapRouter
-    ) BaseRouter(_owner, _tokenWhitelistRegistry) {
-        uniswapV3SwapRouter = ISwapRouter(_uniswapV3SwapRouter);
+    constructor(address _owner, address _tokenWhitelistRegistry, address _uniswapV3PositionManager)
+        BaseRouter(_owner, _tokenWhitelistRegistry)
+    {
         uniswapV3PositionManager = INonfungiblePositionManager(_uniswapV3PositionManager);
     }
 
     function _ensureTokenAllowance(address token, uint256 allowanceRequired) internal {
         IERC20 tokenToApprove = IERC20(token);
 
-        if (tokenToApprove.allowance(address(this), address(uniswapV3SwapRouter)) < allowanceRequired) {
-            tokenToApprove.approve(address(uniswapV3SwapRouter), type(uint256).max);
-        }
         if (tokenToApprove.allowance(address(this), address(uniswapV3PositionManager)) < allowanceRequired) {
             tokenToApprove.approve(address(uniswapV3PositionManager), type(uint256).max);
         }
@@ -38,29 +30,6 @@ contract UniswapV3Router is BaseRouter, IUniswapV3PositionRouter, IUniswapV3Swap
     function _getV3PositionTokenPair(uint256 tokenId) internal view returns (address token0, address token1) {
         // get the position information
         (,, token0, token1,,,,,,,,) = uniswapV3PositionManager.positions(tokenId);
-    }
-
-    function swapTokenWithV3(ISwapRouter.ExactInputSingleParams memory params) external payable override setCaller {
-        if (params.recipient != caller) revert InvalidRecipient();
-
-        // check tokens are whitelisted
-        _checkTokenIsWhitelisted(caller, params.tokenIn);
-        _checkTokenIsWhitelisted(caller, params.tokenOut);
-
-        // ensure uniswap has enough allowance to spend our routers tokens
-        _ensureTokenAllowance(params.tokenIn, params.amountIn);
-
-        // store our current balance of the input token
-        uint256 startBalance = IERC20(params.tokenIn).balanceOf(address(this));
-
-        // transfer funds into router
-        TransferHelper.safeTransferFrom(params.tokenIn, caller, address(this), params.amountIn);
-
-        uniswapV3SwapRouter.exactInputSingle(params);
-        uint256 diff = IERC20(params.tokenIn).balanceOf(address(this)) - startBalance;
-
-        // return left over funds to caller
-        if (diff > 0) TransferHelper.safeTransfer(params.tokenIn, caller, diff);
     }
 
     function mintV3Position(INonfungiblePositionManager.MintParams calldata params)

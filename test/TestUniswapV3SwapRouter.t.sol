@@ -36,9 +36,7 @@ contract TestUniswapV3SwapRouter is BaseUniswap, TokenMinter, UniswapTestHelper 
 
         vm.startPrank(deployer);
         tokenWhitelistRegistry = new TokenWhitelistRegistry();
-        router = new UniswapV3SwapRouter(
-            deployer, address(tokenWhitelistRegistry), address(uniswapV3SwapRouter)
-        );
+        router = new UniswapV3SwapRouter(deployer, address(tokenWhitelistRegistry), address(uniswapV3SwapRouter));
         vm.stopPrank();
 
         vm.label(address(router), "ROUTER");

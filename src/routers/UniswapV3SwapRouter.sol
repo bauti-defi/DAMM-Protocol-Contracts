@@ -12,11 +12,9 @@ import {IUniswapV3SwapRouter} from "@src/interfaces/IUniswapV3SwapRouter.sol";
 contract UniswapV3SwapRouter is BaseRouter, IUniswapV3SwapRouter {
     ISwapRouter public immutable uniswapV3SwapRouter;
 
-    constructor(
-        address _owner,
-        address _tokenWhitelistRegistry,
-        address _uniswapV3SwapRouter
-    ) BaseRouter(_owner, _tokenWhitelistRegistry) {
+    constructor(address _owner, address _tokenWhitelistRegistry, address _uniswapV3SwapRouter)
+        BaseRouter(_owner, _tokenWhitelistRegistry)
+    {
         uniswapV3SwapRouter = ISwapRouter(_uniswapV3SwapRouter);
     }
 
@@ -50,5 +48,4 @@ contract UniswapV3SwapRouter is BaseRouter, IUniswapV3SwapRouter {
         // return left over funds to caller
         if (diff > 0) TransferHelper.safeTransfer(params.tokenIn, caller, diff);
     }
-
 }

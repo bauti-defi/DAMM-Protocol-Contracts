@@ -5,7 +5,7 @@ import {Test} from "@forge-std/Test.sol";
 
 import {ISwapRouter} from "@src/interfaces/ISwapRouter.sol";
 import {INonfungiblePositionManager} from "@src/interfaces/INonfungiblePositionManager.sol";
-import {UniswapV3Router} from "@src/routers/UniswapV3Router.sol";
+import {UniswapV3PositionRouter} from "@src/routers/UniswapV3PositionRouter.sol";
 import {TokenWhitelistRegistry} from "@src/base/TokenWhitelistRegistry.sol";
 
 import {BaseUniswap} from "@test/base/BaseUniswap.sol";
@@ -20,7 +20,7 @@ contract TestUniswapV3Router is BaseUniswap, TokenMinter, UniswapTestHelper {
 
     address public deployer;
     address public trader;
-    UniswapV3Router public router;
+    UniswapV3PositionRouter public router;
     TokenWhitelistRegistry public tokenWhitelistRegistry;
 
     constructor() UniswapTestHelper(uniswapV3SwapRouter, uniswapV3PositionManager) {}
@@ -36,9 +36,8 @@ contract TestUniswapV3Router is BaseUniswap, TokenMinter, UniswapTestHelper {
 
         vm.startPrank(deployer);
         tokenWhitelistRegistry = new TokenWhitelistRegistry();
-        router = new UniswapV3Router(
-            deployer, address(tokenWhitelistRegistry), address(uniswapV3PositionManager), address(uniswapV3SwapRouter)
-        );
+        router =
+            new UniswapV3PositionRouter(deployer, address(tokenWhitelistRegistry), address(uniswapV3PositionManager));
         vm.stopPrank();
 
         vm.label(address(router), "ROUTER");
@@ -46,7 +45,6 @@ contract TestUniswapV3Router is BaseUniswap, TokenMinter, UniswapTestHelper {
 
         assertEq(router.owner(), deployer);
         assertEq(address(router.uniswapV3PositionManager()), address(uniswapV3PositionManager));
-        assertEq(address(router.uniswapV3SwapRouter()), address(uniswapV3SwapRouter));
         assertEq(USDC.balanceOf(address(router)), 0);
         assertEq(USDCe.balanceOf(address(router)), 0);
 
@@ -210,5 +208,4 @@ contract TestUniswapV3Router is BaseUniswap, TokenMinter, UniswapTestHelper {
         vm.prank(trader);
         router.collectV3TokensOwed(collectParams);
     }
-
 }
