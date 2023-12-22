@@ -101,7 +101,7 @@ contract TestUniswapV3Router is BaseUniswap, TokenMinter, UniswapTestHelper {
             _mintPositionParameter(trader, address(USDC), address(USDCe), 100, 100, 100);
 
         vm.prank(trader);
-        router.mintV3Position(params);
+        router.mintPosition(params);
 
         uint256 endingPositionCount = _getUniV3PositionCount(trader);
         assertTrue(endingPositionCount == startingPositionCount + 1);
@@ -112,7 +112,7 @@ contract TestUniswapV3Router is BaseUniswap, TokenMinter, UniswapTestHelper {
             _mintPositionParameter(trader, address(USDC), address(USDCe), 100, 100, 100);
 
         vm.prank(trader);
-        router.mintV3Position(mintParams);
+        router.mintPosition(mintParams);
 
         uint128 decreaseAmount = 5;
 
@@ -129,7 +129,7 @@ contract TestUniswapV3Router is BaseUniswap, TokenMinter, UniswapTestHelper {
             INonfungiblePositionManager.DecreaseLiquidityParams(POSITION_ID, decreaseAmount, 0, 0, _mockTimestamp());
 
         vm.startPrank(trader);
-        router.decreaseV3PositionLiquidity(decreaseParams);
+        router.decreasePositionLiquidity(decreaseParams);
         vm.stopPrank();
 
         (,,,,,,, uint128 end_Liquidity,,,,) =
@@ -145,7 +145,7 @@ contract TestUniswapV3Router is BaseUniswap, TokenMinter, UniswapTestHelper {
             _mintPositionParameter(trader, address(USDC), address(USDCe), 100, 100, 100);
 
         vm.prank(trader);
-        router.mintV3Position(mintParams);
+        router.mintPosition(mintParams);
 
         (,,,,,,, uint128 start_Liquidity,,,,) =
             INonfungiblePositionManager(address(uniswapV3PositionManager)).positions(POSITION_ID);
@@ -160,7 +160,7 @@ contract TestUniswapV3Router is BaseUniswap, TokenMinter, UniswapTestHelper {
             INonfungiblePositionManager.IncreaseLiquidityParams(POSITION_ID, 100, 100, 0, 0, _mockTimestamp());
 
         vm.prank(trader);
-        router.increaseV3PositionLiquidity(increaseParams);
+        router.increasePositionLiquidity(increaseParams);
 
         (,,,,,,, uint128 end_Liquidity,,,,) =
             INonfungiblePositionManager(address(uniswapV3PositionManager)).positions(POSITION_ID);
@@ -173,7 +173,7 @@ contract TestUniswapV3Router is BaseUniswap, TokenMinter, UniswapTestHelper {
             _mintPositionParameter(trader, address(USDC), address(USDCe), 100, BIG_NUMBER / 2, BIG_NUMBER / 2);
 
         vm.prank(trader);
-        router.mintV3Position(mintParams);
+        router.mintPosition(mintParams);
 
         // lets do some swaps
         {
@@ -206,6 +206,6 @@ contract TestUniswapV3Router is BaseUniswap, TokenMinter, UniswapTestHelper {
             INonfungiblePositionManager.CollectParams(POSITION_ID, trader, 1000, 1000);
 
         vm.prank(trader);
-        router.collectV3TokensOwed(collectParams);
+        router.collectTokensOwed(collectParams);
     }
 }
