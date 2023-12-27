@@ -32,12 +32,7 @@ contract UniswapV3PositionRouter is BaseRouter, IUniswapV3PositionRouter {
         (,, token0, token1,,,,,,,,) = uniswapV3PositionManager.positions(tokenId);
     }
 
-    function mintPosition(INonfungiblePositionManager.MintParams calldata params)
-        external
-        payable
-        override
-        setCaller
-    {
+    function mintPosition(INonfungiblePositionManager.MintParams calldata params) external payable override setCaller {
         if (params.recipient != caller) revert InvalidRecipient();
 
         // check tokens are whitelisted

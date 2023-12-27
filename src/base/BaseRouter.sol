@@ -24,6 +24,8 @@ abstract contract BaseRouter is IRouter, IMulticall, ReentrancyGuard {
         tokenWhitelistRegistry = ITokenWhitelistRegistry(_tokenWhitelistRegistry);
     }
 
+    /// @notice This implementation is from Uniswap's V3 Periphery: https://github.com/Uniswap/v3-periphery/blob/main/contracts/base/Multicall.sol
+    /// @notice All functions in `data` must be payable
     function multicall(bytes[] calldata data) external payable override nonReentrant returns (bytes[] memory results) {
         results = new bytes[](data.length);
         for (uint256 i = 0; i < data.length; i++) {
