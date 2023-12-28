@@ -2,20 +2,13 @@
 pragma solidity ^0.8.23;
 
 import {IRouter} from "@src/interfaces/IRouter.sol";
-import {IERC20} from "@openzeppelin-contracts/token/ERC20/IERC20.sol";
 import {ReentrancyGuard} from "@src/lib/ReentrancyGuard.sol";
-import {IMulticall} from "@src/interfaces/IMulticall.sol";
 import {ITokenWhitelistRegistry} from "@src/interfaces/ITokenWhitelistRegistry.sol";
+import {LibMulticaller} from "@vec-multicaller/LibMulticaller.sol";
 
 abstract contract BaseRouter is IRouter, ReentrancyGuard {
     modifier setCaller() {
-        if (caller == address(0)) {
-            if(msg.sender == multicallerWithSender) {
-                // caller = IMulticall(msg.sender).caller();
-            } else {
-                caller = msg.sender;
-            }
-        }
+        if (caller == address(0)) caller = LibMulticaller.sender();
         _;
         caller = address(0);
     }

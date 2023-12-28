@@ -12,9 +12,12 @@ import {IUniswapV3SwapRouter} from "@src/interfaces/IUniswapV3SwapRouter.sol";
 contract UniswapV3SwapRouter is BaseRouter, IUniswapV3SwapRouter {
     ISwapRouter public immutable uniswapV3SwapRouter;
 
-    constructor(address _owner, address _tokenWhitelistRegistry, address _multicallerWithSender, address _uniswapV3SwapRouter)
-        BaseRouter(_owner, _tokenWhitelistRegistry, _multicallerWithSender)
-    {
+    constructor(
+        address _owner,
+        address _tokenWhitelistRegistry,
+        address _multicallerWithSender,
+        address _uniswapV3SwapRouter
+    ) BaseRouter(_owner, _tokenWhitelistRegistry, _multicallerWithSender) {
         uniswapV3SwapRouter = ISwapRouter(_uniswapV3SwapRouter);
     }
 
