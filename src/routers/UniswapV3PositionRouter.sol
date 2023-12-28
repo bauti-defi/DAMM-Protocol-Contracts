@@ -13,8 +13,8 @@ import {IUniswapV3SwapRouter} from "@src/interfaces/IUniswapV3SwapRouter.sol";
 contract UniswapV3PositionRouter is BaseRouter, IUniswapV3PositionRouter {
     INonfungiblePositionManager public immutable uniswapV3PositionManager;
 
-    constructor(address _owner, address _tokenWhitelistRegistry, address _uniswapV3PositionManager)
-        BaseRouter(_owner, _tokenWhitelistRegistry)
+    constructor(address _owner, address _tokenWhitelistRegistry, address _multicallerWithSender, address _uniswapV3PositionManager)
+        BaseRouter(_owner, _tokenWhitelistRegistry, _multicallerWithSender)
     {
         uniswapV3PositionManager = INonfungiblePositionManager(_uniswapV3PositionManager);
     }

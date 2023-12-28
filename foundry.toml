@@ -12,7 +12,8 @@ remappings = [
     "@src/=src/",
     "@test/=test/",
     "@script/=script/",
-    "@uniswapV3/=lib/v3-periphery/contracts/",
+    "@uniswap-v3-periphery/=lib/v3-periphery/contracts/",
+    "@uniswap-v3-core/=lib/v3-core/contracts/",
 ]
 
 fs_permissions = [{ access = "read", path = "./"}]
