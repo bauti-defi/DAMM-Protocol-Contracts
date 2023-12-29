@@ -16,3 +16,6 @@
 [submodule "lib/multicaller"]
 	path = lib/multicaller
 	url = https://github.com/Vectorized/multicaller
+[submodule "lib/safe-contracts"]
+	path = lib/safe-contracts
+	url = https://github.com/safe-global/safe-contracts
