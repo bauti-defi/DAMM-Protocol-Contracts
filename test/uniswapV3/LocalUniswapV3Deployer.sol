@@ -11,7 +11,7 @@ import {NonfungiblePositionManager} from "@uniswap-v3-periphery/NonfungiblePosit
 import {INonfungiblePositionManager} from "@uniswap-v3-periphery/interfaces/INonfungiblePositionManager.sol";
 import {SwapRouter} from "@uniswap-v3-periphery/SwapRouter.sol";
 import {ISwapRouter} from "@uniswap-v3-periphery/interfaces/ISwapRouter.sol";
-import {IBaseUniswapV3} from "@test/base/IBaseUniswapV3.sol";
+import {IBaseUniswapV3} from "@test/uniswapV3/IBaseUniswapV3.sol";
 
 contract Deployer is IBaseUniswapV3 {
     // Cheat code address, 0x7109709ECfa91a80626fF3989D68f67F5b1DD12D.

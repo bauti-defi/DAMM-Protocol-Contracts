@@ -29,7 +29,13 @@ contract UniswapV3SwapRouter is BaseRouter, IUniswapV3SwapRouter {
         }
     }
 
-    function swapToken(ISwapRouter.ExactInputSingleParams memory params) external payable override setCaller {
+    function swapToken(ISwapRouter.ExactInputSingleParams memory params)
+        external
+        payable
+        override
+        setCaller
+        returns (uint256 amountOut)
+    {
         if (params.recipient != caller) revert InvalidRecipient();
 
         // check tokens are whitelisted
@@ -45,7 +51,7 @@ contract UniswapV3SwapRouter is BaseRouter, IUniswapV3SwapRouter {
         // transfer funds into router
         TransferHelper.safeTransferFrom(params.tokenIn, caller, address(this), params.amountIn);
 
-        uniswapV3SwapRouter.exactInputSingle(params);
+        amountOut = uniswapV3SwapRouter.exactInputSingle(params);
         uint256 diff = IERC20(params.tokenIn).balanceOf(address(this)) - startBalance;
 
         // return left over funds to caller

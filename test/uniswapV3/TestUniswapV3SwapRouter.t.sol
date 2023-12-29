@@ -2,7 +2,7 @@
 pragma solidity >=0.8.0;
 
 import {Test, console2} from "@forge-std/Test.sol";
-import {IBaseUniswapV3} from "@test/base/IBaseUniswapV3.sol";
+import {IBaseUniswapV3} from "@test/uniswapV3/IBaseUniswapV3.sol";
 import {MockERC20} from "@test/mocks/MockERC20.sol";
 import {TickMath} from "@test/utils/TickMath.sol";
 import {TokenWhitelistRegistry} from "@src/base/TokenWhitelistRegistry.sol";
@@ -13,6 +13,7 @@ import {ISwapRouter} from "@src/interfaces/ISwapRouter.sol";
 import {INonfungiblePositionManager} from "@src/interfaces/INonfungiblePositionManager.sol";
 import {IUniswapV3PoolActions} from "@src/interfaces/IUniswapV3PoolActions.sol";
 import {IUniswapV3PoolState} from "@src/interfaces/IUniswapV3PoolState.sol";
+import {IRouter} from "@src/interfaces/IRouter.sol";
 
 contract TestUniswapV3SwapRouter is Test {
     struct MintCallbackData {
@@ -22,6 +23,7 @@ contract TestUniswapV3SwapRouter is Test {
     }
 
     uint256 private constant ONE_MILLION = 1_000_000;
+    uint256 private constant ONE_BILLION = ONE_MILLION * 1000;
     uint24 private constant POOL_FEE = 500;
 
     IBaseUniswapV3 public uniswapV3;
@@ -54,16 +56,14 @@ contract TestUniswapV3SwapRouter is Test {
         token1.mint(vault, ONE_MILLION);
 
         // mint tokens to LP
-        token0.mint(lp, ONE_MILLION);
-        token1.mint(lp, ONE_MILLION);
+        token0.mint(lp, ONE_BILLION);
+        token1.mint(lp, ONE_BILLION);
 
         // make they are order the right way
         if (address(token0) > address(token1)) (token0, token1) = (token1, token0);
 
         vm.label(address(token0), "token0");
         vm.label(address(token1), "token1");
-
-        // vm.startStateDiffRecording();
 
         //deploy pool
         (bool success, bytes memory result) = uniswapV3.localUniV3Factory().call(
@@ -84,7 +84,7 @@ contract TestUniswapV3SwapRouter is Test {
 
         // deploy damm uniswap v3 swap router
         dammRouter = new UniswapV3SwapRouter(
-            address(this), address(tokenWhitelistRegistry), address(multicall), address(uniswapV3.localUniV3Router())
+            address(this), address(tokenWhitelistRegistry), address(multicall), uniswapV3.localUniV3Router()
         );
 
         vm.label(address(dammRouter), "DammRouter");
@@ -121,7 +121,7 @@ contract TestUniswapV3SwapRouter is Test {
                 lp,
                 startTick - 500,
                 startTick + 500,
-                10_000_000,
+                100_000_000,
                 abi.encode(MintCallbackData({token0: address(token0), token1: address(token1), payer: lp}))
             )
         );
@@ -151,18 +151,91 @@ contract TestUniswapV3SwapRouter is Test {
         return IBaseUniswapV3(deployer);
     }
 
-    function test_swap_through_damm() public {
+    modifier invariants() {
+        // damm router should never end up with any funds
+        assertEq(token0.balanceOf(address(dammRouter)), 0);
+        assertEq(token1.balanceOf(address(dammRouter)), 0);
+        _;
+        assertEq(token0.balanceOf(address(dammRouter)), 0);
+        assertEq(token1.balanceOf(address(dammRouter)), 0);
+    }
+
+    function test_swap(uint256 amount, bool zeroForOne) public invariants {
+        vm.assume(amount > 0);
+        vm.assume(amount < ONE_MILLION);
+
+        // default: token1 for token0
+        address tokenIn = address(token1);
+        address tokenOut = address(token0);
+
+        if (zeroForOne) (tokenIn, tokenOut) = (address(token0), address(token1));
+
         vm.prank(vault);
+        uint256 amountOut = dammRouter.swapToken(
+            ISwapRouter.ExactInputSingleParams({
+                tokenIn: tokenIn,
+                tokenOut: tokenOut,
+                fee: POOL_FEE,
+                recipient: vault,
+                deadline: block.timestamp + 10_000,
+                amountIn: amount,
+                amountOutMinimum: 0,
+                sqrtPriceLimitX96: 0
+            })
+        );
+
+        assertEq(ONE_MILLION + amountOut, MockERC20(tokenOut).balanceOf(vault));
+        assertEq(ONE_MILLION - amount, MockERC20(tokenIn).balanceOf(vault));
+    }
+
+    function test_cannot_swap_unauthorized_token0(address token, bool zeroForOne) public invariants {
+        vm.assume(token != address(token0));
+        vm.assume(token != address(token1));
+
+        // default: token1 for token0
+        address tokenIn = address(token1);
+        address tokenOut = address(token);
+
+        if (zeroForOne) (tokenIn, tokenOut) = (address(token), address(token1));
+
+        vm.prank(vault);
+        vm.expectRevert(IRouter.TokenNotWhitelisted.selector);
         dammRouter.swapToken(
             ISwapRouter.ExactInputSingleParams({
-                tokenIn: address(token0),
-                tokenOut: address(token1),
+                tokenIn: tokenIn,
+                tokenOut: tokenOut,
                 fee: POOL_FEE,
                 recipient: vault,
                 deadline: block.timestamp + 10_000,
                 amountIn: 100,
                 amountOutMinimum: 0,
-                sqrtPriceLimitX96: 79228162514264337593543950336 - 1_000_000
+                sqrtPriceLimitX96: 0
+            })
+        );
+    }
+
+    function test_cannot_swap_unauthorized_token1(address token, bool zeroForOne) public invariants {
+        vm.assume(token != address(token1));
+        vm.assume(token != address(token0));
+
+        // default: token1 for token0
+        address tokenIn = address(token);
+        address tokenOut = address(token0);
+
+        if (zeroForOne) (tokenIn, tokenOut) = (address(token0), address(token));
+
+        vm.prank(vault);
+        vm.expectRevert(IRouter.TokenNotWhitelisted.selector);
+        dammRouter.swapToken(
+            ISwapRouter.ExactInputSingleParams({
+                tokenIn: tokenIn,
+                tokenOut: tokenOut,
+                fee: POOL_FEE,
+                recipient: vault,
+                deadline: block.timestamp + 10_000,
+                amountIn: 100,
+                amountOutMinimum: 0,
+                sqrtPriceLimitX96: 0
             })
         );
     }
