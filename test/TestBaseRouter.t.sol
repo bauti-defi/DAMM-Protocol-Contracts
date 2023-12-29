@@ -6,6 +6,7 @@ import {Vm} from "@forge-std/Vm.sol";
 import {BaseRouter} from "@src/base/BaseRouter.sol";
 import {MulticallerEtcher} from "@vec-multicaller/MulticallerEtcher.sol";
 import {MulticallerWithSender} from "@vec-multicaller/MulticallerWithSender.sol";
+import {BaseMulticallerWithSender} from "@test/base/BaseMulticallerWithSender.sol";
 
 contract Router is BaseRouter {
     event CurrentCaller(address caller);
@@ -29,12 +30,12 @@ contract Router is BaseRouter {
     }
 }
 
-contract TestBaseRouter is Test {
+contract TestBaseRouter is BaseMulticallerWithSender {
     Router router;
-    MulticallerWithSender multicallerWithSender;
 
-    function setUp() public {
-        multicallerWithSender = MulticallerEtcher.multicallerWithSender();
+    function setUp() public override(BaseMulticallerWithSender) {
+        super.setUp();
+
         router = new Router(address(0), address(0), address(multicallerWithSender));
 
         vm.label(address(router), "Router");

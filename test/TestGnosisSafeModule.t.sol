@@ -2,63 +2,86 @@
 pragma solidity ^0.8.23;
 
 import {Test} from "@forge-std/Test.sol";
-import {SafeL2} from "@safe-contracts/SafeL2.sol";
-import {SafeProxyFactory} from "@safe-contracts/proxies/SafeProxyFactory.sol";
-import {SafeProxy} from "@safe-contracts/proxies/SafeProxy.sol";
-import {ISafe} from "@src/interfaces/ISafe.sol";
-import {GnosisSafeModule} from "@src/base/GnosisSafeModule.sol";
+import {BaseVault} from "@test/base/BaseVault.sol";
 
-contract TestGnosisSafeModule is Test {
-    SafeL2 internal safeSingleton;
-    SafeProxyFactory internal safeProxyFactory;
-    uint256 internal safeSaltNonce;
-
-    GnosisSafeModule public dammModule;
-
-    address public vaultOwner;
-    address public vault;
-
-    function setUp() public {
-        safeSingleton = new SafeL2();
-        vm.label(address(safeSingleton), "SafeSingleton");
-
-        safeProxyFactory = new SafeProxyFactory();
-        vm.label(address(safeProxyFactory), "SafeProxyFactory");
-
-        dammModule = new GnosisSafeModule(
-            address(this),
-            address(this) // multicaller
-        );
-        vm.label(address(dammModule), "SafeModule");
-
-        vaultOwner = makeAddr("VaultOwner");
-
-        address[] memory _owners = new address[](1);
-        _owners[0] = vaultOwner;
-
-        bytes memory data = abi.encodeWithSelector(this.enableModuleCallback.selector, (address(dammModule)));
-
-        bytes memory initializerPayload = abi.encodeCall(
-            ISafe.setup, (_owners, 1, address(this), data, address(0), address(0), 0, payable(address(0)))
-        );
-
-        vault = address(
-            safeProxyFactory.createProxyWithNonce(
-                address(safeSingleton),
-                initializerPayload,
-                uint256(keccak256(abi.encode(safeSaltNonce++, block.chainid)))
-            )
-        );
-
-        vm.label(vault, "Vault");
-
-        assertTrue(ISafe(vault).isModuleEnabled(address(dammModule)), "DAMM module not enabled");
+contract MockRouter {
+    function fun1() external payable returns (address, uint256, uint256) {
+        return (msg.sender, 1, msg.value);
     }
 
-    /// @notice the safe delegatescall to this function upon deployment
-    function enableModuleCallback(address _module) external {
-        ISafe(address(this)).enableModule(_module);
+    function fun2() external payable returns (address, uint256, uint256) {
+        return (msg.sender, 2, msg.value);
     }
 
-    function test() public {}
+    function shouldRevert1() external pure {
+        revert("should revert 1");
+    }
+}
+
+contract TestGnosisSafeModule is BaseVault {
+    address public operator;
+    MockRouter public mockRouter;
+
+    function setUp() public override {
+        super.setUp();
+
+        operator = makeAddr("Operator");
+
+        dammModule.setOperator(operator, true);
+
+        mockRouter = new MockRouter();
+        vm.label(address(mockRouter), "MockRouter");
+
+        dammModule.setRouter(address(mockRouter), true);
+
+        vm.deal(vault, 1 ether);
+    }
+
+    function test_execute() public {
+        vm.prank(operator);
+        bytes memory result =
+            dammModule.execute(vault, address(mockRouter), 0, abi.encodeWithSelector(mockRouter.fun1.selector));
+        (address caller, uint256 res, uint256 value) = abi.decode(result, (address, uint256, uint256));
+
+        assertEq(1, res);
+        assertEq(0, value);
+        assertEq(vault, caller);
+
+        assertEq(1 ether, address(vault).balance);
+    }
+
+    function test_execute_with_value() public {
+        vm.prank(operator);
+        bytes memory result =
+            dammModule.execute(vault, address(mockRouter), 10, abi.encodeWithSelector(mockRouter.fun1.selector));
+        (address caller, uint256 res, uint256 value) = abi.decode(result, (address, uint256, uint256));
+        assertEq(10, value);
+        assertEq(1, res);
+        assertEq(vault, caller);
+
+        assertEq(1 ether - 10, address(vault).balance);
+        assertEq(10, address(mockRouter).balance);
+    }
+
+    function testFails_execute_with_revert() public {
+        vm.prank(operator);
+        bytes memory result =
+            dammModule.execute(vault, address(mockRouter), 0, abi.encodeWithSelector(mockRouter.shouldRevert1.selector));
+        bytes memory error = abi.decode(result, (bytes));
+
+        assertEq("should revert 1", string(error));
+        assertEq(1 ether, address(vault).balance);
+    }
+
+    function test_cannot_execute_unauhtorized_router(address badRouter) public {
+        vm.assume(badRouter != address(mockRouter));
+        vm.assume(badRouter != address(multicallerWithSender));
+        vm.assume(badRouter != address(0));
+
+        vm.prank(operator);
+        vm.expectRevert("GnosisSafeModule: target is not router");
+        dammModule.execute(vault, badRouter, 0, abi.encodeWithSelector(mockRouter.fun1.selector));
+
+        assertEq(1 ether, address(vault).balance);
+    }
 }

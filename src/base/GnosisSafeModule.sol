@@ -31,6 +31,10 @@ contract GnosisSafeModule {
     }
 
     function setRouter(address router, bool enabled) external onlyOwner {
+        require(
+            router != address(multicallerWithSender) && router != address(0) && router != address(this),
+            "GnosisSafeModule: invalid router"
+        );
         routers[router] = enabled;
     }
 
@@ -39,14 +43,17 @@ contract GnosisSafeModule {
         onlyOperator
         returns (bytes memory)
     {
-        require(target != address(multicallerWithSender), "GnosisSafeModule: multicallerWithSender is not allowed");
+        require(routers[target], "GnosisSafeModule: target is not router");
 
         (bool success, bytes memory returnData) =
             ISafe(vault).execTransactionFromModuleReturnData(target, value, data, Enum.Operation.Call);
         if (!success) {
+            // Next 5 lines from https://ethereum.stackexchange.com/a/83577
+            if (returnData.length < 68) revert();
             assembly {
-                revert(add(returnData, 32), mload(returnData))
+                returnData := add(returnData, 0x04)
             }
+            revert(abi.decode(returnData, (string)));
         }
 
         return returnData;
@@ -73,9 +80,12 @@ contract GnosisSafeModule {
         );
 
         if (!success) {
+            // Next 5 lines from https://ethereum.stackexchange.com/a/83577
+            if (returnData.length < 68) revert();
             assembly {
-                revert(add(returnData, 32), mload(returnData))
+                returnData := add(returnData, 0x04)
             }
+            revert(abi.decode(returnData, (string)));
         }
 
         return abi.decode(returnData, (bytes[]));
