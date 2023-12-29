@@ -13,7 +13,14 @@ remappings = [
     "@src/=src/",
     "@test/=test/",
     "@script/=script/",
+
+
     "@uniswap-v3-periphery/=lib/v3-periphery/contracts/",
+    ### @dev These imports are so we can compile the uniswapv3 periphery contracts inside tests
+    "@uniswap/v3-core/=lib/v3-periphery/node_modules/@uniswap/v3-core",
+    "@openzeppelin/contracts/=lib/v3-periphery/node_modules/@openzeppelin/contracts/",
+    #####
+
     "@uniswap-v3-core/=lib/v3-core/contracts/",
 ]
 

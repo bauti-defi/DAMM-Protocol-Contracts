@@ -14,18 +14,6 @@ contract Router is BaseRouter {
         BaseRouter(_owner, _tokenWhitelistRegistry, _multicallerWithSender)
     {}
 
-    function fun1() external payable returns (uint256) {
-        return 1;
-    }
-
-    function fun2() external payable returns (uint256) {
-        return 2;
-    }
-
-    function fun3() external returns (uint256) {
-        return 3;
-    }
-
     function fun4() external setCaller returns (uint256) {
         emit CurrentCaller(caller);
         return 4;
