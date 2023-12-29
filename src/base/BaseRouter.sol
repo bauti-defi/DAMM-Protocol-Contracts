@@ -2,44 +2,28 @@
 pragma solidity ^0.8.23;
 
 import {IRouter} from "@src/interfaces/IRouter.sol";
-import {IERC20} from "@openzeppelin-contracts/token/ERC20/IERC20.sol";
 import {ReentrancyGuard} from "@src/lib/ReentrancyGuard.sol";
-import {IMulticall} from "@src/interfaces/IMulticall.sol";
 import {ITokenWhitelistRegistry} from "@src/interfaces/ITokenWhitelistRegistry.sol";
+import {LibMulticaller} from "@vec-multicaller/LibMulticaller.sol";
 
-abstract contract BaseRouter is IRouter, IMulticall, ReentrancyGuard {
+abstract contract BaseRouter is IRouter, ReentrancyGuard {
     modifier setCaller() {
-        if (caller == address(0)) caller = msg.sender;
+        if (caller == address(0)) caller = LibMulticaller.sender();
         _;
         caller = address(0);
     }
 
+    /// @notice this variable is transient
     address internal caller;
 
     ITokenWhitelistRegistry public immutable tokenWhitelistRegistry;
     address public immutable owner;
+    address public immutable multicallerWithSender;
 
-    constructor(address _owner, address _tokenWhitelistRegistry) {
+    constructor(address _owner, address _tokenWhitelistRegistry, address _multicallerWithSender) {
         owner = _owner;
+        multicallerWithSender = _multicallerWithSender;
         tokenWhitelistRegistry = ITokenWhitelistRegistry(_tokenWhitelistRegistry);
-    }
-
-    function multicall(bytes[] calldata data) external payable override nonReentrant returns (bytes[] memory results) {
-        results = new bytes[](data.length);
-        for (uint256 i = 0; i < data.length; i++) {
-            (bool success, bytes memory result) = address(this).delegatecall(data[i]);
-
-            if (!success) {
-                // Next 5 lines from https://ethereum.stackexchange.com/a/83577
-                if (result.length < 68) revert();
-                assembly {
-                    result := add(result, 0x04)
-                }
-                revert(abi.decode(result, (string)));
-            }
-
-            results[i] = result;
-        }
     }
 
     function isTokenWhitelisted(address user, address token) public view returns (bool) {

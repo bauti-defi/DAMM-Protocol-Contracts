@@ -9,8 +9,8 @@ import {BaseRouter} from "@src/base/BaseRouter.sol";
 contract AaveV3Router is BaseRouter, IAaveV3Router {
     IPool public immutable aaveV3Pool;
 
-    constructor(address _owner, address _tokenWhitelistRegistry, address _aaveV3Pool)
-        BaseRouter(_owner, _tokenWhitelistRegistry)
+    constructor(address _owner, address _tokenWhitelistRegistry, address _multicallerWithSender, address _aaveV3Pool)
+        BaseRouter(_owner, _tokenWhitelistRegistry, _multicallerWithSender)
     {
         aaveV3Pool = IPool(_aaveV3Pool);
     }
