@@ -14,6 +14,7 @@ remappings = [
     "@test/=test/",
     "@script/=script/",
     "@safe-contracts/=lib/safe-contracts/contracts/",
+    "@halmos/=lib/halmos-cheatcodes/src/",
 
 
     "@uniswap-v3-periphery/=lib/v3-periphery/contracts/",

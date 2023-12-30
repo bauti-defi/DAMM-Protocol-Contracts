@@ -20,7 +20,7 @@ contract TestPoolAddress is Test {
 
     /// @notice This test is to verify that the PoolAddress library downloaded as a dep is working as expected.
     /// If the test fails, you should expect the rest of the uniswap test suite to not work.
-    /// @dev To fix this, you should update the INIT_CODE_HASH in the PoolAddress.sol (of the v3-periphery)
+    /// @dev To fix this, you should update the INIT_CODE_HASH in the PoolAddress.sol (lib/v3-periphery/contracts/libraries/PoolAddress.sol)
     /// library to match the one printed at the end of this test.
     function test_pool_address_calc() public {
         address expectedPool = address(

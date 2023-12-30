@@ -2,26 +2,32 @@
 pragma solidity ^0.8.23;
 
 import {ITokenWhitelistRegistry} from "@src/interfaces/ITokenWhitelistRegistry.sol";
+import {BitMaps} from "@openzeppelin-contracts/utils/structs/BitMaps.sol";
+import {AddressConverter} from "@src/lib/AddressConverter.sol";
 
 /// @notice This registry does not yet support native ethereum tokens
+/// @notice This registristry supports up to 256 tokens per router per user
 contract TokenWhitelistRegistry is ITokenWhitelistRegistry {
-    /// @notice keccak256(abi.encode(user, router, token)) => whitelisted
-    mapping(bytes32 tokenPointer => bool whitelisted) internal tokenWhitelist;
+    using BitMaps for BitMaps.BitMap;
+    using AddressConverter for address;
 
-    function _tokenPointer(address user, address router, address token) internal pure returns (bytes32) {
-        return keccak256(abi.encode(user, router, token));
+    /// @notice keccak256(abi.encodePacked(user, router)) => whitelisted
+    mapping(bytes32 pointer => BitMaps.BitMap token) internal tokenWhitelist;
+
+    function _tokenPointer(address user, address router) internal pure returns (bytes32) {
+        return keccak256(abi.encodePacked(user, router));
     }
 
     function isTokenWhitelisted(address user, address router, address token) external view returns (bool) {
-        return tokenWhitelist[_tokenPointer(user, router, token)];
+        return tokenWhitelist[_tokenPointer(user, router)].get(token.toUint256());
     }
 
     function _whitelistToken(address router, address token) internal {
-        tokenWhitelist[_tokenPointer(msg.sender, router, token)] = true;
+        tokenWhitelist[_tokenPointer(msg.sender, router)].setTo(token.toUint256(), true);
     }
 
     function _blacklistToken(address router, address token) internal {
-        tokenWhitelist[_tokenPointer(msg.sender, router, token)] = false;
+        tokenWhitelist[_tokenPointer(msg.sender, router)].setTo(token.toUint256(), false);
     }
 
     function whitelistToken(address router, address token) external {
@@ -41,8 +47,12 @@ contract TokenWhitelistRegistry is ITokenWhitelistRegistry {
 
         require(length == routers.length, "TokenWhitelistRegistry: routers and tokens length mismatch");
 
-        for (uint256 i = 0; i < length; i++) {
+        for (uint256 i = 0; i < length;) {
             _whitelistToken(routers[i], tokens[i]);
+
+            unchecked {
+                ++i;
+            }
         }
 
         emit TokensWhitelisted(msg.sender, routers, tokens);
@@ -53,8 +63,12 @@ contract TokenWhitelistRegistry is ITokenWhitelistRegistry {
 
         require(length == routers.length, "TokenWhitelistRegistry: routers and tokens length mismatch");
 
-        for (uint256 i = 0; i < length; i++) {
+        for (uint256 i = 0; i < length;) {
             _blacklistToken(routers[i], tokens[i]);
+
+            unchecked {
+                ++i;
+            }
         }
 
         emit TokensBlacklisted(msg.sender, routers, tokens);
