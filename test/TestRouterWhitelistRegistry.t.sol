@@ -15,7 +15,7 @@ contract TestRouterWhitelistRegistry is SymTest, Test {
 
     function check_whitelist_router(address router, address otherRouter) external {
         vm.assume(router != address(0));
-
+        vm.assume(router != address(this));
         vm.assume(router != otherRouter);
 
         registry.whitelistRouter(router);
@@ -25,31 +25,13 @@ contract TestRouterWhitelistRegistry is SymTest, Test {
 
     function check_blacklist_router(address router, address otherRouter) external {
         vm.assume(router != address(0));
-
+        vm.assume(router != address(this));
         vm.assume(router != otherRouter);
 
         registry.whitelistRouter(router);
         registry.blacklistRouter(router);
         assertFalse(registry.isRouterWhitelisted(address(this), router));
         assertFalse(registry.isRouterWhitelisted(address(this), otherRouter));
-    }
-
-    function check_top_bound(address otherRouter) public {
-        vm.assume(otherRouter != address(0));
-        vm.assume(otherRouter != address(this));
-        vm.assume(otherRouter != address(registry));
-
-        for (uint160 i = 0; i < 254; i++) {
-            vm.assume(address(i) != otherRouter);
-            registry.whitelistRouter(address(i));
-        }
-
-        assertFalse(registry.isRouterWhitelisted(address(this), otherRouter));
-    }
-
-    function check_collisions(address a, address b) public {
-        vm.assume(a != b);
-        assertFalse(uint256(uint160(a)) == uint256(uint160(b)));
     }
 
     function test_cannot_whitelist_self() public {

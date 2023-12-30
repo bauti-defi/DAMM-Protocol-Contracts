@@ -2,23 +2,18 @@
 pragma solidity ^0.8.23;
 
 import {ITokenWhitelistRegistry} from "@src/interfaces/ITokenWhitelistRegistry.sol";
-import {BitMaps} from "@openzeppelin-contracts/utils/structs/BitMaps.sol";
-import {AddressConverter} from "@src/lib/AddressConverter.sol";
 
 /// @notice This registry does not yet support native ethereum tokens
 contract TokenWhitelistRegistry is ITokenWhitelistRegistry {
-    using BitMaps for BitMaps.BitMap;
-    using AddressConverter for address;
+    /// @notice keccak256(abi.encodePacked(user, router, token)) => whitelisted
+    mapping(bytes32 pointer => bool whitelisted) internal tokenWhitelist;
 
-    /// @notice keccak256(abi.encodePacked(user, router)) => whitelisted
-    mapping(bytes32 pointer => BitMaps.BitMap token) internal tokenWhitelist;
-
-    function _tokenPointer(address user, address router) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked(user, router));
+    function _tokenPointer(address user, address router, address token) internal pure returns (bytes32) {
+        return keccak256(abi.encodePacked(user, router, token));
     }
 
     function isTokenWhitelisted(address user, address router, address token) external view returns (bool) {
-        return tokenWhitelist[_tokenPointer(user, router)].get(token.toUint256());
+        return tokenWhitelist[_tokenPointer(user, router, token)];
     }
 
     function _whitelistToken(address router, address token) internal {
@@ -26,11 +21,11 @@ contract TokenWhitelistRegistry is ITokenWhitelistRegistry {
         require(token != address(this), "TokenWhitelistRegistry: self address");
         require(token != msg.sender, "TokenWhitelistRegistry: sender address");
 
-        tokenWhitelist[_tokenPointer(msg.sender, router)].setTo(token.toUint256(), true);
+        tokenWhitelist[_tokenPointer(msg.sender, router, token)] = true;
     }
 
     function _blacklistToken(address router, address token) internal {
-        tokenWhitelist[_tokenPointer(msg.sender, router)].setTo(token.toUint256(), false);
+        tokenWhitelist[_tokenPointer(msg.sender, router, token)] = false;
     }
 
     function whitelistToken(address router, address token) external {

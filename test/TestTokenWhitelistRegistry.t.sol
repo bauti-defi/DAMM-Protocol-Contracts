@@ -15,7 +15,7 @@ contract TestTokenWhitelistRegistry is SymTest, Test {
 
     function check_whitelist_token(address token, address otherToken, address router) external {
         vm.assume(token != address(0));
-
+        vm.assume(token != address(this));
         vm.assume(token != otherToken);
         vm.assume(router != token);
         vm.assume(router != otherToken);
@@ -29,7 +29,7 @@ contract TestTokenWhitelistRegistry is SymTest, Test {
 
     function check_blacklist_token(address token, address otherToken, address router) external {
         vm.assume(token != address(0));
-
+        vm.assume(token != address(this));
         vm.assume(token != otherToken);
         vm.assume(router != token);
         vm.assume(router != otherToken);
@@ -40,23 +40,6 @@ contract TestTokenWhitelistRegistry is SymTest, Test {
         assertFalse(registry.isTokenWhitelisted(address(this), router, otherToken));
         assertFalse(registry.isTokenWhitelisted(address(this), otherToken, router));
         assertFalse(registry.isTokenWhitelisted(address(this), token, router));
-    }
-
-    function check_top_bound(address otherToken) public {
-        for (uint160 i = 0; i < 254; i++) {
-            vm.assume(address(i) != otherToken);
-            registry.whitelistToken(address(this), address(i));
-        }
-
-        for (uint160 i = 0; i < 254; i++) {
-            assertTrue(registry.isTokenWhitelisted(address(this), address(this), address(i)));
-        }
-        assertFalse(registry.isTokenWhitelisted(address(this), address(this), otherToken));
-    }
-
-    function check_collisions(address a, address b) public {
-        vm.assume(a != b);
-        assertFalse(uint256(uint160(a)) == uint256(uint160(b)));
     }
 
     function test_cannot_whitelist_self() public {

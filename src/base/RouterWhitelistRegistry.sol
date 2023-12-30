@@ -1,18 +1,17 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 pragma solidity ^0.8.23;
 
-import {BitMaps} from "@openzeppelin-contracts/utils/structs/BitMaps.sol";
 import {IRouterWhitelistRegistry} from "@src/interfaces/IRouterWhitelistRegistry.sol";
-import {AddressConverter} from "@src/lib/AddressConverter.sol";
 
 contract RouterWhitelistRegistry is IRouterWhitelistRegistry {
-    using BitMaps for BitMaps.BitMap;
-    using AddressConverter for address;
+    mapping(bytes32 pointer => bool whitelisted) internal routerWhitelist;
 
-    mapping(address vault => BitMaps.BitMap router) internal routerWhitelist;
+    function _pointer(address vault, address router) internal pure returns (bytes32) {
+        return keccak256(abi.encodePacked(vault, router));
+    }
 
     function isRouterWhitelisted(address vault, address router) external view returns (bool) {
-        return routerWhitelist[vault].get(router.toUint256());
+        return routerWhitelist[_pointer(vault, router)];
     }
 
     function _whitelistRouter(address router) internal {
@@ -20,11 +19,11 @@ contract RouterWhitelistRegistry is IRouterWhitelistRegistry {
         require(router != address(this), "RouterWhitelistRegistry: self address");
         require(router != msg.sender, "RouterWhitelistRegistry: sender address");
 
-        routerWhitelist[msg.sender].setTo(router.toUint256(), true);
+        routerWhitelist[_pointer(msg.sender, router)] = true;
     }
 
     function _blacklistRouter(address router) internal {
-        routerWhitelist[msg.sender].setTo(router.toUint256(), false);
+        routerWhitelist[_pointer(msg.sender, router)] = false;
     }
 
     function whitelistRouter(address router) external {
