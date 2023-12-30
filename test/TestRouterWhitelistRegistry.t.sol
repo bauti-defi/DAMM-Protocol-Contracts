@@ -1,0 +1,53 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+pragma solidity ^0.8.23;
+
+import {Test} from "@forge-std/Test.sol";
+
+import {SymTest} from "@halmos/SymTest.sol";
+import {RouterWhitelistRegistry} from "@src/base/RouterWhitelistRegistry.sol";
+
+contract TestRouterWhitelistRegistry is SymTest, Test {
+    RouterWhitelistRegistry public registry;
+
+    function setUp() public {
+        registry = new RouterWhitelistRegistry();
+    }
+
+    function check_whitelist_router(address router, address otherRouter) external {
+        vm.assume(router != address(0));
+
+        vm.assume(router != otherRouter);
+
+        registry.whitelistRouter(router);
+        assertFalse(registry.isRouterWhitelisted(address(this), otherRouter));
+        assertTrue(registry.isRouterWhitelisted(address(this), router));
+    }
+
+    function check_blacklist_router(address router, address otherRouter) external {
+        vm.assume(router != address(0));
+
+        vm.assume(router != otherRouter);
+
+        registry.whitelistRouter(router);
+        registry.blacklistRouter(router);
+        assertFalse(registry.isRouterWhitelisted(address(this), router));
+        assertFalse(registry.isRouterWhitelisted(address(this), otherRouter));
+    }
+
+    function check_top_bound(address otherRouter) public {
+        for (uint160 i = 0; i < 300; i++) {
+            vm.assume(address(i) != otherRouter);
+            registry.whitelistRouter(address(i));
+        }
+
+        for (uint160 i = 0; i < 300; i++) {
+            assertTrue(registry.isRouterWhitelisted(address(this), address(i)));
+        }
+        assertFalse(registry.isRouterWhitelisted(address(this), otherRouter));
+    }
+
+    function check_collisions(address a, address b) public {
+        vm.assume(a != b);
+        assertFalse(uint256(uint160(a)) == uint256(uint160(b)));
+    }
+}
