@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.0;
 
-import {ITokenWhitelistRegistry} from "./ITokenWhitelistRegistry.sol";
+import {ITokenWhitelistRegistry} from "@src/interfaces/ITokenWhitelistRegistry.sol";
 
 interface IRouter {
     error InvalidRecipient();

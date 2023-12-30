@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 pragma solidity ^0.8.23;
 
-import {IMulticallerWithSender} from "@src/interfaces/IMulticallerWithSender.sol";
-import {ISafe} from "@src/interfaces/ISafe.sol";
+import {IMulticallerWithSender} from "@src/interfaces/external/IMulticallerWithSender.sol";
+import {ISafe} from "@src/interfaces/external/ISafe.sol";
 import {Enum} from "@safe-contracts/common/Enum.sol";
 import {IRouterWhitelistRegistry} from "@src/interfaces/IRouterWhitelistRegistry.sol";
 import {IGnosisSafeModule} from "@src/interfaces/IGnosisSafeModule.sol";
@@ -71,16 +71,23 @@ contract GnosisSafeModule is IGnosisSafeModule {
         bytes[] calldata datas,
         uint256[] calldata values
     ) external override onlyOperator returns (bytes[] memory) {
+        uint256 length = targets.length;
+
         // sum up how much ETH the safe will need to send to the multicaller
         uint256 value;
-        for (uint256 i = 0; i < targets.length; ++i) {
+        for (uint256 i = 0; i < length;) {
             _isValidTarget(vault, targets[i]);
             value += values[i];
+
+            unchecked {
+                ++i;
+            }
         }
 
         bytes memory data =
             abi.encodeWithSelector(IMulticallerWithSender.aggregateWithSender.selector, targets, datas, values);
 
+        /// @notice multicaller will revert if arrays are not of equal length
         (bool success, bytes memory returnData) = ISafe(vault).execTransactionFromModuleReturnData(
             address(multicallerWithSender), value, data, Enum.Operation.Call
         );

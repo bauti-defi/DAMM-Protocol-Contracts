@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.0;
 
-import {INonfungiblePositionManager} from "@src/interfaces/INonfungiblePositionManager.sol";
+import {INonfungiblePositionManager} from "@src/interfaces/external/INonfungiblePositionManager.sol";
 
 interface IUniswapV3PositionRouter {
     function uniswapV3PositionManager() external view returns (INonfungiblePositionManager);

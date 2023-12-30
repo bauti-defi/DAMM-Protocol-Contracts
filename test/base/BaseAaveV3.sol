@@ -2,7 +2,7 @@
 pragma solidity ^0.8.23;
 
 import {Test} from "@forge-std/Test.sol";
-import {IPool} from "@src/interfaces/IPool.sol";
+import {IPool} from "@src/interfaces/external/IPool.sol";
 
 abstract contract BaseAaveV3 is Test {
     address constant AAVE_V3_POOL = 0x794a61358D6845594F94dc1DB02A252b5b4814aD;

@@ -5,7 +5,7 @@ import {Test} from "@forge-std/Test.sol";
 import {SafeL2} from "@safe-contracts/SafeL2.sol";
 import {SafeProxyFactory} from "@safe-contracts/proxies/SafeProxyFactory.sol";
 import {SafeProxy} from "@safe-contracts/proxies/SafeProxy.sol";
-import {ISafe} from "@src/interfaces/ISafe.sol";
+import {ISafe} from "@src/interfaces/external/ISafe.sol";
 import {GnosisSafeModule} from "@src/base/GnosisSafeModule.sol";
 import {BaseMulticallerWithSender} from "@test/base/BaseMulticallerWithSender.sol";
 import {RouterWhitelistRegistry} from "@src/base/RouterWhitelistRegistry.sol";
