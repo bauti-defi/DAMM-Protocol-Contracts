@@ -8,12 +8,14 @@ import {SafeProxy} from "@safe-contracts/proxies/SafeProxy.sol";
 import {ISafe} from "@src/interfaces/ISafe.sol";
 import {GnosisSafeModule} from "@src/base/GnosisSafeModule.sol";
 import {BaseMulticallerWithSender} from "@test/base/BaseMulticallerWithSender.sol";
+import {RouterWhitelistRegistry} from "@src/base/RouterWhitelistRegistry.sol";
 
 abstract contract BaseVault is BaseMulticallerWithSender {
     SafeL2 internal safeSingleton;
     SafeProxyFactory internal safeProxyFactory;
     uint256 internal safeSaltNonce;
 
+    RouterWhitelistRegistry public routerWhitelistRegistry;
     GnosisSafeModule public dammModule;
 
     address public vaultOwner;
@@ -28,7 +30,11 @@ abstract contract BaseVault is BaseMulticallerWithSender {
         safeProxyFactory = new SafeProxyFactory();
         vm.label(address(safeProxyFactory), "SafeProxyFactory");
 
-        dammModule = new GnosisSafeModule(address(this), address(multicallerWithSender));
+        routerWhitelistRegistry = new RouterWhitelistRegistry();
+        vm.label(address(routerWhitelistRegistry), "RouterWhitelistRegistry");
+
+        dammModule =
+            new GnosisSafeModule(address(this), address(routerWhitelistRegistry), address(multicallerWithSender));
         vm.label(address(dammModule), "SafeModule");
 
         vaultOwner = makeAddr("VaultOwner");

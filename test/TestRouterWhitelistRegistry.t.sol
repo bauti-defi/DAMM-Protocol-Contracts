@@ -50,4 +50,19 @@ contract TestRouterWhitelistRegistry is SymTest, Test {
         vm.assume(a != b);
         assertFalse(uint256(uint160(a)) == uint256(uint160(b)));
     }
+
+    function test_cannot_whitelist_self() public {
+        vm.expectRevert("RouterWhitelistRegistry: sender address");
+        registry.whitelistRouter(address(this));
+    }
+
+    function test_cannot_whitelist_zero() public {
+        vm.expectRevert("RouterWhitelistRegistry: zero address");
+        registry.whitelistRouter(address(0));
+    }
+
+    function test_cannot_whitelist_registry() public {
+        vm.expectRevert("RouterWhitelistRegistry: self address");
+        registry.whitelistRouter(address(registry));
+    }
 }

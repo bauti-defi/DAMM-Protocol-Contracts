@@ -4,15 +4,19 @@ pragma solidity ^0.8.23;
 import {IMulticallerWithSender} from "@src/interfaces/IMulticallerWithSender.sol";
 import {ISafe} from "@src/interfaces/ISafe.sol";
 import {Enum} from "@safe-contracts/common/Enum.sol";
+import {IRouterWhitelistRegistry} from "@src/interfaces/IRouterWhitelistRegistry.sol";
 
 contract GnosisSafeModule {
     address public immutable owner;
     IMulticallerWithSender public immutable multicallerWithSender;
+    IRouterWhitelistRegistry public immutable routerWhitelistRegistry;
+
     mapping(address operator => bool enabled) public operators;
     mapping(address routers => bool enabled) public routers;
 
-    constructor(address _owner, address _multicallerWithSender) {
+    constructor(address _owner, address _routerWhitelistRegistry, address _multicallerWithSender) {
         owner = _owner;
+        routerWhitelistRegistry = IRouterWhitelistRegistry(_routerWhitelistRegistry);
         multicallerWithSender = IMulticallerWithSender(_multicallerWithSender);
     }
 

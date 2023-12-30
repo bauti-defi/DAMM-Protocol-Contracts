@@ -16,6 +16,10 @@ contract RouterWhitelistRegistry is IRouterWhitelistRegistry {
     }
 
     function _whitelistRouter(address router) internal {
+        require(router != address(0), "RouterWhitelistRegistry: zero address");
+        require(router != address(this), "RouterWhitelistRegistry: self address");
+        require(router != msg.sender, "RouterWhitelistRegistry: sender address");
+
         routerWhitelist[msg.sender].setTo(router.toUint256(), true);
     }
 

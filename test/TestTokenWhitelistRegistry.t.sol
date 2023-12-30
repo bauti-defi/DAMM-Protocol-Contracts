@@ -58,4 +58,19 @@ contract TestTokenWhitelistRegistry is SymTest, Test {
         vm.assume(a != b);
         assertFalse(uint256(uint160(a)) == uint256(uint160(b)));
     }
+
+    function test_cannot_whitelist_self() public {
+        vm.expectRevert("TokenWhitelistRegistry: sender address");
+        registry.whitelistToken(address(this), address(this));
+    }
+
+    function test_cannot_whitelist_zero() public {
+        vm.expectRevert("TokenWhitelistRegistry: zero address");
+        registry.whitelistToken(address(this), address(0));
+    }
+
+    function test_cannot_whitelist_registry() public {
+        vm.expectRevert("TokenWhitelistRegistry: self address");
+        registry.whitelistToken(address(this), address(registry));
+    }
 }

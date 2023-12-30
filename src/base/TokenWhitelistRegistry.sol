@@ -6,7 +6,6 @@ import {BitMaps} from "@openzeppelin-contracts/utils/structs/BitMaps.sol";
 import {AddressConverter} from "@src/lib/AddressConverter.sol";
 
 /// @notice This registry does not yet support native ethereum tokens
-/// @notice This registristry supports up to 256 tokens per router per user
 contract TokenWhitelistRegistry is ITokenWhitelistRegistry {
     using BitMaps for BitMaps.BitMap;
     using AddressConverter for address;
@@ -23,6 +22,10 @@ contract TokenWhitelistRegistry is ITokenWhitelistRegistry {
     }
 
     function _whitelistToken(address router, address token) internal {
+        require(token != address(0), "TokenWhitelistRegistry: zero address");
+        require(token != address(this), "TokenWhitelistRegistry: self address");
+        require(token != msg.sender, "TokenWhitelistRegistry: sender address");
+
         tokenWhitelist[_tokenPointer(msg.sender, router)].setTo(token.toUint256(), true);
     }
 
