@@ -9,10 +9,10 @@ import {TokenWhitelistRegistry} from "@src/base/TokenWhitelistRegistry.sol";
 import {UniswapV3SwapRouter} from "@src/routers/UniswapV3SwapRouter.sol";
 import {MulticallerWithSender} from "@vec-multicaller/MulticallerWithSender.sol";
 import {MulticallerEtcher} from "@vec-multicaller/MulticallerEtcher.sol";
-import {ISwapRouter} from "@src/interfaces/ISwapRouter.sol";
-import {INonfungiblePositionManager} from "@src/interfaces/INonfungiblePositionManager.sol";
-import {IUniswapV3PoolActions} from "@src/interfaces/IUniswapV3PoolActions.sol";
-import {IUniswapV3PoolState} from "@src/interfaces/IUniswapV3PoolState.sol";
+import {ISwapRouter} from "@src/interfaces/external/ISwapRouter.sol";
+import {INonfungiblePositionManager} from "@src/interfaces/external/INonfungiblePositionManager.sol";
+import {IUniswapV3PoolActions} from "@src/interfaces/external/IUniswapV3PoolActions.sol";
+import {IUniswapV3PoolState} from "@src/interfaces/external/IUniswapV3PoolState.sol";
 import {IRouter} from "@src/interfaces/IRouter.sol";
 
 contract TestUniswapV3SwapRouter is Test {

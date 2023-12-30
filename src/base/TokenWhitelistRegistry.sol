@@ -5,11 +5,11 @@ import {ITokenWhitelistRegistry} from "@src/interfaces/ITokenWhitelistRegistry.s
 
 /// @notice This registry does not yet support native ethereum tokens
 contract TokenWhitelistRegistry is ITokenWhitelistRegistry {
-    /// @notice keccak256(abi.encode(user, router, token)) => whitelisted
-    mapping(bytes32 tokenPointer => bool whitelisted) internal tokenWhitelist;
+    /// @notice keccak256(abi.encodePacked(user, router, token)) => whitelisted
+    mapping(bytes32 pointer => bool whitelisted) internal tokenWhitelist;
 
     function _tokenPointer(address user, address router, address token) internal pure returns (bytes32) {
-        return keccak256(abi.encode(user, router, token));
+        return keccak256(abi.encodePacked(user, router, token));
     }
 
     function isTokenWhitelisted(address user, address router, address token) external view returns (bool) {
@@ -17,6 +17,10 @@ contract TokenWhitelistRegistry is ITokenWhitelistRegistry {
     }
 
     function _whitelistToken(address router, address token) internal {
+        require(token != address(0), "TokenWhitelistRegistry: zero address");
+        require(token != address(this), "TokenWhitelistRegistry: self address");
+        require(token != msg.sender, "TokenWhitelistRegistry: sender address");
+
         tokenWhitelist[_tokenPointer(msg.sender, router, token)] = true;
     }
 
@@ -41,8 +45,12 @@ contract TokenWhitelistRegistry is ITokenWhitelistRegistry {
 
         require(length == routers.length, "TokenWhitelistRegistry: routers and tokens length mismatch");
 
-        for (uint256 i = 0; i < length; i++) {
+        for (uint256 i = 0; i < length;) {
             _whitelistToken(routers[i], tokens[i]);
+
+            unchecked {
+                ++i;
+            }
         }
 
         emit TokensWhitelisted(msg.sender, routers, tokens);
@@ -53,8 +61,12 @@ contract TokenWhitelistRegistry is ITokenWhitelistRegistry {
 
         require(length == routers.length, "TokenWhitelistRegistry: routers and tokens length mismatch");
 
-        for (uint256 i = 0; i < length; i++) {
+        for (uint256 i = 0; i < length;) {
             _blacklistToken(routers[i], tokens[i]);
+
+            unchecked {
+                ++i;
+            }
         }
 
         emit TokensBlacklisted(msg.sender, routers, tokens);

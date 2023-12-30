@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.0;
 
-import {ISwapRouter} from "@src/interfaces/ISwapRouter.sol";
+import {ISwapRouter} from "@src/interfaces/external/ISwapRouter.sol";
 
 interface IUniswapV3SwapRouter {
     function uniswapV3SwapRouter() external view returns (ISwapRouter);
