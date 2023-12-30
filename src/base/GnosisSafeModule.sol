@@ -5,14 +5,14 @@ import {IMulticallerWithSender} from "@src/interfaces/IMulticallerWithSender.sol
 import {ISafe} from "@src/interfaces/ISafe.sol";
 import {Enum} from "@safe-contracts/common/Enum.sol";
 import {IRouterWhitelistRegistry} from "@src/interfaces/IRouterWhitelistRegistry.sol";
+import {IGnosisSafeModule} from "@src/interfaces/IGnosisSafeModule.sol";
 
-contract GnosisSafeModule {
+contract GnosisSafeModule is IGnosisSafeModule {
     address public immutable owner;
     IMulticallerWithSender public immutable multicallerWithSender;
     IRouterWhitelistRegistry public immutable routerWhitelistRegistry;
 
     mapping(address operator => bool enabled) public operators;
-    mapping(address routers => bool enabled) public routers;
 
     constructor(address _owner, address _routerWhitelistRegistry, address _multicallerWithSender) {
         owner = _owner;
@@ -21,33 +21,35 @@ contract GnosisSafeModule {
     }
 
     modifier onlyOwner() {
-        require(msg.sender == owner, "GnosisSafeModule: only owner");
+        if (msg.sender != owner) revert OnlyOwner();
         _;
     }
 
     modifier onlyOperator() {
-        require(operators[msg.sender], "GnosisSafeModule: only operator");
+        if (!operators[msg.sender]) revert OnlyOperator();
         _;
     }
 
     function setOperator(address operator, bool enabled) external onlyOwner {
         operators[operator] = enabled;
+
+        emit SetOperator(msg.sender, operator, enabled);
     }
 
-    function setRouter(address router, bool enabled) external onlyOwner {
-        require(
-            router != address(multicallerWithSender) && router != address(0) && router != address(this),
-            "GnosisSafeModule: invalid router"
-        );
-        routers[router] = enabled;
+    function _isValidTarget(address vault, address target) internal view {
+        if (
+            target == address(multicallerWithSender) || target == address(0) || target == address(this)
+                || !routerWhitelistRegistry.isRouterWhitelisted(vault, target)
+        ) revert InvalidRouter();
     }
 
     function execute(address vault, address target, uint256 value, bytes calldata data)
         external
+        override
         onlyOperator
         returns (bytes memory)
     {
-        require(routers[target], "GnosisSafeModule: target is not router");
+        _isValidTarget(vault, target);
 
         (bool success, bytes memory returnData) =
             ISafe(vault).execTransactionFromModuleReturnData(target, value, data, Enum.Operation.Call);
@@ -68,11 +70,11 @@ contract GnosisSafeModule {
         address[] calldata targets,
         bytes[] calldata datas,
         uint256[] calldata values
-    ) external payable onlyOperator returns (bytes[] memory) {
+    ) external override onlyOperator returns (bytes[] memory) {
         // sum up how much ETH the safe will need to send to the multicaller
         uint256 value;
         for (uint256 i = 0; i < targets.length; ++i) {
-            require(routers[targets[i]], "GnosisSafeModule: target is not router");
+            _isValidTarget(vault, targets[i]);
             value += values[i];
         }
 

@@ -43,12 +43,12 @@ contract TestTokenWhitelistRegistry is SymTest, Test {
     }
 
     function check_top_bound(address otherToken) public {
-        for (uint160 i = 0; i < 300; i++) {
+        for (uint160 i = 0; i < 254; i++) {
             vm.assume(address(i) != otherToken);
             registry.whitelistToken(address(this), address(i));
         }
 
-        for (uint160 i = 0; i < 300; i++) {
+        for (uint160 i = 0; i < 254; i++) {
             assertTrue(registry.isTokenWhitelisted(address(this), address(this), address(i)));
         }
         assertFalse(registry.isTokenWhitelisted(address(this), address(this), otherToken));

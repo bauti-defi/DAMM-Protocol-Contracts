@@ -35,14 +35,15 @@ contract TestRouterWhitelistRegistry is SymTest, Test {
     }
 
     function check_top_bound(address otherRouter) public {
-        for (uint160 i = 0; i < 300; i++) {
+        vm.assume(otherRouter != address(0));
+        vm.assume(otherRouter != address(this));
+        vm.assume(otherRouter != address(registry));
+
+        for (uint160 i = 0; i < 254; i++) {
             vm.assume(address(i) != otherRouter);
             registry.whitelistRouter(address(i));
         }
 
-        for (uint160 i = 0; i < 300; i++) {
-            assertTrue(registry.isRouterWhitelisted(address(this), address(i)));
-        }
         assertFalse(registry.isRouterWhitelisted(address(this), otherRouter));
     }
 

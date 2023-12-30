@@ -4,6 +4,7 @@ pragma solidity ^0.8.23;
 import {Test} from "@forge-std/Test.sol";
 import {BaseVault} from "@test/base/BaseVault.sol";
 import {LibMulticaller} from "@vec-multicaller/LibMulticaller.sol";
+import {IGnosisSafeModule} from "@src/interfaces/IGnosisSafeModule.sol";
 
 contract MockRouter {
     function fun1() external payable returns (address, uint256, uint256) {
@@ -33,21 +34,22 @@ contract TestGnosisSafeModule is BaseVault {
         mockRouter = new MockRouter();
         vm.label(address(mockRouter), "MockRouter");
 
-        dammModule.setRouter(address(mockRouter), true);
+        vm.prank(vault);
+        routerWhitelistRegistry.whitelistRouter(address(mockRouter));
 
         vm.deal(vault, 1 ether);
     }
 
     function test_only_operator_can_execute(address _op) public {
         vm.assume(_op != operator);
-        vm.expectRevert("GnosisSafeModule: only operator");
+        vm.expectRevert(IGnosisSafeModule.OnlyOperator.selector);
         vm.prank(_op);
         dammModule.execute(vault, address(mockRouter), 0, abi.encodeWithSelector(mockRouter.fun1.selector));
     }
 
     function test_only_operator_can_execute_multicall(address _op) public {
         vm.assume(_op != operator);
-        vm.expectRevert("GnosisSafeModule: only operator");
+        vm.expectRevert(IGnosisSafeModule.OnlyOperator.selector);
         vm.prank(_op);
         dammModule.executeMulticall(vault, new address[](0), new bytes[](0), new uint256[](0));
     }
@@ -94,7 +96,7 @@ contract TestGnosisSafeModule is BaseVault {
         vm.assume(badRouter != address(0));
 
         vm.prank(operator);
-        vm.expectRevert("GnosisSafeModule: target is not router");
+        vm.expectRevert(IGnosisSafeModule.InvalidRouter.selector);
         dammModule.execute(vault, badRouter, 0, abi.encodeWithSelector(mockRouter.fun1.selector));
 
         assertEq(1 ether, address(vault).balance);
@@ -184,5 +186,22 @@ contract TestGnosisSafeModule is BaseVault {
         assertEq(vault, caller1);
 
         assertEq(1 ether, address(vault).balance);
+    }
+
+    function test_enable_operator(address op) public {
+        dammModule.setOperator(op, true);
+        assertTrue(dammModule.operators(op));
+
+        dammModule.setOperator(op, false);
+        assertFalse(dammModule.operators(op));
+    }
+
+    function test_only_owner_can_enable_operator(address op, address caller) public {
+        vm.assume(caller != address(this));
+        vm.assume(caller != op);
+
+        vm.expectRevert(IGnosisSafeModule.OnlyOwner.selector);
+        vm.prank(caller);
+        dammModule.setOperator(op, true);
     }
 }
