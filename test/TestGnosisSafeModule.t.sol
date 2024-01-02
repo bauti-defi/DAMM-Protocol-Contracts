@@ -4,7 +4,7 @@ pragma solidity ^0.8.23;
 import {Test} from "@forge-std/Test.sol";
 import {BaseVault} from "@test/base/BaseVault.sol";
 import {LibMulticaller} from "@vec-multicaller/LibMulticaller.sol";
-import {IGnosisSafeModule} from "@src/interfaces/IGnosisSafeModule.sol";
+import {IDAMMGnosisSafeModule} from "@src/interfaces/IDAMMGnosisSafeModule.sol";
 
 contract MockRouter {
     function fun1() external payable returns (address, uint256, uint256) {
@@ -20,7 +20,7 @@ contract MockRouter {
     }
 }
 
-contract TestGnosisSafeModule is BaseVault {
+contract TestDAMMGnosisSafeModule is BaseVault {
     address public operator;
     MockRouter public mockRouter;
 
@@ -42,14 +42,14 @@ contract TestGnosisSafeModule is BaseVault {
 
     function test_only_operator_can_execute(address _op) public {
         vm.assume(_op != operator);
-        vm.expectRevert(IGnosisSafeModule.OnlyOperator.selector);
+        vm.expectRevert(IDAMMGnosisSafeModule.OnlyOperator.selector);
         vm.prank(_op);
         dammModule.execute(vault, address(mockRouter), 0, abi.encodeWithSelector(mockRouter.fun1.selector));
     }
 
     function test_only_operator_can_execute_multicall(address _op) public {
         vm.assume(_op != operator);
-        vm.expectRevert(IGnosisSafeModule.OnlyOperator.selector);
+        vm.expectRevert(IDAMMGnosisSafeModule.OnlyOperator.selector);
         vm.prank(_op);
         dammModule.executeMulticall(vault, new address[](0), new bytes[](0), new uint256[](0));
     }
@@ -96,7 +96,7 @@ contract TestGnosisSafeModule is BaseVault {
         vm.assume(badRouter != address(0));
 
         vm.prank(operator);
-        vm.expectRevert(IGnosisSafeModule.InvalidRouter.selector);
+        vm.expectRevert(IDAMMGnosisSafeModule.InvalidRouter.selector);
         dammModule.execute(vault, badRouter, 0, abi.encodeWithSelector(mockRouter.fun1.selector));
 
         assertEq(1 ether, address(vault).balance);
@@ -200,7 +200,7 @@ contract TestGnosisSafeModule is BaseVault {
         vm.assume(caller != address(this));
         vm.assume(caller != op);
 
-        vm.expectRevert(IGnosisSafeModule.OnlyOwner.selector);
+        vm.expectRevert(IDAMMGnosisSafeModule.OnlyOwner.selector);
         vm.prank(caller);
         dammModule.setOperator(op, true);
     }

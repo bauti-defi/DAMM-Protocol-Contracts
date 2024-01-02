@@ -5,9 +5,9 @@ import {IMulticallerWithSender} from "@src/interfaces/external/IMulticallerWithS
 import {ISafe} from "@src/interfaces/external/ISafe.sol";
 import {Enum} from "@safe-contracts/common/Enum.sol";
 import {IRouterWhitelistRegistry} from "@src/interfaces/IRouterWhitelistRegistry.sol";
-import {IGnosisSafeModule} from "@src/interfaces/IGnosisSafeModule.sol";
+import {IDAMMGnosisSafeModule} from "@src/interfaces/IDAMMGnosisSafeModule.sol";
 
-contract GnosisSafeModule is IGnosisSafeModule {
+contract DAMMGnosisSafeModule is IDAMMGnosisSafeModule {
     address public immutable owner;
     IMulticallerWithSender public immutable multicallerWithSender;
     IRouterWhitelistRegistry public immutable routerWhitelistRegistry;
