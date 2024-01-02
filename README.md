@@ -48,12 +48,12 @@ The RouterWhitelistRegistry is a registry of whitelisted routers. It is responsi
 > Reminder: Assets must be whitelisted in the TokenWhitelistRegistry in order to be traded by the routers.
 
 ### [UniswapV3PositionRouter](./src/routers/UniswapV3PositionRouter.sol)
-The UniswapV3PositionRouter is a router that allows users to create and manage Uniswap V3 positions.
+The `UniswapV3PositionRouter` is a router that allows users to create and manage Uniswap V3 positions.
 
 ---
 
 ### [UniswapV3SwapRouter](./src/routers/UniswapV3SwapRouter.sol)
-The UniswapV3SwapRouter is a router that allows users to swap tokens using Uniswap V3.
+The `UniswapV3SwapRouter` is a router that allows users to swap tokens through Uniswap V3.
 
 ## Usage
 
