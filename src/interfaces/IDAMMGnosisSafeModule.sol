@@ -4,7 +4,7 @@ pragma solidity ^0.8.0;
 import {IRouterWhitelistRegistry} from "@src/interfaces/IRouterWhitelistRegistry.sol";
 import {IMulticallerWithSender} from "@src/interfaces/external/IMulticallerWithSender.sol";
 
-interface IGnosisSafeModule {
+interface IDAMMGnosisSafeModule {
     error InvalidRouter();
     error OnlyOwner();
     error OnlyOperator();

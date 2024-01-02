@@ -6,7 +6,7 @@ import {SafeL2} from "@safe-contracts/SafeL2.sol";
 import {SafeProxyFactory} from "@safe-contracts/proxies/SafeProxyFactory.sol";
 import {SafeProxy} from "@safe-contracts/proxies/SafeProxy.sol";
 import {ISafe} from "@src/interfaces/external/ISafe.sol";
-import {GnosisSafeModule} from "@src/base/GnosisSafeModule.sol";
+import {DAMMGnosisSafeModule} from "@src/base/DAMMGnosisSafeModule.sol";
 import {BaseMulticallerWithSender} from "@test/base/BaseMulticallerWithSender.sol";
 import {RouterWhitelistRegistry} from "@src/base/RouterWhitelistRegistry.sol";
 
@@ -16,7 +16,7 @@ abstract contract BaseVault is BaseMulticallerWithSender {
     uint256 internal safeSaltNonce;
 
     RouterWhitelistRegistry public routerWhitelistRegistry;
-    GnosisSafeModule public dammModule;
+    DAMMGnosisSafeModule public dammModule;
 
     address public vaultOwner;
     address public vault;
@@ -34,8 +34,8 @@ abstract contract BaseVault is BaseMulticallerWithSender {
         vm.label(address(routerWhitelistRegistry), "RouterWhitelistRegistry");
 
         dammModule =
-            new GnosisSafeModule(address(this), address(routerWhitelistRegistry), address(multicallerWithSender));
-        vm.label(address(dammModule), "SafeModule");
+            new DAMMGnosisSafeModule(address(this), address(routerWhitelistRegistry), address(multicallerWithSender));
+        vm.label(address(dammModule), "DAMMGnosisSafeModule");
 
         vaultOwner = makeAddr("VaultOwner");
 
