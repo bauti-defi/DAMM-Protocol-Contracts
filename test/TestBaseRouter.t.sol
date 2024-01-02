@@ -59,7 +59,7 @@ contract TestBaseRouter is BaseMulticallerWithSender, BaseWETH9 {
         vm.expectRevert("Not WETH9");
         payable(address(router)).transfer(1 ether);
 
-        (bool success, bytes memory res) = address(router).call{value: 1 ether}("");
+        (bool success,) = address(router).call{value: 1 ether}("");
         assertEq(success, false);
 
         assertEq(address(this).balance, 1 ether);

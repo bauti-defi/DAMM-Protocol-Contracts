@@ -9,7 +9,7 @@ import {NonfungiblePositionManager} from "@uniswap-v3-periphery/NonfungiblePosit
 import {INonfungiblePositionManager} from "@uniswap-v3-periphery/interfaces/INonfungiblePositionManager.sol";
 import {SwapRouter} from "@uniswap-v3-periphery/SwapRouter.sol";
 import {ISwapRouter} from "@uniswap-v3-periphery/interfaces/ISwapRouter.sol";
-import {IBaseUniswapV3} from "@test/uniswapV3/IBaseUniswapV3.sol";
+import {IBaseUniswapV3} from "@test/base/uniswapV3/IBaseUniswapV3.sol";
 import {TickMath} from "@test/utils/TickMath.sol";
 
 contract Deployer is IBaseUniswapV3 {

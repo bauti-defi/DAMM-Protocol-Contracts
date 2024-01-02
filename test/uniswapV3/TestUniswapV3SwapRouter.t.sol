@@ -2,9 +2,7 @@
 pragma solidity >=0.8.0;
 
 import {Test, console2} from "@forge-std/Test.sol";
-import {IBaseUniswapV3} from "@test/uniswapV3/IBaseUniswapV3.sol";
 import {MockERC20} from "@test/mocks/MockERC20.sol";
-import {IWETH9} from "@src/interfaces/external/IWETH9.sol";
 import {TickMath} from "@test/utils/TickMath.sol";
 import {TokenWhitelistRegistry} from "@src/base/TokenWhitelistRegistry.sol";
 import {UniswapV3SwapRouter} from "@src/routers/UniswapV3SwapRouter.sol";
@@ -14,8 +12,9 @@ import {IUniswapV3PoolActions} from "@src/interfaces/external/IUniswapV3PoolActi
 import {IUniswapV3PoolState} from "@src/interfaces/external/IUniswapV3PoolState.sol";
 import {IRouter} from "@src/interfaces/IRouter.sol";
 import {BaseMulticallerWithSender} from "@test/base/BaseMulticallerWithSender.sol";
+import {BaseUniswapV3} from "@test/base/uniswapV3/BaseUniswapV3.sol";
 
-contract TestUniswapV3SwapRouter is Test, BaseMulticallerWithSender {
+contract TestUniswapV3SwapRouter is BaseUniswapV3, BaseMulticallerWithSender {
     struct MintCallbackData {
         address token0;
         address token1;
@@ -26,10 +25,8 @@ contract TestUniswapV3SwapRouter is Test, BaseMulticallerWithSender {
     uint256 private constant ONE_BILLION = ONE_MILLION * 1000;
     uint24 private constant POOL_FEE = 500;
 
-    IBaseUniswapV3 public uniswapV3;
     MockERC20 public token0;
     MockERC20 public token1;
-    IWETH9 public weth9;
     address public pool;
     TokenWhitelistRegistry public tokenWhitelistRegistry;
     UniswapV3SwapRouter public dammRouter;
@@ -39,14 +36,13 @@ contract TestUniswapV3SwapRouter is Test, BaseMulticallerWithSender {
     address public trader;
     address public lp;
 
-    function setUp() public override(BaseMulticallerWithSender) {
-        super.setUp();
+    function setUp() public override(BaseUniswapV3, BaseMulticallerWithSender) {
+        BaseUniswapV3.setUp();
+        BaseMulticallerWithSender.setUp();
 
         trader = makeAddr("Trader");
         lp = makeAddr("LP");
         vault = makeAddr("Vault");
-
-        uniswapV3 = _deployUniswapV3();
 
         token0 = new MockERC20();
         token1 = new MockERC20();
@@ -127,15 +123,6 @@ contract TestUniswapV3SwapRouter is Test, BaseMulticallerWithSender {
         if (amount1Owed > 0) token1.transferFrom(mintCallback.payer, address(pool), amount1Owed);
     }
 
-    function _deployUniswapV3() internal returns (IBaseUniswapV3) {
-        bytes memory bytecode = abi.encodePacked(vm.getCode("LocalUniswapV3Deployer.sol:Deployer"));
-        address deployer;
-        assembly {
-            deployer := create(0, add(bytecode, 0x20), mload(bytecode))
-        }
-        return IBaseUniswapV3(deployer);
-    }
-
     modifier invariants() {
         // damm router should never end up with any funds
         assertEq(token0.balanceOf(address(dammRouter)), 0);
@@ -145,7 +132,7 @@ contract TestUniswapV3SwapRouter is Test, BaseMulticallerWithSender {
         assertEq(token1.balanceOf(address(dammRouter)), 0);
     }
 
-    modifier withTokens(address t0, address t1) {
+    modifier useTokens(address t0, address t1) {
         token0 = MockERC20(t0);
         token1 = MockERC20(t1);
 
@@ -157,11 +144,7 @@ contract TestUniswapV3SwapRouter is Test, BaseMulticallerWithSender {
         _;
     }
 
-    function test_swap(uint256 amount, bool zeroForOne)
-        public
-        withTokens(address(token0), address(token1))
-        invariants
-    {
+    function test_swap(uint256 amount, bool zeroForOne) public useTokens(address(token0), address(token1)) invariants {
         vm.assume(amount > 0);
         vm.assume(amount < ONE_MILLION);
 
@@ -191,7 +174,7 @@ contract TestUniswapV3SwapRouter is Test, BaseMulticallerWithSender {
 
     function test_cannot_swap_unauthorized_token0(address token, bool zeroForOne)
         public
-        withTokens(address(token0), address(token1))
+        useTokens(address(token0), address(token1))
         invariants
     {
         vm.assume(token != address(token0));
@@ -221,7 +204,7 @@ contract TestUniswapV3SwapRouter is Test, BaseMulticallerWithSender {
 
     function test_cannot_swap_unauthorized_token1(address token, bool zeroForOne)
         public
-        withTokens(address(token0), address(token1))
+        useTokens(address(token0), address(token1))
         invariants
     {
         vm.assume(token != address(token1));
