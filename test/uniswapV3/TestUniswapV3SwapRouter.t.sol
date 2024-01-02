@@ -59,7 +59,7 @@ contract TestUniswapV3SwapRouter is BaseUniswapV3, BaseMulticallerWithSender {
         pool = uniswapV3.deployPool(address(token0), address(token1), POOL_FEE);
 
         // deploy token whitelist registry
-        tokenWhitelistRegistry = new TokenWhitelistRegistry();
+        tokenWhitelistRegistry = new TokenWhitelistRegistry(address(this));
 
         vm.label(address(tokenWhitelistRegistry), "TokenWhitelistRegistry");
 

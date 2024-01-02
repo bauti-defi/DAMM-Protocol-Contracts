@@ -30,7 +30,7 @@ abstract contract BaseVault is BaseMulticallerWithSender {
         safeProxyFactory = new SafeProxyFactory();
         vm.label(address(safeProxyFactory), "SafeProxyFactory");
 
-        routerWhitelistRegistry = new RouterWhitelistRegistry();
+        routerWhitelistRegistry = new RouterWhitelistRegistry(address(this));
         vm.label(address(routerWhitelistRegistry), "RouterWhitelistRegistry");
 
         dammModule =

@@ -59,7 +59,7 @@ contract TestUniswapV3PositionRouter is BaseUniswapV3, BaseMulticallerWithSender
         uniswapV3.initializePool(unauthorizedPool0, START_TICK);
 
         // deploy token whitelist registry
-        tokenWhitelistRegistry = new TokenWhitelistRegistry();
+        tokenWhitelistRegistry = new TokenWhitelistRegistry(address(this));
         vm.label(address(tokenWhitelistRegistry), "tokenWhitelistRegistry");
 
         // deploy router

@@ -10,7 +10,7 @@ contract TestRouterWhitelistRegistry is SymTest, Test {
     RouterWhitelistRegistry public registry;
 
     function setUp() public {
-        registry = new RouterWhitelistRegistry();
+        registry = new RouterWhitelistRegistry(address(this));
     }
 
     function check_whitelist_router(address router, address otherRouter) external {

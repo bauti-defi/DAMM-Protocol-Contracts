@@ -31,6 +31,7 @@ contract UniswapV3SwapRouter is BaseRouter, IUniswapV3SwapRouter {
     function swapToken(ISwapRouter.ExactInputSingleParams memory params)
         external
         override
+        notPaused
         setCaller
         returns (uint256 amountOut)
     {

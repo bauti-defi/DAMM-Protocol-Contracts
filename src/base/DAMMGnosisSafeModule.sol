@@ -6,15 +6,16 @@ import {ISafe} from "@src/interfaces/external/ISafe.sol";
 import {Enum} from "@safe-contracts/common/Enum.sol";
 import {IRouterWhitelistRegistry} from "@src/interfaces/IRouterWhitelistRegistry.sol";
 import {IDAMMGnosisSafeModule} from "@src/interfaces/IDAMMGnosisSafeModule.sol";
+import {Pausable} from "@src/lib/Pausable.sol";
 
-contract DAMMGnosisSafeModule is IDAMMGnosisSafeModule {
+contract DAMMGnosisSafeModule is Pausable, IDAMMGnosisSafeModule {
     address public immutable owner;
     IMulticallerWithSender public immutable multicallerWithSender;
     IRouterWhitelistRegistry public immutable routerWhitelistRegistry;
 
     mapping(address operator => bool enabled) public operators;
 
-    constructor(address _owner, address _routerWhitelistRegistry, address _multicallerWithSender) {
+    constructor(address _owner, address _routerWhitelistRegistry, address _multicallerWithSender) Pausable(_owner) {
         owner = _owner;
         routerWhitelistRegistry = IRouterWhitelistRegistry(_routerWhitelistRegistry);
         multicallerWithSender = IMulticallerWithSender(_multicallerWithSender);
@@ -30,7 +31,7 @@ contract DAMMGnosisSafeModule is IDAMMGnosisSafeModule {
         _;
     }
 
-    function setOperator(address operator, bool enabled) external onlyOwner {
+    function setOperator(address operator, bool enabled) external notPaused onlyOwner {
         operators[operator] = enabled;
 
         emit SetOperator(msg.sender, operator, enabled);
@@ -46,6 +47,7 @@ contract DAMMGnosisSafeModule is IDAMMGnosisSafeModule {
     function execute(address vault, address target, uint256 value, bytes calldata data)
         external
         override
+        notPaused
         onlyOperator
         returns (bytes memory)
     {
@@ -70,7 +72,7 @@ contract DAMMGnosisSafeModule is IDAMMGnosisSafeModule {
         address[] calldata targets,
         bytes[] calldata datas,
         uint256[] calldata values
-    ) external override onlyOperator returns (bytes[] memory) {
+    ) external override notPaused onlyOperator returns (bytes[] memory) {
         uint256 length = targets.length;
 
         // sum up how much ETH the safe will need to send to the multicaller

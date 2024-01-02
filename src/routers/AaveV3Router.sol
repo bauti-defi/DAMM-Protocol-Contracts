@@ -27,13 +27,13 @@ contract AaveV3Router is BaseRouter, IAaveV3Router {
         }
     }
 
-    function supplyAAVE(address token, uint256 amount) external override setCaller {
+    function supplyAAVE(address token, uint256 amount) external override notPaused setCaller {
         _checkTokenIsWhitelisted(caller, token);
 
         aaveV3Pool.supply(token, amount, caller, 0);
     }
 
-    function withdrawAAVE(address asset, uint256 amount) external override setCaller {
+    function withdrawAAVE(address asset, uint256 amount) external override notPaused setCaller {
         _checkTokenIsWhitelisted(caller, asset);
 
         aaveV3Pool.withdraw(asset, amount, caller);

@@ -2,11 +2,14 @@
 pragma solidity ^0.8.23;
 
 import {ITokenWhitelistRegistry} from "@src/interfaces/ITokenWhitelistRegistry.sol";
+import {Pausable} from "@src/lib/Pausable.sol";
 
 /// @notice This registry does not yet support native ethereum tokens
-contract TokenWhitelistRegistry is ITokenWhitelistRegistry {
+contract TokenWhitelistRegistry is Pausable, ITokenWhitelistRegistry {
     /// @notice keccak256(abi.encodePacked(user, router, token)) => whitelisted
     mapping(bytes32 pointer => bool whitelisted) internal tokenWhitelist;
+
+    constructor(address _owner) Pausable(_owner) {}
 
     function _tokenPointer(address user, address router, address token) internal pure returns (bytes32) {
         return keccak256(abi.encodePacked(user, router, token));
@@ -16,7 +19,7 @@ contract TokenWhitelistRegistry is ITokenWhitelistRegistry {
         return tokenWhitelist[_tokenPointer(user, router, token)];
     }
 
-    function _whitelistToken(address router, address token) internal {
+    function _whitelistToken(address router, address token) internal notPaused {
         require(token != address(0), "TokenWhitelistRegistry: zero address");
         require(token != address(this), "TokenWhitelistRegistry: self address");
         require(token != msg.sender, "TokenWhitelistRegistry: sender address");
@@ -24,7 +27,7 @@ contract TokenWhitelistRegistry is ITokenWhitelistRegistry {
         tokenWhitelist[_tokenPointer(msg.sender, router, token)] = true;
     }
 
-    function _blacklistToken(address router, address token) internal {
+    function _blacklistToken(address router, address token) internal notPaused {
         tokenWhitelist[_tokenPointer(msg.sender, router, token)] = false;
     }
 
