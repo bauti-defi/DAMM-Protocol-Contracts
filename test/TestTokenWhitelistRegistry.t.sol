@@ -10,7 +10,7 @@ contract TestTokenWhitelistRegistry is SymTest, Test {
     TokenWhitelistRegistry public registry;
 
     function setUp() public {
-        registry = new TokenWhitelistRegistry();
+        registry = new TokenWhitelistRegistry(address(this));
     }
 
     function check_whitelist_token(address token, address otherToken, address router) external {

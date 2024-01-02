@@ -7,8 +7,9 @@ import {ITokenWhitelistRegistry} from "@src/interfaces/ITokenWhitelistRegistry.s
 import {LibMulticaller} from "@vec-multicaller/LibMulticaller.sol";
 import {IWETH9} from "@src/interfaces/external/IWETH9.sol";
 import {TransferHelper} from "@src/lib/TransferHelper.sol";
+import {Pausable} from "@src/lib/Pausable.sol";
 
-abstract contract BaseRouter is IRouter, ReentrancyGuard {
+abstract contract BaseRouter is Pausable, IRouter, ReentrancyGuard {
     modifier setCaller() {
         if (caller == address(0)) caller = LibMulticaller.sender();
         _;
@@ -23,7 +24,9 @@ abstract contract BaseRouter is IRouter, ReentrancyGuard {
     address public immutable multicallerWithSender;
     address public immutable WETH9;
 
-    constructor(address _owner, address _WETH9, address _tokenWhitelistRegistry, address _multicallerWithSender) {
+    constructor(address _owner, address _WETH9, address _tokenWhitelistRegistry, address _multicallerWithSender)
+        Pausable(_owner)
+    {
         owner = _owner;
         WETH9 = _WETH9;
         multicallerWithSender = _multicallerWithSender;

@@ -38,6 +38,7 @@ contract UniswapV3PositionRouter is BaseRouter, IUniswapV3PositionRouter {
         external
         payable
         override
+        notPaused
         setCaller
         returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1)
     {
@@ -71,6 +72,7 @@ contract UniswapV3PositionRouter is BaseRouter, IUniswapV3PositionRouter {
         external
         payable
         override
+        notPaused
         setCaller
         returns (uint256 amount0, uint256 amount1)
     {
@@ -90,6 +92,7 @@ contract UniswapV3PositionRouter is BaseRouter, IUniswapV3PositionRouter {
         external
         payable
         override
+        notPaused
         setCaller
         returns (uint128 liquidity, uint256 amount0, uint256 amount1)
     {
@@ -122,6 +125,7 @@ contract UniswapV3PositionRouter is BaseRouter, IUniswapV3PositionRouter {
         external
         payable
         override
+        notPaused
         setCaller
         returns (uint256 amount0, uint256 amount1)
     {
