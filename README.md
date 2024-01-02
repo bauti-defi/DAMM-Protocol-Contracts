@@ -10,9 +10,16 @@ Decentralized Autonomous Money Management (DAMM) is a protocol for creating and 
 $ forge build
 ```
 
-### Test
+### Unit Test
 
 ```shell
 $ forge test
+```
+
+### Symbolic Test
+
+> Requires previously installation of the [halmos library.](https://github.com/a16z/halmos)
+
+```shell
 $ halmos --test-parallel
 ```
