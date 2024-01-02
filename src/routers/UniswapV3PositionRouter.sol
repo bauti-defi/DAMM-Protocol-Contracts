@@ -13,10 +13,11 @@ contract UniswapV3PositionRouter is BaseRouter, IUniswapV3PositionRouter {
 
     constructor(
         address _owner,
+        address _WETH9,
         address _tokenWhitelistRegistry,
         address _multicallerWithSender,
         address _uniswapV3PositionManager
-    ) BaseRouter(_owner, _tokenWhitelistRegistry, _multicallerWithSender) {
+    ) BaseRouter(_owner, _WETH9, _tokenWhitelistRegistry, _multicallerWithSender) {
         uniswapV3PositionManager = INonfungiblePositionManager(_uniswapV3PositionManager);
     }
 
@@ -33,7 +34,13 @@ contract UniswapV3PositionRouter is BaseRouter, IUniswapV3PositionRouter {
         (,, token0, token1,,,,,,,,) = uniswapV3PositionManager.positions(tokenId);
     }
 
-    function mintPosition(INonfungiblePositionManager.MintParams calldata params) external payable override setCaller {
+    function mintPosition(INonfungiblePositionManager.MintParams calldata params)
+        external
+        payable
+        override
+        setCaller
+        returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1)
+    {
         if (params.recipient != caller) revert InvalidRecipient();
 
         // check tokens are whitelisted
@@ -45,18 +52,18 @@ contract UniswapV3PositionRouter is BaseRouter, IUniswapV3PositionRouter {
         _ensureTokenAllowance(params.token1, params.amount1Desired);
 
         // transfer funds into router
-        TransferHelper.safeTransferFrom(params.token0, caller, address(this), params.amount0Desired);
-        TransferHelper.safeTransferFrom(params.token1, caller, address(this), params.amount1Desired);
+        transfer(params.token0, caller, address(this), params.amount0Desired);
+        transfer(params.token1, caller, address(this), params.amount1Desired);
 
         // mint position
-        (,, uint256 amount0, uint256 amount1) = uniswapV3PositionManager.mint(params);
+        (tokenId, liquidity, amount0, amount1) = uniswapV3PositionManager.mint(params);
 
         // transfer unspent funds back to sender
         if (params.amount0Desired > amount0) {
-            TransferHelper.safeTransfer(params.token0, caller, params.amount0Desired - amount0);
+            transfer(params.token0, address(this), caller, params.amount0Desired - amount0);
         }
         if (params.amount1Desired > amount1) {
-            TransferHelper.safeTransfer(params.token1, caller, params.amount1Desired - amount1);
+            transfer(params.token1, address(this), caller, params.amount1Desired - amount1);
         }
     }
 
@@ -65,15 +72,18 @@ contract UniswapV3PositionRouter is BaseRouter, IUniswapV3PositionRouter {
         payable
         override
         setCaller
+        returns (uint256 amount0, uint256 amount1)
     {
-        if (params.recipient != caller) revert InvalidRecipient();
+        address positionOwner = IERC721(address(uniswapV3PositionManager)).ownerOf(params.tokenId);
+
+        if (positionOwner != caller || params.recipient != caller) revert InvalidRecipient();
 
         (address token0, address token1) = _getV3PositionTokenPair(params.tokenId);
 
         _checkTokenIsWhitelisted(caller, token0);
         _checkTokenIsWhitelisted(caller, token1);
 
-        uniswapV3PositionManager.collect(params);
+        (amount0, amount1) = uniswapV3PositionManager.collect(params);
     }
 
     function increasePositionLiquidity(INonfungiblePositionManager.IncreaseLiquidityParams calldata params)
@@ -81,6 +91,7 @@ contract UniswapV3PositionRouter is BaseRouter, IUniswapV3PositionRouter {
         payable
         override
         setCaller
+        returns (uint128 liquidity, uint256 amount0, uint256 amount1)
     {
         address positionOwner = IERC721(address(uniswapV3PositionManager)).ownerOf(params.tokenId);
 
@@ -94,16 +105,16 @@ contract UniswapV3PositionRouter is BaseRouter, IUniswapV3PositionRouter {
         _ensureTokenAllowance(token0, params.amount0Desired);
         _ensureTokenAllowance(token1, params.amount1Desired);
 
-        TransferHelper.safeTransferFrom(token0, caller, address(this), params.amount0Desired);
-        TransferHelper.safeTransferFrom(token1, caller, address(this), params.amount1Desired);
+        transfer(token0, caller, address(this), params.amount0Desired);
+        transfer(token1, caller, address(this), params.amount1Desired);
 
-        (, uint256 amount0, uint256 amoun1) = uniswapV3PositionManager.increaseLiquidity(params);
+        (liquidity, amount0, amount1) = uniswapV3PositionManager.increaseLiquidity(params);
 
         if (params.amount0Desired > amount0) {
-            TransferHelper.safeTransfer(token0, caller, params.amount0Desired - amount0);
+            transfer(token0, address(this), caller, params.amount0Desired - amount0);
         }
-        if (params.amount1Desired > amoun1) {
-            TransferHelper.safeTransfer(token1, caller, params.amount1Desired - amoun1);
+        if (params.amount1Desired > amount1) {
+            transfer(token1, address(this), caller, params.amount1Desired - amount1);
         }
     }
 
@@ -112,6 +123,7 @@ contract UniswapV3PositionRouter is BaseRouter, IUniswapV3PositionRouter {
         payable
         override
         setCaller
+        returns (uint256 amount0, uint256 amount1)
     {
         address positionOwner = IERC721(address(uniswapV3PositionManager)).ownerOf(params.tokenId);
 
@@ -122,6 +134,6 @@ contract UniswapV3PositionRouter is BaseRouter, IUniswapV3PositionRouter {
         _checkTokenIsWhitelisted(caller, token0);
         _checkTokenIsWhitelisted(caller, token1);
 
-        uniswapV3PositionManager.decreaseLiquidity(params);
+        (amount0, amount1) = uniswapV3PositionManager.decreaseLiquidity(params);
     }
 }

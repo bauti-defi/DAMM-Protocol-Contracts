@@ -6,5 +6,5 @@ import {ISwapRouter} from "@src/interfaces/external/ISwapRouter.sol";
 interface IUniswapV3SwapRouter {
     function uniswapV3SwapRouter() external view returns (ISwapRouter);
 
-    function swapToken(ISwapRouter.ExactInputSingleParams memory params) external payable returns (uint256 amountOut);
+    function swapToken(ISwapRouter.ExactInputSingleParams memory params) external returns (uint256 amountOut);
 }
