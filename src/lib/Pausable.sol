@@ -13,26 +13,26 @@ abstract contract Pausable {
     }
 
     function pause() public {
-        require(msg.sender == admin);
+        require(msg.sender == admin, "Pausable: Only admin can pause");
         paused = true;
 
         emit Paused(msg.sender);
     }
 
     function unpause() public {
-        require(msg.sender == admin);
+        require(msg.sender == admin, "Pausable: Only admin can unpause");
         paused = false;
 
         emit Unpaused(msg.sender);
     }
 
     modifier notPaused() {
-        require(!paused);
+        require(!paused, "Pausable: paused");
         _;
     }
 
     modifier isPaused() {
-        require(paused);
+        require(paused, "Pausable: not paused");
         _;
     }
 }
