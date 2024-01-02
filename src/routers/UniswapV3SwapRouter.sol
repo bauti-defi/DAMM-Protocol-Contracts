@@ -4,7 +4,6 @@ pragma solidity ^0.8.23;
 import {ISwapRouter} from "@src/interfaces/external/ISwapRouter.sol";
 import {IERC20} from "@openzeppelin-contracts/token/ERC20/IERC20.sol";
 import {IERC721} from "@openzeppelin-contracts/token/ERC721/IERC721.sol";
-import {TransferHelper} from "@src/lib/TransferHelper.sol";
 import {BaseRouter} from "@src/base/BaseRouter.sol";
 import {IUniswapV3SwapRouter} from "@src/interfaces/IUniswapV3SwapRouter.sol";
 
@@ -13,10 +12,11 @@ contract UniswapV3SwapRouter is BaseRouter, IUniswapV3SwapRouter {
 
     constructor(
         address _owner,
+        address _WETH9,
         address _tokenWhitelistRegistry,
         address _multicallerWithSender,
         address _uniswapV3SwapRouter
-    ) BaseRouter(_owner, _tokenWhitelistRegistry, _multicallerWithSender) {
+    ) BaseRouter(_owner, _WETH9, _tokenWhitelistRegistry, _multicallerWithSender) {
         uniswapV3SwapRouter = ISwapRouter(_uniswapV3SwapRouter);
     }
 
@@ -47,12 +47,12 @@ contract UniswapV3SwapRouter is BaseRouter, IUniswapV3SwapRouter {
         uint256 startBalance = IERC20(params.tokenIn).balanceOf(address(this));
 
         // transfer funds into router
-        TransferHelper.safeTransferFrom(params.tokenIn, caller, address(this), params.amountIn);
+        transfer(params.tokenIn, caller, address(this), params.amountIn);
 
         amountOut = uniswapV3SwapRouter.exactInputSingle(params);
         uint256 diff = IERC20(params.tokenIn).balanceOf(address(this)) - startBalance;
 
         // return left over funds to caller
-        if (diff > 0) TransferHelper.safeTransfer(params.tokenIn, caller, diff);
+        if (diff > 0) transfer(params.tokenIn, address(this), caller, diff);
     }
 }

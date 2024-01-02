@@ -7,12 +7,13 @@ import {BaseRouter} from "@src/base/BaseRouter.sol";
 import {MulticallerEtcher} from "@vec-multicaller/MulticallerEtcher.sol";
 import {MulticallerWithSender} from "@vec-multicaller/MulticallerWithSender.sol";
 import {BaseMulticallerWithSender} from "@test/base/BaseMulticallerWithSender.sol";
+import {BaseWETH9} from "@test/base/BaseWETH9.sol";
 
 contract Router is BaseRouter {
     event CurrentCaller(address caller);
 
-    constructor(address _owner, address _tokenWhitelistRegistry, address _multicallerWithSender)
-        BaseRouter(_owner, _tokenWhitelistRegistry, _multicallerWithSender)
+    constructor(address _weth9, address _multicallerWithSender)
+        BaseRouter(address(0), _weth9, address(0), _multicallerWithSender)
     {}
 
     function fun4() external setCaller returns (uint256) {
@@ -30,16 +31,16 @@ contract Router is BaseRouter {
     }
 }
 
-contract TestBaseRouter is BaseMulticallerWithSender {
+contract TestBaseRouter is BaseMulticallerWithSender, BaseWETH9 {
     Router router;
 
-    function setUp() public override(BaseMulticallerWithSender) {
-        super.setUp();
+    function setUp() public override(BaseMulticallerWithSender, BaseWETH9) {
+        BaseMulticallerWithSender.setUp();
+        BaseWETH9.setUp();
 
-        router = new Router(address(0), address(0), address(multicallerWithSender));
+        router = new Router(address(WETH9), address(multicallerWithSender));
 
         vm.label(address(router), "Router");
-        vm.label(address(multicallerWithSender), "MulticallerWithSender");
     }
 
     modifier invariants() {
@@ -50,6 +51,19 @@ contract TestBaseRouter is BaseMulticallerWithSender {
         /// @notice the caller address is a transient variable that should be reset after each transaction
         callerAddress = vm.load(address(router), bytes32(uint256(0)));
         assertEq(bytes32(0), callerAddress);
+    }
+
+    function test_cannot_transfer_native_eth_to_router() public invariants {
+        vm.deal(address(this), 1 ether);
+
+        vm.expectRevert("Not WETH9");
+        payable(address(router)).transfer(1 ether);
+
+        (bool success, bytes memory res) = address(router).call{value: 1 ether}("");
+        assertEq(success, false);
+
+        assertEq(address(this).balance, 1 ether);
+        assertEq(address(router).balance, 0);
     }
 
     function test_caller_is_set() public invariants {

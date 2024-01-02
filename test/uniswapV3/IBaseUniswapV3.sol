@@ -7,4 +7,6 @@ interface IBaseUniswapV3 {
     function localUniV3TokenDescriptor() external view returns (address);
     function localUniV3PM() external view returns (address);
     function localUniV3Router() external view returns (address);
+    function deployPool(address token0, address token1, uint24 poolFee) external returns (address pool);
+    function initializePool(address pool, int24 startTick) external;
 }
