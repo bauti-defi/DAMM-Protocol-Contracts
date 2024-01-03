@@ -10,10 +10,10 @@ import {ISwapRouter} from "@src/interfaces/external/ISwapRouter.sol";
 import {INonfungiblePositionManager} from "@src/interfaces/external/INonfungiblePositionManager.sol";
 import {IUniswapV3PoolActions} from "@src/interfaces/external/IUniswapV3PoolActions.sol";
 import {IUniswapV3PoolState} from "@src/interfaces/external/IUniswapV3PoolState.sol";
-import {IRouter} from "@src/interfaces/IRouter.sol";
 import {BaseMulticallerWithSender} from "@test/base/BaseMulticallerWithSender.sol";
 import {BaseUniswapV3} from "@test/base/uniswapV3/BaseUniswapV3.sol";
 import {ProtocolState} from "@src/base/ProtocolState.sol";
+import {BaseRouter} from "@src/base/BaseRouter.sol";
 
 contract TestUniswapV3SwapRouter is BaseUniswapV3, BaseMulticallerWithSender {
     struct MintCallbackData {
@@ -193,7 +193,7 @@ contract TestUniswapV3SwapRouter is BaseUniswapV3, BaseMulticallerWithSender {
         if (zeroForOne) (tokenIn, tokenOut) = (address(token), address(token1));
 
         vm.prank(vault);
-        vm.expectRevert(IRouter.TokenNotWhitelisted.selector);
+        vm.expectRevert(BaseRouter.TokenNotWhitelisted.selector);
         dammRouter.swapToken(
             ISwapRouter.ExactInputSingleParams({
                 tokenIn: tokenIn,
@@ -223,7 +223,7 @@ contract TestUniswapV3SwapRouter is BaseUniswapV3, BaseMulticallerWithSender {
         if (zeroForOne) (tokenIn, tokenOut) = (address(token0), address(token));
 
         vm.prank(vault);
-        vm.expectRevert(IRouter.TokenNotWhitelisted.selector);
+        vm.expectRevert(BaseRouter.TokenNotWhitelisted.selector);
         dammRouter.swapToken(
             ISwapRouter.ExactInputSingleParams({
                 tokenIn: tokenIn,

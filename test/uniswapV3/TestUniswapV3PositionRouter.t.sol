@@ -8,8 +8,8 @@ import {TokenWhitelistRegistry} from "@src/base/TokenWhitelistRegistry.sol";
 import {UniswapV3PositionRouter} from "@src/routers/UniswapV3PositionRouter.sol";
 import {INonfungiblePositionManager} from "@src/interfaces/external/INonfungiblePositionManager.sol";
 import {IERC721} from "@openzeppelin-contracts/token/ERC721/IERC721.sol";
-import {IRouter} from "@src/interfaces/IRouter.sol";
 import {ProtocolState} from "@src/base/ProtocolState.sol";
+import {BaseRouter} from "@src/base/BaseRouter.sol";
 
 contract TestUniswapV3PositionRouter is BaseUniswapV3, BaseMulticallerWithSender {
     uint256 private constant ONE_BILLION = 1_000_000 * 1000;
@@ -214,7 +214,7 @@ contract TestUniswapV3PositionRouter is BaseUniswapV3, BaseMulticallerWithSender
         vm.assume(other != lp);
 
         vm.prank(lp);
-        vm.expectRevert(IRouter.InvalidRecipient.selector);
+        vm.expectRevert(BaseRouter.InvalidRecipient.selector);
         dammRouter.mintPosition(
             INonfungiblePositionManager.MintParams({
                 token0: address(token0),
@@ -238,7 +238,7 @@ contract TestUniswapV3PositionRouter is BaseUniswapV3, BaseMulticallerWithSender
         invariants
     {
         vm.prank(lp);
-        vm.expectRevert(IRouter.TokenNotWhitelisted.selector);
+        vm.expectRevert(BaseRouter.TokenNotWhitelisted.selector);
         dammRouter.mintPosition(
             INonfungiblePositionManager.MintParams({
                 token0: address(unauthorizedToken),
@@ -262,7 +262,7 @@ contract TestUniswapV3PositionRouter is BaseUniswapV3, BaseMulticallerWithSender
         invariants
     {
         vm.prank(lp);
-        vm.expectRevert(IRouter.TokenNotWhitelisted.selector);
+        vm.expectRevert(BaseRouter.TokenNotWhitelisted.selector);
         dammRouter.mintPosition(
             INonfungiblePositionManager.MintParams({
                 token0: address(token0),
@@ -321,7 +321,7 @@ contract TestUniswapV3PositionRouter is BaseUniswapV3, BaseMulticallerWithSender
         _mint_position_with_router(lp, 1000, 1000);
 
         vm.prank(lp);
-        vm.expectRevert(IRouter.InvalidRecipient.selector);
+        vm.expectRevert(BaseRouter.InvalidRecipient.selector);
         dammRouter.increasePositionLiquidity(
             INonfungiblePositionManager.IncreaseLiquidityParams({
                 tokenId: 1, // this is the otherLP's position
@@ -402,7 +402,7 @@ contract TestUniswapV3PositionRouter is BaseUniswapV3, BaseMulticallerWithSender
         _mint_position_with_router(lp, 1000, 1000);
 
         vm.prank(lp);
-        vm.expectRevert(IRouter.InvalidRecipient.selector);
+        vm.expectRevert(BaseRouter.InvalidRecipient.selector);
         dammRouter.decreasePositionLiquidity(
             INonfungiblePositionManager.DecreaseLiquidityParams({
                 tokenId: 1, // this is the otherLP's position
@@ -470,7 +470,7 @@ contract TestUniswapV3PositionRouter is BaseUniswapV3, BaseMulticallerWithSender
         _mint_position_with_router(lp, 1000, 1000);
 
         vm.prank(lp);
-        vm.expectRevert(IRouter.InvalidRecipient.selector);
+        vm.expectRevert(BaseRouter.InvalidRecipient.selector);
         dammRouter.collectTokensOwed(
             INonfungiblePositionManager.CollectParams({
                 tokenId: 1, // this is the otherLP's position

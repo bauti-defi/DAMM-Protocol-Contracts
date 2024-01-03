@@ -6,11 +6,13 @@ import {ISafe} from "@src/interfaces/external/ISafe.sol";
 import {Enum} from "@safe-contracts/common/Enum.sol";
 import {IRouterWhitelistRegistry} from "@src/interfaces/IRouterWhitelistRegistry.sol";
 import {IDAMMGnosisSafeModule} from "@src/interfaces/IDAMMGnosisSafeModule.sol";
-import {ProtocolStateAccesor} from "@src/lib/ProtocolStateAccesor.sol";
+import {Pausable} from "@src/base/Pausable.sol";
+import {IProtocolState} from "@src/interfaces/IProtocolState.sol";
 
-contract DAMMGnosisSafeModule is ProtocolStateAccesor, IDAMMGnosisSafeModule {
+contract DAMMGnosisSafeModule is Pausable, IDAMMGnosisSafeModule {
     IMulticallerWithSender public immutable multicallerWithSender;
     IRouterWhitelistRegistry public immutable routerWhitelistRegistry;
+    IProtocolState public immutable protocolState;
 
     /// @notice keccak256(abi.encodePacked(vault, operator)) => bool
     mapping(bytes32 operatorPointer => bool enabled) public operators;
@@ -19,8 +21,9 @@ contract DAMMGnosisSafeModule is ProtocolStateAccesor, IDAMMGnosisSafeModule {
     mapping(address vault => bool suspended) public tradingSuspended;
 
     constructor(address _protocolState, address _routerWhitelistRegistry, address _multicallerWithSender)
-        ProtocolStateAccesor(_protocolState)
+        Pausable(_protocolState)
     {
+        protocolState = IProtocolState(_protocolState);
         routerWhitelistRegistry = IRouterWhitelistRegistry(_routerWhitelistRegistry);
         multicallerWithSender = IMulticallerWithSender(_multicallerWithSender);
     }

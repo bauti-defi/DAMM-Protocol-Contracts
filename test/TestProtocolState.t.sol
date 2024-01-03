@@ -2,15 +2,14 @@
 pragma solidity ^0.8.23;
 
 import {Test} from "@forge-std/Test.sol";
-
-import {ProtocolStateAccesor} from "@src/lib/ProtocolStateAccesor.sol";
+import {Pausable} from "@src/base/Pausable.sol";
 import {IProtocolStateActions} from "@src/interfaces/IProtocolStateActions.sol";
 import {ProtocolState} from "@src/base/ProtocolState.sol";
 
-contract Target is ProtocolStateAccesor {
+contract Target is Pausable {
     uint256 public state;
 
-    constructor(address _protocolState) ProtocolStateAccesor(_protocolState) {}
+    constructor(address _protocolState) Pausable(_protocolState) {}
 
     function add(uint256 a, uint256 b) external notPaused {
         state = a + b;

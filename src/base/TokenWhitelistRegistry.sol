@@ -2,14 +2,19 @@
 pragma solidity ^0.8.23;
 
 import {ITokenWhitelistRegistry} from "@src/interfaces/ITokenWhitelistRegistry.sol";
-import {ProtocolStateAccesor} from "@src/lib/ProtocolStateAccesor.sol";
+import {Pausable} from "@src/base/Pausable.sol";
+import {IProtocolState} from "@src/interfaces/IProtocolState.sol";
 
 /// @notice This registry does not yet support native ethereum tokens
-contract TokenWhitelistRegistry is ProtocolStateAccesor, ITokenWhitelistRegistry {
+contract TokenWhitelistRegistry is Pausable, ITokenWhitelistRegistry {
+    IProtocolState public immutable protocolState;
+
     /// @notice keccak256(abi.encodePacked(user, router, token)) => whitelisted
     mapping(bytes32 pointer => bool whitelisted) internal tokenWhitelist;
 
-    constructor(address _protocolState) ProtocolStateAccesor(_protocolState) {}
+    constructor(address _protocolState) Pausable(_protocolState) {
+        protocolState = IProtocolState(_protocolState);
+    }
 
     function _tokenPointer(address user, address router, address token) internal pure returns (bytes32) {
         return keccak256(abi.encode(user, router, token));
