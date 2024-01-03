@@ -1,14 +1,17 @@
-// SPDX-License-Identifier: GPL-2.0-or-later
-pragma solidity ^0.8.23;
+// SPDX-License-Identifier: GPL-3.0-only
+pragma solidity >=0.8.18;
 
-import {IRouter} from "@src/interfaces/IRouter.sol";
 import {ITokenWhitelistRegistry} from "@src/interfaces/ITokenWhitelistRegistry.sol";
 import {LibMulticaller} from "@vec-multicaller/LibMulticaller.sol";
 import {IWETH9} from "@src/interfaces/external/IWETH9.sol";
 import {TransferHelper} from "@src/lib/TransferHelper.sol";
-import {ProtocolStateAccesor} from "@src/lib/ProtocolStateAccesor.sol";
+import {IProtocolState} from "@src/interfaces/IProtocolState.sol";
+import {BasePausable} from "@src/base/BasePausable.sol";
 
-abstract contract BaseRouter is ProtocolStateAccesor, IRouter {
+abstract contract BaseRouter is BasePausable {
+    error InvalidRecipient();
+    error TokenNotWhitelisted();
+
     modifier setCaller() {
         if (caller == address(0)) caller = LibMulticaller.sender();
         _;
@@ -18,13 +21,15 @@ abstract contract BaseRouter is ProtocolStateAccesor, IRouter {
     /// @notice this variable is transient
     address internal caller;
 
+    IProtocolState public immutable protocolState;
     ITokenWhitelistRegistry public immutable tokenWhitelistRegistry;
     address public immutable multicallerWithSender;
     address public immutable WETH9;
 
     constructor(address _protocolState, address _WETH9, address _tokenWhitelistRegistry, address _multicallerWithSender)
-        ProtocolStateAccesor(_protocolState)
+        BasePausable(_protocolState)
     {
+        protocolState = IProtocolState(_protocolState);
         WETH9 = _WETH9;
         multicallerWithSender = _multicallerWithSender;
         tokenWhitelistRegistry = ITokenWhitelistRegistry(_tokenWhitelistRegistry);
@@ -36,6 +41,20 @@ abstract contract BaseRouter is ProtocolStateAccesor, IRouter {
 
     function _checkTokenIsWhitelisted(address user, address token) internal view {
         if (!isTokenWhitelisted(user, token)) revert TokenNotWhitelisted();
+    }
+
+    function _checkTokensAreWhitelisted(address user, address[] memory tokens) internal view {
+        uint256 length = tokens.length;
+
+        require(length > 0, "Router: length must be > 0");
+
+        for (uint256 i = 0; i < length;) {
+            _checkTokenIsWhitelisted(user, tokens[i]);
+
+            unchecked {
+                ++i;
+            }
+        }
     }
 
     fallback() external payable {

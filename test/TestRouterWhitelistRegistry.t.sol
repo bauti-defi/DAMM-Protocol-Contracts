@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: GPL-2.0-or-later
-pragma solidity ^0.8.23;
+// SPDX-License-Identifier: GPL-3.0-only
+pragma solidity >=0.8.18;
 
 import {Test, console2} from "@forge-std/Test.sol";
 
@@ -30,6 +30,7 @@ contract TestRouterWhitelistRegistry is SymTest, Test {
         vm.assume(router != address(0));
         vm.assume(router != address(this));
         vm.assume(router != otherRouter);
+        
 
         registry.whitelistRouter(router);
         registry.blacklistRouter(router);

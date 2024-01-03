@@ -1,16 +1,15 @@
-// SPDX-License-Identifier: GPL-2.0-or-later
-pragma solidity ^0.8.23;
+// SPDX-License-Identifier: GPL-3.0-only
+pragma solidity >=0.8.18;
 
 import {Test} from "@forge-std/Test.sol";
-
-import {ProtocolStateAccesor} from "@src/lib/ProtocolStateAccesor.sol";
+import {BasePausable} from "@src/base/BasePausable.sol";
 import {IProtocolStateActions} from "@src/interfaces/IProtocolStateActions.sol";
 import {ProtocolState} from "@src/base/ProtocolState.sol";
 
-contract Target is ProtocolStateAccesor {
+contract Target is BasePausable {
     uint256 public state;
 
-    constructor(address _protocolState) ProtocolStateAccesor(_protocolState) {}
+    constructor(address _protocolState) BasePausable(_protocolState) {}
 
     function add(uint256 a, uint256 b) external notPaused {
         state = a + b;
