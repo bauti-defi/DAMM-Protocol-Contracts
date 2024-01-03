@@ -1,10 +1,10 @@
-// SPDX-License-Identifier: GPL-2.0-or-later
-pragma solidity ^0.8.23;
+// SPDX-License-Identifier: GPL-3.0-only
+pragma solidity >=0.8.18;
 
 import "@src/lib/ProtocolStateAccesor.sol";
 import {IPausableState} from "@src/interfaces/libs/IPausableState.sol";
 
-abstract contract Pausable is IPausableState {
+abstract contract BasePausable is IPausableState {
     IProtocolState private immutable protocolState;
 
     constructor(address _protocolState) {

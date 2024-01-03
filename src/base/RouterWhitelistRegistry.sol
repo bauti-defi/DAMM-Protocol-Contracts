@@ -1,17 +1,17 @@
-// SPDX-License-Identifier: GPL-2.0-or-later
-pragma solidity ^0.8.23;
+// SPDX-License-Identifier: GPL-3.0-only
+pragma solidity >=0.8.18;
 
 import {IRouterWhitelistRegistry} from "@src/interfaces/IRouterWhitelistRegistry.sol";
 import {ProtocolStateAccesor} from "@src/lib/ProtocolStateAccesor.sol";
 import {IProtocolState} from "@src/interfaces/IProtocolState.sol";
-import {Pausable} from "@src/base/Pausable.sol";
+import {BasePausable} from "@src/base/BasePausable.sol";
 
-contract RouterWhitelistRegistry is Pausable, IRouterWhitelistRegistry {
+contract RouterWhitelistRegistry is BasePausable, IRouterWhitelistRegistry {
     IProtocolState public immutable protocolState;
 
     mapping(bytes32 pointer => bool whitelisted) internal routerWhitelist;
 
-    constructor(address _protocolState) Pausable(_protocolState) {
+    constructor(address _protocolState) BasePausable(_protocolState) {
         protocolState = IProtocolState(_protocolState);
     }
 

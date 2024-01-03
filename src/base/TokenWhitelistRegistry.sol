@@ -1,18 +1,18 @@
-// SPDX-License-Identifier: GPL-2.0-or-later
-pragma solidity ^0.8.23;
+// SPDX-License-Identifier: GPL-3.0-only
+pragma solidity >=0.8.18;
 
 import {ITokenWhitelistRegistry} from "@src/interfaces/ITokenWhitelistRegistry.sol";
-import {Pausable} from "@src/base/Pausable.sol";
+import {BasePausable} from "@src/base/BasePausable.sol";
 import {IProtocolState} from "@src/interfaces/IProtocolState.sol";
 
 /// @notice This registry does not yet support native ethereum tokens
-contract TokenWhitelistRegistry is Pausable, ITokenWhitelistRegistry {
+contract TokenWhitelistRegistry is BasePausable, ITokenWhitelistRegistry {
     IProtocolState public immutable protocolState;
 
     /// @notice keccak256(abi.encodePacked(user, router, token)) => whitelisted
     mapping(bytes32 pointer => bool whitelisted) internal tokenWhitelist;
 
-    constructor(address _protocolState) Pausable(_protocolState) {
+    constructor(address _protocolState) BasePausable(_protocolState) {
         protocolState = IProtocolState(_protocolState);
     }
 

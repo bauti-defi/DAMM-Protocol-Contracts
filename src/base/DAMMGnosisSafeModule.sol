@@ -1,15 +1,15 @@
-// SPDX-License-Identifier: GPL-2.0-or-later
-pragma solidity ^0.8.23;
+// SPDX-License-Identifier: GPL-3.0-only
+pragma solidity >=0.8.18;
 
 import {IMulticallerWithSender} from "@src/interfaces/external/IMulticallerWithSender.sol";
 import {ISafe} from "@src/interfaces/external/ISafe.sol";
 import {Enum} from "@safe-contracts/common/Enum.sol";
 import {IRouterWhitelistRegistry} from "@src/interfaces/IRouterWhitelistRegistry.sol";
 import {IDAMMGnosisSafeModule} from "@src/interfaces/IDAMMGnosisSafeModule.sol";
-import {Pausable} from "@src/base/Pausable.sol";
+import {BasePausable} from "@src/base/BasePausable.sol";
 import {IProtocolState} from "@src/interfaces/IProtocolState.sol";
 
-contract DAMMGnosisSafeModule is Pausable, IDAMMGnosisSafeModule {
+contract DAMMGnosisSafeModule is BasePausable, IDAMMGnosisSafeModule {
     IMulticallerWithSender public immutable multicallerWithSender;
     IRouterWhitelistRegistry public immutable routerWhitelistRegistry;
     IProtocolState public immutable protocolState;
@@ -21,7 +21,7 @@ contract DAMMGnosisSafeModule is Pausable, IDAMMGnosisSafeModule {
     mapping(address vault => bool suspended) public tradingSuspended;
 
     constructor(address _protocolState, address _routerWhitelistRegistry, address _multicallerWithSender)
-        Pausable(_protocolState)
+        BasePausable(_protocolState)
     {
         protocolState = IProtocolState(_protocolState);
         routerWhitelistRegistry = IRouterWhitelistRegistry(_routerWhitelistRegistry);
@@ -63,9 +63,10 @@ contract DAMMGnosisSafeModule is Pausable, IDAMMGnosisSafeModule {
         emit SuspendTrading(msg.sender);
     }
 
-    function _isValidTarget(address vault, address target) internal view {
+    function _checkTargetIsValid(address vault, address target) internal view {
         if (
             target == address(multicallerWithSender) || target == address(0) || target == address(this)
+                || target == address(protocolState) || target == address(routerWhitelistRegistry) || vault == target
                 || !routerWhitelistRegistry.isRouterWhitelisted(vault, target)
         ) revert InvalidRouter();
     }
@@ -78,7 +79,7 @@ contract DAMMGnosisSafeModule is Pausable, IDAMMGnosisSafeModule {
         onlyOperator(vault, msg.sender)
         returns (bytes memory)
     {
-        _isValidTarget(vault, target);
+        _checkTargetIsValid(vault, target);
 
         (bool success, bytes memory returnData) =
             ISafe(vault).execTransactionFromModuleReturnData(target, value, data, Enum.Operation.Call);
@@ -108,7 +109,7 @@ contract DAMMGnosisSafeModule is Pausable, IDAMMGnosisSafeModule {
         // sum up how much ETH the safe will need to send to the multicaller
         uint256 value;
         for (uint256 i = 0; i < length;) {
-            _isValidTarget(vault, targets[i]);
+            _checkTargetIsValid(vault, targets[i]);
             value += values[i];
 
             unchecked {

@@ -1,14 +1,14 @@
-// SPDX-License-Identifier: GPL-2.0-or-later
-pragma solidity ^0.8.23;
+// SPDX-License-Identifier: GPL-3.0-only
+pragma solidity >=0.8.18;
 
 import {ITokenWhitelistRegistry} from "@src/interfaces/ITokenWhitelistRegistry.sol";
 import {LibMulticaller} from "@vec-multicaller/LibMulticaller.sol";
 import {IWETH9} from "@src/interfaces/external/IWETH9.sol";
 import {TransferHelper} from "@src/lib/TransferHelper.sol";
 import {IProtocolState} from "@src/interfaces/IProtocolState.sol";
-import {Pausable} from "@src/base/Pausable.sol";
+import {BasePausable} from "@src/base/BasePausable.sol";
 
-abstract contract BaseRouter is Pausable {
+abstract contract BaseRouter is BasePausable {
     error InvalidRecipient();
     error TokenNotWhitelisted();
 
@@ -27,7 +27,7 @@ abstract contract BaseRouter is Pausable {
     address public immutable WETH9;
 
     constructor(address _protocolState, address _WETH9, address _tokenWhitelistRegistry, address _multicallerWithSender)
-        Pausable(_protocolState)
+        BasePausable(_protocolState)
     {
         protocolState = IProtocolState(_protocolState);
         WETH9 = _WETH9;

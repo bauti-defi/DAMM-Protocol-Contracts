@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: GPL-2.0-or-later
-pragma solidity ^0.8.23;
+// SPDX-License-Identifier: GPL-3.0-only
+pragma solidity >=0.8.18;
 
 import {ISwapRouter} from "@src/interfaces/external/ISwapRouter.sol";
 import {IERC20} from "@openzeppelin-contracts/token/ERC20/IERC20.sol";
@@ -24,7 +24,7 @@ contract UniswapV3SwapRouter is BaseRouter, IUniswapV3SwapRouter {
         IERC20 tokenToApprove = IERC20(token);
 
         if (tokenToApprove.allowance(address(this), address(uniswapV3SwapRouter)) < allowanceRequired) {
-            tokenToApprove.approve(address(uniswapV3SwapRouter), type(uint256).max);
+            require(tokenToApprove.approve(address(uniswapV3SwapRouter), type(uint256).max), "Router: approve failed");
         }
     }
 
