@@ -13,7 +13,8 @@ contract DAMMGnosisSafeModule is ProtocolStateAccesor, IDAMMGnosisSafeModule {
     IMulticallerWithSender public immutable multicallerWithSender;
     IRouterWhitelistRegistry public immutable routerWhitelistRegistry;
 
-    mapping(address operator => bool enabled) public operators;
+    /// @notice keccak256(abi.encodePacked(vault, operator)) => bool
+    mapping(bytes32 operatorPointer => bool enabled) public operators;
 
     constructor(
         address _owner,
@@ -26,18 +27,18 @@ contract DAMMGnosisSafeModule is ProtocolStateAccesor, IDAMMGnosisSafeModule {
         multicallerWithSender = IMulticallerWithSender(_multicallerWithSender);
     }
 
-    modifier onlyOwner() {
-        if (msg.sender != owner) revert OnlyOwner();
+    modifier onlyOperator(address vault, address operator) {
+        if (!operators[_operatorPointer(vault, operator)]) revert OnlyOperator();
         _;
     }
 
-    modifier onlyOperator() {
-        if (!operators[msg.sender]) revert OnlyOperator();
-        _;
+    function _operatorPointer(address vault, address operator) internal pure returns (bytes32) {
+        return keccak256(abi.encode(vault, operator));
     }
 
-    function setOperator(address operator, bool enabled) external notPaused onlyOwner {
-        operators[operator] = enabled;
+    function setOperator(address operator, bool enabled) external notPaused {
+        require(operator != address(0), "DAMMGnosisSafeModule: operator is zero address");
+        operators[_operatorPointer(msg.sender, operator)] = enabled;
 
         emit SetOperator(msg.sender, operator, enabled);
     }
@@ -53,7 +54,7 @@ contract DAMMGnosisSafeModule is ProtocolStateAccesor, IDAMMGnosisSafeModule {
         external
         override
         notPaused
-        onlyOperator
+        onlyOperator(vault, msg.sender)
         returns (bytes memory)
     {
         _isValidTarget(vault, target);
@@ -77,7 +78,7 @@ contract DAMMGnosisSafeModule is ProtocolStateAccesor, IDAMMGnosisSafeModule {
         address[] calldata targets,
         bytes[] calldata datas,
         uint256[] calldata values
-    ) external override notPaused onlyOperator returns (bytes[] memory) {
+    ) external override notPaused onlyOperator(vault, msg.sender) returns (bytes[] memory) {
         uint256 length = targets.length;
 
         // sum up how much ETH the safe will need to send to the multicaller

@@ -29,6 +29,7 @@ contract TestDAMMGnosisSafeModule is BaseVault {
 
         operator = makeAddr("Operator");
 
+        vm.prank(vault);
         dammModule.setOperator(operator, true);
 
         mockRouter = new MockRouter();
@@ -188,20 +189,22 @@ contract TestDAMMGnosisSafeModule is BaseVault {
         assertEq(1 ether, address(vault).balance);
     }
 
-    function test_enable_operator(address op) public {
-        dammModule.setOperator(op, true);
-        assertTrue(dammModule.operators(op));
+    function test_enable_operator(address _vault, address op) public {
+        vm.assume(_vault != address(0));
+        vm.assume(op != address(0));
 
+        vm.prank(_vault);
+        dammModule.setOperator(op, true);
+        assertTrue(dammModule.operators(keccak256(abi.encode(_vault, op))));
+
+        vm.prank(_vault);
         dammModule.setOperator(op, false);
-        assertFalse(dammModule.operators(op));
+        assertFalse(dammModule.operators(keccak256(abi.encode(_vault, op))));
     }
 
-    function test_only_owner_can_enable_operator(address op, address caller) public {
-        vm.assume(caller != address(this));
-        vm.assume(caller != op);
-
-        vm.expectRevert(IDAMMGnosisSafeModule.OnlyOwner.selector);
-        vm.prank(caller);
-        dammModule.setOperator(op, true);
+    function test_cannot_set_zero_address_as_operator(address _vault) public {
+        vm.expectRevert("DAMMGnosisSafeModule: operator is zero address");
+        vm.prank(_vault);
+        dammModule.setOperator(address(0), true);
     }
 }

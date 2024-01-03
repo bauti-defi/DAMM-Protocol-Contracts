@@ -10,7 +10,7 @@ contract RouterWhitelistRegistry is ProtocolStateAccesor, IRouterWhitelistRegist
     constructor(address _protocolState) ProtocolStateAccesor(_protocolState) {}
 
     function _pointer(address vault, address router) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked(vault, router));
+        return keccak256(abi.encode(vault, router));
     }
 
     function isRouterWhitelisted(address vault, address router) external view returns (bool) {
@@ -26,6 +26,8 @@ contract RouterWhitelistRegistry is ProtocolStateAccesor, IRouterWhitelistRegist
     }
 
     function _blacklistRouter(address router) internal notPaused {
+        require(router != address(0), "RouterWhitelistRegistry: zero address");
+
         routerWhitelist[_pointer(msg.sender, router)] = false;
     }
 

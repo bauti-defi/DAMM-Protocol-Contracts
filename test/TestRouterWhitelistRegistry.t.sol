@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 pragma solidity ^0.8.23;
 
-import {Test} from "@forge-std/Test.sol";
+import {Test, console2} from "@forge-std/Test.sol";
 
 import {SymTest} from "@halmos/SymTest.sol";
 import {RouterWhitelistRegistry} from "@src/base/RouterWhitelistRegistry.sol";

@@ -12,7 +12,7 @@ contract TokenWhitelistRegistry is ProtocolStateAccesor, ITokenWhitelistRegistry
     constructor(address _protocolState) ProtocolStateAccesor(_protocolState) {}
 
     function _tokenPointer(address user, address router, address token) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked(user, router, token));
+        return keccak256(abi.encode(user, router, token));
     }
 
     function isTokenWhitelisted(address user, address router, address token) external view returns (bool) {
@@ -28,6 +28,8 @@ contract TokenWhitelistRegistry is ProtocolStateAccesor, ITokenWhitelistRegistry
     }
 
     function _blacklistToken(address router, address token) internal notPaused {
+        require(token != address(0), "TokenWhitelistRegistry: zero address");
+
         tokenWhitelist[_tokenPointer(msg.sender, router, token)] = false;
     }
 

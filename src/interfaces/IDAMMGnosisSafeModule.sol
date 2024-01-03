@@ -24,7 +24,7 @@ interface IDAMMGnosisSafeModule {
 
     function setOperator(address operator, bool enabled) external;
 
-    function operators(address operator) external view returns (bool);
+    function operators(bytes32 operatorPointer) external view returns (bool);
 
     function owner() external view returns (address);
 
