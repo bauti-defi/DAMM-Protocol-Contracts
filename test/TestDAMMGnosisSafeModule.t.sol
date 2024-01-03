@@ -55,6 +55,48 @@ contract TestDAMMGnosisSafeModule is BaseVault {
         dammModule.executeMulticall(vault, new address[](0), new bytes[](0), new uint256[](0));
     }
 
+    function test_can_only_execute_when_not_suspended() public {
+        vm.prank(vault);
+        dammModule.suspendTrading();
+        vm.expectRevert(IDAMMGnosisSafeModule.TradingSuspended.selector);
+        dammModule.execute(vault, address(mockRouter), 0, abi.encodeWithSelector(mockRouter.fun1.selector));
+
+        vm.prank(vault);
+        dammModule.resumeTrading();
+        vm.prank(operator);
+        dammModule.execute(vault, address(mockRouter), 0, abi.encodeWithSelector(mockRouter.fun1.selector));
+    }
+
+    function test_can_only_execute_multicall_when_not_suspended() public {
+        vm.prank(vault);
+        dammModule.suspendTrading();
+        vm.expectRevert(IDAMMGnosisSafeModule.TradingSuspended.selector);
+        dammModule.executeMulticall(vault, new address[](0), new bytes[](0), new uint256[](0));
+
+        vm.prank(vault);
+        dammModule.resumeTrading();
+
+        address[] memory targets = new address[](1);
+        targets[0] = address(mockRouter);
+
+        bytes[] memory datas = new bytes[](1);
+        datas[0] = abi.encodeWithSelector(mockRouter.fun1.selector);
+
+        uint256[] memory values = new uint256[](1);
+        values[0] = 0;
+
+        vm.prank(operator);
+        bytes[] memory results = dammModule.executeMulticall(vault, targets, datas, values);
+
+        (address caller1, uint256 res1, uint256 value1) = abi.decode(results[0], (address, uint256, uint256));
+
+        assertEq(1, res1);
+        assertEq(0, value1);
+        assertEq(vault, caller1);
+
+        assertEq(1 ether, address(vault).balance);
+    }
+
     function test_execute() public {
         vm.prank(operator);
         bytes memory result =

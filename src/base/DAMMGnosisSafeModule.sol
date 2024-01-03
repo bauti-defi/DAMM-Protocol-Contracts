@@ -15,6 +15,9 @@ contract DAMMGnosisSafeModule is ProtocolStateAccesor, IDAMMGnosisSafeModule {
     /// @notice keccak256(abi.encodePacked(vault, operator)) => bool
     mapping(bytes32 operatorPointer => bool enabled) public operators;
 
+    /// @notice vaults can forcefully pause this module
+    mapping(address vault => bool suspended) public tradingSuspended;
+
     constructor(address _protocolState, address _routerWhitelistRegistry, address _multicallerWithSender)
         ProtocolStateAccesor(_protocolState)
     {
@@ -27,15 +30,34 @@ contract DAMMGnosisSafeModule is ProtocolStateAccesor, IDAMMGnosisSafeModule {
         _;
     }
 
+    modifier tradingNotSuspended(address vault) {
+        if (tradingSuspended[vault]) revert TradingSuspended();
+        _;
+    }
+
     function _operatorPointer(address vault, address operator) internal pure returns (bytes32) {
         return keccak256(abi.encode(vault, operator));
     }
 
-    function setOperator(address operator, bool enabled) external notPaused {
+    function setOperator(address operator, bool enabled) external {
         require(operator != address(0), "DAMMGnosisSafeModule: operator is zero address");
+        if (paused() && enabled) revert ModulePaused();
+
         operators[_operatorPointer(msg.sender, operator)] = enabled;
 
         emit SetOperator(msg.sender, operator, enabled);
+    }
+
+    function suspendTrading() external {
+        tradingSuspended[msg.sender] = true;
+
+        emit ResumeTrading(msg.sender);
+    }
+
+    function resumeTrading() external {
+        tradingSuspended[msg.sender] = false;
+
+        emit SuspendTrading(msg.sender);
     }
 
     function _isValidTarget(address vault, address target) internal view {
@@ -49,6 +71,7 @@ contract DAMMGnosisSafeModule is ProtocolStateAccesor, IDAMMGnosisSafeModule {
         external
         override
         notPaused
+        tradingNotSuspended(vault)
         onlyOperator(vault, msg.sender)
         returns (bytes memory)
     {
@@ -73,7 +96,7 @@ contract DAMMGnosisSafeModule is ProtocolStateAccesor, IDAMMGnosisSafeModule {
         address[] calldata targets,
         bytes[] calldata datas,
         uint256[] calldata values
-    ) external override notPaused onlyOperator(vault, msg.sender) returns (bytes[] memory) {
+    ) external override notPaused tradingNotSuspended(vault) onlyOperator(vault, msg.sender) returns (bytes[] memory) {
         uint256 length = targets.length;
 
         // sum up how much ETH the safe will need to send to the multicaller

@@ -3,7 +3,7 @@ pragma solidity ^0.8.23;
 
 import {IProtocolState} from "@src/interfaces/IProtocolState.sol";
 
-abstract contract ProtocolStateAccesor {
+abstract contract ProtocolStateAccesor is IProtocolState {
     IProtocolState public immutable protocolState;
 
     constructor(address _protocolState) {
@@ -18,5 +18,17 @@ abstract contract ProtocolStateAccesor {
     modifier isPaused() {
         require(protocolState.paused(), "Pausable: not paused");
         _;
+    }
+
+    function paused() public view returns (bool) {
+        return protocolState.paused();
+    }
+
+    function owner() public view returns (address) {
+        return protocolState.owner();
+    }
+
+    function ownershipHandoverExpiresAt(address pendingOwner) public view returns (uint256) {
+        return protocolState.ownershipHandoverExpiresAt(pendingOwner);
     }
 }

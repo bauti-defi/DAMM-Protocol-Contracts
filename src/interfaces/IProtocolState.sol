@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.0;
 
-interface IProtocolState {
-    function owner() external view returns (address);
-    function paused() external view returns (bool);
-}
+import {IPausableState} from "@src/interfaces/libs/IPausableState.sol";
+import {IOwnableState} from "@src/interfaces/libs/IOwnableState.sol";
+
+interface IProtocolState is IPausableState, IOwnableState {}

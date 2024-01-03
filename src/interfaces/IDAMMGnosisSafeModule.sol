@@ -7,8 +7,12 @@ import {IMulticallerWithSender} from "@src/interfaces/external/IMulticallerWithS
 interface IDAMMGnosisSafeModule {
     error InvalidRouter();
     error OnlyOperator();
+    error TradingSuspended();
+    error ModulePaused();
 
     event SetOperator(address indexed caller, address indexed operator, bool enabled);
+    event SuspendTrading(address vault);
+    event ResumeTrading(address vault);
 
     function execute(address vault, address target, uint256 value, bytes calldata data)
         external
@@ -20,6 +24,12 @@ interface IDAMMGnosisSafeModule {
         bytes[] calldata datas,
         uint256[] calldata values
     ) external returns (bytes[] memory);
+
+    function tradingSuspended(address vault) external view returns (bool);
+
+    function suspendTrading() external;
+
+    function resumeTrading() external;
 
     function setOperator(address operator, bool enabled) external;
 
