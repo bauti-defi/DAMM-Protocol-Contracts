@@ -99,6 +99,9 @@ contract DAMMGnosisSafeModule is ProtocolStateAccesor, IDAMMGnosisSafeModule {
     ) external override notPaused tradingNotSuspended(vault) onlyOperator(vault, msg.sender) returns (bytes[] memory) {
         uint256 length = targets.length;
 
+        require(length == datas.length, "DAMMGnosisSafeModule: datas length mismatch");
+        require(length == values.length, "DAMMGnosisSafeModule: values length mismatch");
+
         // sum up how much ETH the safe will need to send to the multicaller
         uint256 value;
         for (uint256 i = 0; i < length;) {
