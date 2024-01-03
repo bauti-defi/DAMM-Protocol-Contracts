@@ -38,6 +38,20 @@ abstract contract BaseRouter is ProtocolStateAccesor, IRouter {
         if (!isTokenWhitelisted(user, token)) revert TokenNotWhitelisted();
     }
 
+    function _checkTokensAreWhitelisted(address user, address[] memory tokens) internal view {
+        uint256 length = tokens.length;
+
+        require(length > 0, "Router: length must be > 0");
+
+        for (uint256 i = 0; i < length;) {
+            _checkTokenIsWhitelisted(user, tokens[i]);
+
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
     fallback() external payable {
         revert("Router: invalid fallback");
     }

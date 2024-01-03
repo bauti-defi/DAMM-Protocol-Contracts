@@ -28,6 +28,12 @@ contract UniswapV3SwapRouter is BaseRouter, IUniswapV3SwapRouter {
         }
     }
 
+    function _tupleToArray(address token0, address token1) internal pure returns (address[] memory tokens) {
+        tokens = new address[](2);
+        tokens[0] = token0;
+        tokens[1] = token1;
+    }
+
     function swapToken(ISwapRouter.ExactInputSingleParams memory params)
         external
         override
@@ -38,8 +44,7 @@ contract UniswapV3SwapRouter is BaseRouter, IUniswapV3SwapRouter {
         if (params.recipient != caller) revert InvalidRecipient();
 
         // check tokens are whitelisted
-        _checkTokenIsWhitelisted(caller, params.tokenIn);
-        _checkTokenIsWhitelisted(caller, params.tokenOut);
+        _checkTokensAreWhitelisted(caller, _tupleToArray(params.tokenIn, params.tokenOut));
 
         // ensure uniswap has enough allowance to spend our routers tokens
         _ensureTokenAllowance(params.tokenIn, params.amountIn);
