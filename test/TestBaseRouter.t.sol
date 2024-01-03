@@ -13,7 +13,7 @@ contract Router is BaseRouter {
     event CurrentCaller(address caller);
 
     constructor(address _weth9, address _multicallerWithSender)
-        BaseRouter(address(0), address(0), _weth9, address(0), _multicallerWithSender)
+        BaseRouter(address(0), _weth9, address(0), _multicallerWithSender)
     {}
 
     function fun4() external setCaller returns (uint256) {

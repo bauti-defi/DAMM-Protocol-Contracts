@@ -11,13 +11,12 @@ contract UniswapV3SwapRouter is BaseRouter, IUniswapV3SwapRouter {
     ISwapRouter public immutable uniswapV3SwapRouter;
 
     constructor(
-        address _owner,
         address _protocolState,
         address _WETH9,
         address _tokenWhitelistRegistry,
         address _multicallerWithSender,
         address _uniswapV3SwapRouter
-    ) BaseRouter(_owner, _protocolState, _WETH9, _tokenWhitelistRegistry, _multicallerWithSender) {
+    ) BaseRouter(_protocolState, _WETH9, _tokenWhitelistRegistry, _multicallerWithSender) {
         uniswapV3SwapRouter = ISwapRouter(_uniswapV3SwapRouter);
     }
 

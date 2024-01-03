@@ -70,7 +70,6 @@ contract TestUniswapV3PositionRouter is BaseUniswapV3, BaseMulticallerWithSender
 
         // deploy router
         dammRouter = new UniswapV3PositionRouter(
-            address(this),
             address(protocolState),
             uniswapV3.weth9(),
             address(tokenWhitelistRegistry),

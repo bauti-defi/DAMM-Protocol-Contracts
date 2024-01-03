@@ -6,7 +6,6 @@ import {IMulticallerWithSender} from "@src/interfaces/external/IMulticallerWithS
 
 interface IDAMMGnosisSafeModule {
     error InvalidRouter();
-    error OnlyOwner();
     error OnlyOperator();
 
     event SetOperator(address indexed caller, address indexed operator, bool enabled);
@@ -25,8 +24,6 @@ interface IDAMMGnosisSafeModule {
     function setOperator(address operator, bool enabled) external;
 
     function operators(bytes32 operatorPointer) external view returns (bool);
-
-    function owner() external view returns (address);
 
     function multicallerWithSender() external view returns (IMulticallerWithSender);
 

@@ -71,7 +71,6 @@ contract TestUniswapV3SwapRouter is BaseUniswapV3, BaseMulticallerWithSender {
 
         // deploy damm uniswap v3 swap router
         dammRouter = new UniswapV3SwapRouter(
-            address(this),
             address(protocolState),
             uniswapV3.weth9(),
             address(tokenWhitelistRegistry),

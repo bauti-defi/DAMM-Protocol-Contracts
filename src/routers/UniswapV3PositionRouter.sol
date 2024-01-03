@@ -12,13 +12,12 @@ contract UniswapV3PositionRouter is BaseRouter, IUniswapV3PositionRouter {
     INonfungiblePositionManager public immutable uniswapV3PositionManager;
 
     constructor(
-        address _owner,
         address _protocolState,
         address _WETH9,
         address _tokenWhitelistRegistry,
         address _multicallerWithSender,
         address _uniswapV3PositionManager
-    ) BaseRouter(_owner, _protocolState, _WETH9, _tokenWhitelistRegistry, _multicallerWithSender) {
+    ) BaseRouter(_protocolState, _WETH9, _tokenWhitelistRegistry, _multicallerWithSender) {
         uniswapV3PositionManager = INonfungiblePositionManager(_uniswapV3PositionManager);
     }
 

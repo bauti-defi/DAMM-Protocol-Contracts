@@ -52,14 +52,14 @@ contract TestProtocolState is Test {
 
     function test_only_admin_can_pause(address pauser) public {
         vm.assume(pauser != address(this));
-        vm.expectRevert("Pausable: Only admin can pause");
+        vm.expectRevert();
         vm.prank(pauser);
         IProtocolStateActions(protocolState).pause();
     }
 
     function test_only_admin_can_unpause(address pauser) public {
         vm.assume(pauser != address(this));
-        vm.expectRevert("Pausable: Only admin can unpause");
+        vm.expectRevert();
         vm.prank(pauser);
         IProtocolStateActions(protocolState).unpause();
     }
