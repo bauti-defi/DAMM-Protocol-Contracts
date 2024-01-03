@@ -2,14 +2,13 @@
 pragma solidity ^0.8.23;
 
 import {IRouter} from "@src/interfaces/IRouter.sol";
-import {ReentrancyGuard} from "@src/lib/ReentrancyGuard.sol";
 import {ITokenWhitelistRegistry} from "@src/interfaces/ITokenWhitelistRegistry.sol";
 import {LibMulticaller} from "@vec-multicaller/LibMulticaller.sol";
 import {IWETH9} from "@src/interfaces/external/IWETH9.sol";
 import {TransferHelper} from "@src/lib/TransferHelper.sol";
 import {Pausable} from "@src/lib/Pausable.sol";
 
-abstract contract BaseRouter is Pausable, IRouter, ReentrancyGuard {
+abstract contract BaseRouter is Pausable, IRouter {
     modifier setCaller() {
         if (caller == address(0)) caller = LibMulticaller.sender();
         _;
