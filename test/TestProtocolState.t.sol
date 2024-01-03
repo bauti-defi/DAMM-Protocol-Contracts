@@ -3,12 +3,14 @@ pragma solidity ^0.8.23;
 
 import {Test} from "@forge-std/Test.sol";
 
-import {Pausable} from "@src/lib/Pausable.sol";
+import {ProtocolStateAccesor} from "@src/lib/ProtocolStateAccesor.sol";
+import {IProtocolStateActions} from "@src/interfaces/IProtocolStateActions.sol";
+import {ProtocolState} from "@src/base/ProtocolState.sol";
 
-contract Target is Pausable {
+contract Target is ProtocolStateAccesor {
     uint256 public state;
 
-    constructor(address _admin) Pausable(_admin) {}
+    constructor(address _protocolState) ProtocolStateAccesor(_protocolState) {}
 
     function add(uint256 a, uint256 b) external notPaused {
         state = a + b;
@@ -19,15 +21,17 @@ contract Target is Pausable {
     }
 }
 
-contract TestPausable is Test {
+contract TestProtocolState is Test {
     Target public target;
+    ProtocolState public protocolState;
 
     function setUp() public {
-        target = new Target(address(this));
+        protocolState = new ProtocolState(address(this));
+        target = new Target(address(protocolState));
     }
 
-    function test() public {
-        target.pause();
+    function test_pause() public {
+        IProtocolStateActions(protocolState).pause();
 
         vm.expectRevert();
         target.add(1, 2);
@@ -36,7 +40,7 @@ contract TestPausable is Test {
         target.sub(10, 5);
         assertEq(target.state(), 5);
 
-        target.unpause();
+        IProtocolStateActions(protocolState).unpause();
 
         target.add(1, 2);
         assertEq(target.state(), 3);
@@ -50,13 +54,13 @@ contract TestPausable is Test {
         vm.assume(pauser != address(this));
         vm.expectRevert("Pausable: Only admin can pause");
         vm.prank(pauser);
-        target.pause();
+        IProtocolStateActions(protocolState).pause();
     }
 
     function test_only_admin_can_unpause(address pauser) public {
         vm.assume(pauser != address(this));
         vm.expectRevert("Pausable: Only admin can unpause");
         vm.prank(pauser);
-        target.unpause();
+        IProtocolStateActions(protocolState).unpause();
     }
 }

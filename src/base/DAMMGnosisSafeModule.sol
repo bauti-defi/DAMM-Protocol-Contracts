@@ -6,16 +6,21 @@ import {ISafe} from "@src/interfaces/external/ISafe.sol";
 import {Enum} from "@safe-contracts/common/Enum.sol";
 import {IRouterWhitelistRegistry} from "@src/interfaces/IRouterWhitelistRegistry.sol";
 import {IDAMMGnosisSafeModule} from "@src/interfaces/IDAMMGnosisSafeModule.sol";
-import {Pausable} from "@src/lib/Pausable.sol";
+import {ProtocolStateAccesor} from "@src/lib/ProtocolStateAccesor.sol";
 
-contract DAMMGnosisSafeModule is Pausable, IDAMMGnosisSafeModule {
+contract DAMMGnosisSafeModule is ProtocolStateAccesor, IDAMMGnosisSafeModule {
     address public immutable owner;
     IMulticallerWithSender public immutable multicallerWithSender;
     IRouterWhitelistRegistry public immutable routerWhitelistRegistry;
 
     mapping(address operator => bool enabled) public operators;
 
-    constructor(address _owner, address _routerWhitelistRegistry, address _multicallerWithSender) Pausable(_owner) {
+    constructor(
+        address _owner,
+        address _protocolState,
+        address _routerWhitelistRegistry,
+        address _multicallerWithSender
+    ) ProtocolStateAccesor(_protocolState) {
         owner = _owner;
         routerWhitelistRegistry = IRouterWhitelistRegistry(_routerWhitelistRegistry);
         multicallerWithSender = IMulticallerWithSender(_multicallerWithSender);

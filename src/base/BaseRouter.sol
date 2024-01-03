@@ -6,9 +6,9 @@ import {ITokenWhitelistRegistry} from "@src/interfaces/ITokenWhitelistRegistry.s
 import {LibMulticaller} from "@vec-multicaller/LibMulticaller.sol";
 import {IWETH9} from "@src/interfaces/external/IWETH9.sol";
 import {TransferHelper} from "@src/lib/TransferHelper.sol";
-import {Pausable} from "@src/lib/Pausable.sol";
+import {ProtocolStateAccesor} from "@src/lib/ProtocolStateAccesor.sol";
 
-abstract contract BaseRouter is Pausable, IRouter {
+abstract contract BaseRouter is ProtocolStateAccesor, IRouter {
     modifier setCaller() {
         if (caller == address(0)) caller = LibMulticaller.sender();
         _;
@@ -23,9 +23,13 @@ abstract contract BaseRouter is Pausable, IRouter {
     address public immutable multicallerWithSender;
     address public immutable WETH9;
 
-    constructor(address _owner, address _WETH9, address _tokenWhitelistRegistry, address _multicallerWithSender)
-        Pausable(_owner)
-    {
+    constructor(
+        address _owner,
+        address _protocolState,
+        address _WETH9,
+        address _tokenWhitelistRegistry,
+        address _multicallerWithSender
+    ) ProtocolStateAccesor(_protocolState) {
         owner = _owner;
         WETH9 = _WETH9;
         multicallerWithSender = _multicallerWithSender;

@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.23;
 
-abstract contract Pausable {
+import {IProtocolState} from "@src/interfaces/IProtocolState.sol";
+import {IProtocolStateActions} from "@src/interfaces/IProtocolStateActions.sol";
+
+contract ProtocolState is IProtocolState, IProtocolStateActions {
     event Paused(address pauser);
     event Unpaused(address unpauser);
 
@@ -24,15 +27,5 @@ abstract contract Pausable {
         paused = false;
 
         emit Unpaused(msg.sender);
-    }
-
-    modifier notPaused() {
-        require(!paused, "Pausable: paused");
-        _;
-    }
-
-    modifier isPaused() {
-        require(paused, "Pausable: not paused");
-        _;
     }
 }

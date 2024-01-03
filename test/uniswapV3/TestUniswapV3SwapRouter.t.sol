@@ -13,6 +13,7 @@ import {IUniswapV3PoolState} from "@src/interfaces/external/IUniswapV3PoolState.
 import {IRouter} from "@src/interfaces/IRouter.sol";
 import {BaseMulticallerWithSender} from "@test/base/BaseMulticallerWithSender.sol";
 import {BaseUniswapV3} from "@test/base/uniswapV3/BaseUniswapV3.sol";
+import {ProtocolState} from "@src/base/ProtocolState.sol";
 
 contract TestUniswapV3SwapRouter is BaseUniswapV3, BaseMulticallerWithSender {
     struct MintCallbackData {
@@ -28,6 +29,8 @@ contract TestUniswapV3SwapRouter is BaseUniswapV3, BaseMulticallerWithSender {
     MockERC20 public token0;
     MockERC20 public token1;
     address public pool;
+
+    ProtocolState public protocolState;
     TokenWhitelistRegistry public tokenWhitelistRegistry;
     UniswapV3SwapRouter public dammRouter;
 
@@ -58,14 +61,18 @@ contract TestUniswapV3SwapRouter is BaseUniswapV3, BaseMulticallerWithSender {
         //deploy pool
         pool = uniswapV3.deployPool(address(token0), address(token1), POOL_FEE);
 
-        // deploy token whitelist registry
-        tokenWhitelistRegistry = new TokenWhitelistRegistry(address(this));
+        // deploy protocol state
+        protocolState = new ProtocolState(address(this));
+        vm.label(address(protocolState), "ProtocolState");
 
+        // deploy token whitelist registry
+        tokenWhitelistRegistry = new TokenWhitelistRegistry(address(protocolState));
         vm.label(address(tokenWhitelistRegistry), "TokenWhitelistRegistry");
 
         // deploy damm uniswap v3 swap router
         dammRouter = new UniswapV3SwapRouter(
             address(this),
+            address(protocolState),
             uniswapV3.weth9(),
             address(tokenWhitelistRegistry),
             address(multicallerWithSender),

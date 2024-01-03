@@ -5,12 +5,15 @@ import {Test} from "@forge-std/Test.sol";
 
 import {SymTest} from "@halmos/SymTest.sol";
 import {RouterWhitelistRegistry} from "@src/base/RouterWhitelistRegistry.sol";
+import {ProtocolState} from "@src/base/ProtocolState.sol";
 
 contract TestRouterWhitelistRegistry is SymTest, Test {
     RouterWhitelistRegistry public registry;
+    ProtocolState public protocolState;
 
     function setUp() public {
-        registry = new RouterWhitelistRegistry(address(this));
+        protocolState = new ProtocolState(address(this));
+        registry = new RouterWhitelistRegistry(address(protocolState));
     }
 
     function check_whitelist_router(address router, address otherRouter) external {
