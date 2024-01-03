@@ -1,33 +1,19 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 pragma solidity ^0.8.23;
 
-import {IProtocolState} from "@src/interfaces/IProtocolState.sol";
-import {IProtocolStateActions} from "@src/interfaces/IProtocolStateActions.sol";
 import {Ownable} from "@solady/auth/Ownable.sol";
+import {Pausable} from "@openzeppelin-contracts/utils/Pausable.sol";
 
-contract ProtocolState is Ownable, IProtocolState, IProtocolStateActions {
-    event Paused(address pauser);
-    event Unpaused(address unpauser);
-
-    bool public paused;
-
+contract ProtocolState is Ownable, Pausable {
     constructor(address _owner) {
         _initializeOwner(_owner);
     }
 
-    function owner() public view override(Ownable, IProtocolState) returns (address) {
-        return super.owner();
-    }
-
     function pause() public onlyOwner {
-        paused = true;
-
-        emit Paused(msg.sender);
+        _pause();
     }
 
     function unpause() public onlyOwner {
-        paused = false;
-
-        emit Unpaused(msg.sender);
+        _unpause();
     }
 }

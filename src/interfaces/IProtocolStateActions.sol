@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.0;
 
-import {IPausable} from "./IPausable.sol";
+import {IPausableActions} from "@src/interfaces/IPausableActions.sol";
+import {IOwnableActions} from "@src/interfaces/libs/IOwnableActions.sol";
 
-interface IProtocolStateActions is IPausable {}
+interface IProtocolStateActions is IPausableActions, IOwnableActions {}

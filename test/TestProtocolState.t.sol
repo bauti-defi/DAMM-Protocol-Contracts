@@ -23,11 +23,11 @@ contract Target is ProtocolStateAccesor {
 
 contract TestProtocolState is Test {
     Target public target;
-    ProtocolState public protocolState;
+    address public protocolState;
 
     function setUp() public {
-        protocolState = new ProtocolState(address(this));
-        target = new Target(address(protocolState));
+        protocolState = address(new ProtocolState(address(this)));
+        target = new Target(protocolState);
     }
 
     function test_pause() public {

@@ -27,4 +27,8 @@ abstract contract ProtocolStateAccesor is IProtocolState {
     function owner() public view returns (address) {
         return protocolState.owner();
     }
+
+    function ownershipHandoverExpiresAt(address pendingOwner) public view returns (uint256) {
+        return protocolState.ownershipHandoverExpiresAt(pendingOwner);
+    }
 }
