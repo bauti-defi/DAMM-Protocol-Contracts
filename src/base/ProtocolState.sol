@@ -3,27 +3,29 @@ pragma solidity ^0.8.23;
 
 import {IProtocolState} from "@src/interfaces/IProtocolState.sol";
 import {IProtocolStateActions} from "@src/interfaces/IProtocolStateActions.sol";
+import {Ownable} from "@solady/auth/Ownable.sol";
 
-contract ProtocolState is IProtocolState, IProtocolStateActions {
+contract ProtocolState is Ownable, IProtocolState, IProtocolStateActions {
     event Paused(address pauser);
     event Unpaused(address unpauser);
 
     bool public paused;
-    address public admin;
 
-    constructor(address _admin) {
-        admin = _admin;
+    constructor(address _owner) {
+        _initializeOwner(_owner);
     }
 
-    function pause() public {
-        require(msg.sender == admin, "Pausable: Only admin can pause");
+    function owner() public view override(Ownable, IProtocolState) returns (address) {
+        return super.owner();
+    }
+
+    function pause() public onlyOwner {
         paused = true;
 
         emit Paused(msg.sender);
     }
 
-    function unpause() public {
-        require(msg.sender == admin, "Pausable: Only admin can unpause");
+    function unpause() public onlyOwner {
         paused = false;
 
         emit Unpaused(msg.sender);

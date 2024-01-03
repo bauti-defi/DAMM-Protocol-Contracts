@@ -15,7 +15,7 @@ remappings = [
     "@script/=script/",
     "@safe-contracts/=lib/safe-contracts/contracts/",
     "@halmos/=lib/halmos-cheatcodes/src/",
-
+    "@solady/=lib/solady/src/",
 
     "@uniswap-v3-periphery/=lib/v3-periphery/contracts/",
     ### @dev These imports are so we can compile the uniswapv3 periphery contracts inside tests

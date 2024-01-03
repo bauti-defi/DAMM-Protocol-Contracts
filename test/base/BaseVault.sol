@@ -39,7 +39,7 @@ abstract contract BaseVault is BaseMulticallerWithSender {
         vm.label(address(routerWhitelistRegistry), "RouterWhitelistRegistry");
 
         dammModule = new DAMMGnosisSafeModule(
-            address(this), address(protocolState), address(routerWhitelistRegistry), address(multicallerWithSender)
+            address(protocolState), address(routerWhitelistRegistry), address(multicallerWithSender)
         );
         vm.label(address(dammModule), "DAMMGnosisSafeModule");
 

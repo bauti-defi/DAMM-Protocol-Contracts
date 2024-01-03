@@ -19,18 +19,12 @@ abstract contract BaseRouter is ProtocolStateAccesor, IRouter {
     address internal caller;
 
     ITokenWhitelistRegistry public immutable tokenWhitelistRegistry;
-    address public immutable owner;
     address public immutable multicallerWithSender;
     address public immutable WETH9;
 
-    constructor(
-        address _owner,
-        address _protocolState,
-        address _WETH9,
-        address _tokenWhitelistRegistry,
-        address _multicallerWithSender
-    ) ProtocolStateAccesor(_protocolState) {
-        owner = _owner;
+    constructor(address _protocolState, address _WETH9, address _tokenWhitelistRegistry, address _multicallerWithSender)
+        ProtocolStateAccesor(_protocolState)
+    {
         WETH9 = _WETH9;
         multicallerWithSender = _multicallerWithSender;
         tokenWhitelistRegistry = ITokenWhitelistRegistry(_tokenWhitelistRegistry);

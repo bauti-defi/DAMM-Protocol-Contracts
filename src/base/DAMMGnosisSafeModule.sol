@@ -9,20 +9,15 @@ import {IDAMMGnosisSafeModule} from "@src/interfaces/IDAMMGnosisSafeModule.sol";
 import {ProtocolStateAccesor} from "@src/lib/ProtocolStateAccesor.sol";
 
 contract DAMMGnosisSafeModule is ProtocolStateAccesor, IDAMMGnosisSafeModule {
-    address public immutable owner;
     IMulticallerWithSender public immutable multicallerWithSender;
     IRouterWhitelistRegistry public immutable routerWhitelistRegistry;
 
     /// @notice keccak256(abi.encodePacked(vault, operator)) => bool
     mapping(bytes32 operatorPointer => bool enabled) public operators;
 
-    constructor(
-        address _owner,
-        address _protocolState,
-        address _routerWhitelistRegistry,
-        address _multicallerWithSender
-    ) ProtocolStateAccesor(_protocolState) {
-        owner = _owner;
+    constructor(address _protocolState, address _routerWhitelistRegistry, address _multicallerWithSender)
+        ProtocolStateAccesor(_protocolState)
+    {
         routerWhitelistRegistry = IRouterWhitelistRegistry(_routerWhitelistRegistry);
         multicallerWithSender = IMulticallerWithSender(_multicallerWithSender);
     }
