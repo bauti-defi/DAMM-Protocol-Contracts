@@ -2,17 +2,17 @@
 pragma solidity ^0.8.23;
 
 import {ITokenWhitelistRegistry} from "@src/interfaces/ITokenWhitelistRegistry.sol";
-import {Pausable} from "@src/lib/Pausable.sol";
+import {ProtocolStateAccesor} from "@src/lib/ProtocolStateAccesor.sol";
 
 /// @notice This registry does not yet support native ethereum tokens
-contract TokenWhitelistRegistry is Pausable, ITokenWhitelistRegistry {
+contract TokenWhitelistRegistry is ProtocolStateAccesor, ITokenWhitelistRegistry {
     /// @notice keccak256(abi.encodePacked(user, router, token)) => whitelisted
     mapping(bytes32 pointer => bool whitelisted) internal tokenWhitelist;
 
-    constructor(address _owner) Pausable(_owner) {}
+    constructor(address _protocolState) ProtocolStateAccesor(_protocolState) {}
 
     function _tokenPointer(address user, address router, address token) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked(user, router, token));
+        return keccak256(abi.encode(user, router, token));
     }
 
     function isTokenWhitelisted(address user, address router, address token) external view returns (bool) {
@@ -28,6 +28,8 @@ contract TokenWhitelistRegistry is Pausable, ITokenWhitelistRegistry {
     }
 
     function _blacklistToken(address router, address token) internal notPaused {
+        require(token != address(0), "TokenWhitelistRegistry: zero address");
+
         tokenWhitelist[_tokenPointer(msg.sender, router, token)] = false;
     }
 

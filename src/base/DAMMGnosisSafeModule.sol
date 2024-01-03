@@ -6,33 +6,39 @@ import {ISafe} from "@src/interfaces/external/ISafe.sol";
 import {Enum} from "@safe-contracts/common/Enum.sol";
 import {IRouterWhitelistRegistry} from "@src/interfaces/IRouterWhitelistRegistry.sol";
 import {IDAMMGnosisSafeModule} from "@src/interfaces/IDAMMGnosisSafeModule.sol";
-import {Pausable} from "@src/lib/Pausable.sol";
+import {ProtocolStateAccesor} from "@src/lib/ProtocolStateAccesor.sol";
 
-contract DAMMGnosisSafeModule is Pausable, IDAMMGnosisSafeModule {
+contract DAMMGnosisSafeModule is ProtocolStateAccesor, IDAMMGnosisSafeModule {
     address public immutable owner;
     IMulticallerWithSender public immutable multicallerWithSender;
     IRouterWhitelistRegistry public immutable routerWhitelistRegistry;
 
-    mapping(address operator => bool enabled) public operators;
+    /// @notice keccak256(abi.encodePacked(vault, operator)) => bool
+    mapping(bytes32 operatorPointer => bool enabled) public operators;
 
-    constructor(address _owner, address _routerWhitelistRegistry, address _multicallerWithSender) Pausable(_owner) {
+    constructor(
+        address _owner,
+        address _protocolState,
+        address _routerWhitelistRegistry,
+        address _multicallerWithSender
+    ) ProtocolStateAccesor(_protocolState) {
         owner = _owner;
         routerWhitelistRegistry = IRouterWhitelistRegistry(_routerWhitelistRegistry);
         multicallerWithSender = IMulticallerWithSender(_multicallerWithSender);
     }
 
-    modifier onlyOwner() {
-        if (msg.sender != owner) revert OnlyOwner();
+    modifier onlyOperator(address vault, address operator) {
+        if (!operators[_operatorPointer(vault, operator)]) revert OnlyOperator();
         _;
     }
 
-    modifier onlyOperator() {
-        if (!operators[msg.sender]) revert OnlyOperator();
-        _;
+    function _operatorPointer(address vault, address operator) internal pure returns (bytes32) {
+        return keccak256(abi.encode(vault, operator));
     }
 
-    function setOperator(address operator, bool enabled) external notPaused onlyOwner {
-        operators[operator] = enabled;
+    function setOperator(address operator, bool enabled) external notPaused {
+        require(operator != address(0), "DAMMGnosisSafeModule: operator is zero address");
+        operators[_operatorPointer(msg.sender, operator)] = enabled;
 
         emit SetOperator(msg.sender, operator, enabled);
     }
@@ -48,7 +54,7 @@ contract DAMMGnosisSafeModule is Pausable, IDAMMGnosisSafeModule {
         external
         override
         notPaused
-        onlyOperator
+        onlyOperator(vault, msg.sender)
         returns (bytes memory)
     {
         _isValidTarget(vault, target);
@@ -72,7 +78,7 @@ contract DAMMGnosisSafeModule is Pausable, IDAMMGnosisSafeModule {
         address[] calldata targets,
         bytes[] calldata datas,
         uint256[] calldata values
-    ) external override notPaused onlyOperator returns (bytes[] memory) {
+    ) external override notPaused onlyOperator(vault, msg.sender) returns (bytes[] memory) {
         uint256 length = targets.length;
 
         // sum up how much ETH the safe will need to send to the multicaller

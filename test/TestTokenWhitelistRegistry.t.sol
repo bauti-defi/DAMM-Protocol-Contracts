@@ -5,12 +5,15 @@ import {Test} from "@forge-std/Test.sol";
 
 import {SymTest} from "@halmos/SymTest.sol";
 import {TokenWhitelistRegistry} from "@src/base/TokenWhitelistRegistry.sol";
+import {ProtocolState} from "@src/base/ProtocolState.sol";
 
 contract TestTokenWhitelistRegistry is SymTest, Test {
     TokenWhitelistRegistry public registry;
+    ProtocolState public protocolState;
 
     function setUp() public {
-        registry = new TokenWhitelistRegistry(address(this));
+        protocolState = new ProtocolState(address(this));
+        registry = new TokenWhitelistRegistry(address(protocolState));
     }
 
     function check_whitelist_token(address token, address otherToken, address router) external {

@@ -2,15 +2,15 @@
 pragma solidity ^0.8.23;
 
 import {IRouterWhitelistRegistry} from "@src/interfaces/IRouterWhitelistRegistry.sol";
-import {Pausable} from "@src/lib/Pausable.sol";
+import {ProtocolStateAccesor} from "@src/lib/ProtocolStateAccesor.sol";
 
-contract RouterWhitelistRegistry is Pausable, IRouterWhitelistRegistry {
+contract RouterWhitelistRegistry is ProtocolStateAccesor, IRouterWhitelistRegistry {
     mapping(bytes32 pointer => bool whitelisted) internal routerWhitelist;
 
-    constructor(address _owner) Pausable(_owner) {}
+    constructor(address _protocolState) ProtocolStateAccesor(_protocolState) {}
 
     function _pointer(address vault, address router) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked(vault, router));
+        return keccak256(abi.encode(vault, router));
     }
 
     function isRouterWhitelisted(address vault, address router) external view returns (bool) {
@@ -26,6 +26,8 @@ contract RouterWhitelistRegistry is Pausable, IRouterWhitelistRegistry {
     }
 
     function _blacklistRouter(address router) internal notPaused {
+        require(router != address(0), "RouterWhitelistRegistry: zero address");
+
         routerWhitelist[_pointer(msg.sender, router)] = false;
     }
 

@@ -9,6 +9,7 @@ import {UniswapV3PositionRouter} from "@src/routers/UniswapV3PositionRouter.sol"
 import {INonfungiblePositionManager} from "@src/interfaces/external/INonfungiblePositionManager.sol";
 import {IERC721} from "@openzeppelin-contracts/token/ERC721/IERC721.sol";
 import {IRouter} from "@src/interfaces/IRouter.sol";
+import {ProtocolState} from "@src/base/ProtocolState.sol";
 
 contract TestUniswapV3PositionRouter is BaseUniswapV3, BaseMulticallerWithSender {
     uint256 private constant ONE_BILLION = 1_000_000 * 1000;
@@ -29,6 +30,7 @@ contract TestUniswapV3PositionRouter is BaseUniswapV3, BaseMulticallerWithSender
     address public unauthorizedPool0;
 
     TokenWhitelistRegistry public tokenWhitelistRegistry;
+    ProtocolState public protocolState;
     UniswapV3PositionRouter public dammRouter;
 
     function setUp() public override(BaseUniswapV3, BaseMulticallerWithSender) {
@@ -58,13 +60,18 @@ contract TestUniswapV3PositionRouter is BaseUniswapV3, BaseMulticallerWithSender
         uniswapV3.initializePool(pool, START_TICK);
         uniswapV3.initializePool(unauthorizedPool0, START_TICK);
 
+        // deploy protocol state
+        protocolState = new ProtocolState(address(this));
+        vm.label(address(protocolState), "protocolState");
+
         // deploy token whitelist registry
-        tokenWhitelistRegistry = new TokenWhitelistRegistry(address(this));
+        tokenWhitelistRegistry = new TokenWhitelistRegistry(address(protocolState));
         vm.label(address(tokenWhitelistRegistry), "tokenWhitelistRegistry");
 
         // deploy router
         dammRouter = new UniswapV3PositionRouter(
             address(this),
+            address(protocolState),
             uniswapV3.weth9(),
             address(tokenWhitelistRegistry),
             address(multicallerWithSender),

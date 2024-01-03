@@ -9,6 +9,7 @@ import {ISafe} from "@src/interfaces/external/ISafe.sol";
 import {DAMMGnosisSafeModule} from "@src/base/DAMMGnosisSafeModule.sol";
 import {BaseMulticallerWithSender} from "@test/base/BaseMulticallerWithSender.sol";
 import {RouterWhitelistRegistry} from "@src/base/RouterWhitelistRegistry.sol";
+import {ProtocolState} from "@src/base/ProtocolState.sol";
 
 abstract contract BaseVault is BaseMulticallerWithSender {
     SafeL2 internal safeSingleton;
@@ -16,6 +17,7 @@ abstract contract BaseVault is BaseMulticallerWithSender {
     uint256 internal safeSaltNonce;
 
     RouterWhitelistRegistry public routerWhitelistRegistry;
+    ProtocolState public protocolState;
     DAMMGnosisSafeModule public dammModule;
 
     address public vaultOwner;
@@ -30,11 +32,15 @@ abstract contract BaseVault is BaseMulticallerWithSender {
         safeProxyFactory = new SafeProxyFactory();
         vm.label(address(safeProxyFactory), "SafeProxyFactory");
 
-        routerWhitelistRegistry = new RouterWhitelistRegistry(address(this));
+        protocolState = new ProtocolState(address(this));
+        vm.label(address(protocolState), "ProtocolState");
+
+        routerWhitelistRegistry = new RouterWhitelistRegistry(address(protocolState));
         vm.label(address(routerWhitelistRegistry), "RouterWhitelistRegistry");
 
-        dammModule =
-            new DAMMGnosisSafeModule(address(this), address(routerWhitelistRegistry), address(multicallerWithSender));
+        dammModule = new DAMMGnosisSafeModule(
+            address(this), address(protocolState), address(routerWhitelistRegistry), address(multicallerWithSender)
+        );
         vm.label(address(dammModule), "DAMMGnosisSafeModule");
 
         vaultOwner = makeAddr("VaultOwner");
