@@ -21,16 +21,18 @@ contract Target is BasePausable {
 }
 
 contract TestProtocolState is Test {
+    uint256 internal constant PAUSER_ROLE = 1 << 0;
+
     Target public target;
-    address public protocolState;
+    ProtocolState public protocolState;
 
     function setUp() public {
-        protocolState = address(new ProtocolState(address(this)));
-        target = new Target(protocolState);
+        protocolState = new ProtocolState(address(this));
+        target = new Target(address(protocolState));
     }
 
     function test_pause() public {
-        IProtocolStateActions(protocolState).pause();
+        protocolState.pause();
 
         vm.expectRevert();
         target.add(1, 2);
@@ -39,7 +41,7 @@ contract TestProtocolState is Test {
         target.sub(10, 5);
         assertEq(target.state(), 5);
 
-        IProtocolStateActions(protocolState).unpause();
+        protocolState.unpause();
 
         target.add(1, 2);
         assertEq(target.state(), 3);
@@ -49,29 +51,38 @@ contract TestProtocolState is Test {
         assertEq(target.state(), 3);
     }
 
-    function test_only_admin_can_pause(address pauser) public {
+    function test_only_owner_or_pauser_can_pause(address pauser, address notPauser) public {
         vm.assume(pauser != address(this));
+        vm.assume(pauser != notPauser);
+
+        protocolState.grantRoles(pauser, PAUSER_ROLE);
+
         vm.expectRevert();
+        vm.prank(notPauser);
+        protocolState.pause();
+
         vm.prank(pauser);
-        IProtocolStateActions(protocolState).pause();
+        protocolState.pause();
+
+        assertTrue(protocolState.paused());
     }
 
     function test_only_admin_can_unpause(address pauser) public {
         vm.assume(pauser != address(this));
         vm.expectRevert();
         vm.prank(pauser);
-        IProtocolStateActions(protocolState).unpause();
+        protocolState.unpause();
     }
 
     function test_sweep() public {
-        vm.deal(protocolState, 1 ether);
+        vm.deal(address(protocolState), 1 ether);
 
         uint256 balance = address(this).balance;
 
-        IProtocolStateActions(protocolState).sweep();
+        protocolState.sweep();
 
         assertEq(address(this).balance, balance + 1 ether);
-        assertEq(protocolState.balance, 0);
+        assertEq(address(protocolState).balance, 0);
     }
 
     receive() external payable {}

@@ -1,15 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity >=0.8.18;
 
-import {Ownable} from "@solady/auth/Ownable.sol";
+import {OwnableRoles} from "@solady/auth/OwnableRoles.sol";
 import {Pausable} from "@openzeppelin-contracts/utils/Pausable.sol";
 
-contract ProtocolState is Ownable, Pausable {
+contract ProtocolState is OwnableRoles, Pausable {
+    uint256 public constant PAUSER_ROLE = _ROLE_0;
+
     constructor(address _owner) {
         _initializeOwner(_owner);
     }
 
-    function pause() public onlyOwner {
+    function pause() public onlyOwnerOrRoles(PAUSER_ROLE) {
         _pause();
     }
 
