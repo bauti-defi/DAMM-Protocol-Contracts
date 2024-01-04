@@ -39,7 +39,6 @@ contract UniswapV3PositionRouter is BaseRouter, IUniswapV3PositionRouter {
 
     function mintPosition(INonfungiblePositionManager.MintParams calldata params)
         external
-        payable
         override
         notPaused
         setCaller
@@ -72,7 +71,6 @@ contract UniswapV3PositionRouter is BaseRouter, IUniswapV3PositionRouter {
 
     function collectTokensOwed(INonfungiblePositionManager.CollectParams calldata params)
         external
-        payable
         override
         notPaused
         setCaller
@@ -91,7 +89,6 @@ contract UniswapV3PositionRouter is BaseRouter, IUniswapV3PositionRouter {
 
     function increasePositionLiquidity(INonfungiblePositionManager.IncreaseLiquidityParams calldata params)
         external
-        payable
         override
         notPaused
         setCaller
@@ -123,7 +120,6 @@ contract UniswapV3PositionRouter is BaseRouter, IUniswapV3PositionRouter {
 
     function decreasePositionLiquidity(INonfungiblePositionManager.DecreaseLiquidityParams calldata params)
         external
-        payable
         override
         notPaused
         setCaller
