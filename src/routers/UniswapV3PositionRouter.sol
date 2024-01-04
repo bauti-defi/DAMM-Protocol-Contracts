@@ -38,12 +38,6 @@ contract UniswapV3PositionRouter is BaseRouter, IUniswapV3PositionRouter {
         (,, token0, token1,,,,,,,,) = uniswapV3PositionManager.positions(tokenId);
     }
 
-    function _tupleToArray(address token0, address token1) internal pure returns (address[] memory tokens) {
-        tokens = new address[](2);
-        tokens[0] = token0;
-        tokens[1] = token1;
-    }
-
     function mintPosition(INonfungiblePositionManager.MintParams calldata params)
         external
         payable
@@ -55,7 +49,7 @@ contract UniswapV3PositionRouter is BaseRouter, IUniswapV3PositionRouter {
         if (params.recipient != caller) revert InvalidRecipient();
 
         // check tokens are whitelisted
-        _checkTokensAreWhitelisted(caller, _tupleToArray(params.token0, params.token1));
+        _checkTokensAreWhitelisted(caller, abi.encodePacked(params.token0, params.token1));
 
         // ensure uniswap has enough allowance to spend our routers tokens
         _ensureTokenAllowance(params.token0, params.amount0Desired);
@@ -91,7 +85,7 @@ contract UniswapV3PositionRouter is BaseRouter, IUniswapV3PositionRouter {
 
         (address token0, address token1) = _getV3PositionTokenPair(params.tokenId);
 
-        _checkTokensAreWhitelisted(caller, _tupleToArray(token0, token1));
+        _checkTokensAreWhitelisted(caller, abi.encodePacked(token0, token1));
 
         (amount0, amount1) = uniswapV3PositionManager.collect(params);
     }
@@ -110,7 +104,7 @@ contract UniswapV3PositionRouter is BaseRouter, IUniswapV3PositionRouter {
 
         (address token0, address token1) = _getV3PositionTokenPair(params.tokenId);
 
-        _checkTokensAreWhitelisted(caller, _tupleToArray(token0, token1));
+        _checkTokensAreWhitelisted(caller, abi.encodePacked(token0, token1));
 
         _ensureTokenAllowance(token0, params.amount0Desired);
         _ensureTokenAllowance(token1, params.amount1Desired);
@@ -142,7 +136,7 @@ contract UniswapV3PositionRouter is BaseRouter, IUniswapV3PositionRouter {
 
         (address token0, address token1) = _getV3PositionTokenPair(params.tokenId);
 
-        _checkTokensAreWhitelisted(caller, _tupleToArray(token0, token1));
+        _checkTokensAreWhitelisted(caller, abi.encodePacked(token0, token1));
 
         (amount0, amount1) = uniswapV3PositionManager.decreaseLiquidity(params);
     }

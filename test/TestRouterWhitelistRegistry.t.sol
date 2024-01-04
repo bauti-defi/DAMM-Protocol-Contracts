@@ -30,7 +30,6 @@ contract TestRouterWhitelistRegistry is SymTest, Test {
         vm.assume(router != address(0));
         vm.assume(router != address(this));
         vm.assume(router != otherRouter);
-        
 
         registry.whitelistRouter(router);
         registry.blacklistRouter(router);
