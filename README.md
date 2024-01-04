@@ -69,8 +69,6 @@ $ forge build
 $ forge test
 ```
 
-> Tests failing? Make sure you have **updated the UniswapV3 Periphery pool init code hash**! [See here.](./test/uniswapV3/TestPoolAddress.t.sol) 
-
 ### Symbolic Test
 
 > Requires previously installation of the [halmos library.](https://github.com/a16z/halmos)
