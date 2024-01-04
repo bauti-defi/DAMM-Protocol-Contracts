@@ -51,12 +51,18 @@ contract TestProtocolState is Test {
         assertEq(target.state(), 3);
     }
 
-    function test_only_owner_or_pauser_can_pause(address pauser, address notPauser) public {
+    function test_only_owner_or_pauser_can_pause(address pauser, address notPauser, uint256 randomRole) public {
         vm.assume(pauser != address(this));
         vm.assume(pauser != notPauser);
+        vm.assume(randomRole & PAUSER_ROLE == 0);
 
         protocolState.grantRoles(pauser, PAUSER_ROLE);
 
+        vm.expectRevert();
+        vm.prank(notPauser);
+        protocolState.pause();
+
+        protocolState.grantRoles(notPauser, randomRole);
         vm.expectRevert();
         vm.prank(notPauser);
         protocolState.pause();
