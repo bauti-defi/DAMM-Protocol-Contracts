@@ -27,3 +27,13 @@ remappings = [
 ]
 
 fs_permissions = [{ access = "read", path = "./"}]
+
+gas_reports = [
+    "BaseRouter", 
+    "ProtocolState", 
+    "DAMMGnosisSafeModule", 
+    "TokenWhitelistRegistry", 
+    "RouterWhitelistRegsitry", 
+    "UniswapV3PositionRouter", 
+    "UniswapV3SwapRouter"
+]
