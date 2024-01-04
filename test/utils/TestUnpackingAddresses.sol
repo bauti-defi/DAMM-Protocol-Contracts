@@ -8,8 +8,6 @@ contract TestUnpackingAddresses is Test {
     using BytesLib for bytes;
 
     function test1(address a) public {
-        vm.assume(a != address(0));
-
         bytes memory packed = abi.encodePacked(a);
 
         address[] memory array = packed.unpackAddresses();
@@ -19,7 +17,6 @@ contract TestUnpackingAddresses is Test {
     }
 
     function test2(address a, address b) public {
-        vm.assume(a != address(0) && b != address(0));
         vm.assume(a != b);
 
         bytes memory packed = abi.encodePacked(a, b);
@@ -32,7 +29,6 @@ contract TestUnpackingAddresses is Test {
     }
 
     function test3(address a, address b, address c) public {
-        vm.assume(a != address(0) && b != address(0) && c != address(0));
         vm.assume(a != b && a != c && b != c);
 
         bytes memory packed = abi.encodePacked(a, b, c);
