@@ -62,4 +62,17 @@ contract TestProtocolState is Test {
         vm.prank(pauser);
         IProtocolStateActions(protocolState).unpause();
     }
+
+    function test_sweep() public {
+        vm.deal(protocolState, 1 ether);
+
+        uint256 balance = address(this).balance;
+
+        IProtocolStateActions(protocolState).sweep();
+
+        assertEq(address(this).balance, balance + 1 ether);
+        assertEq(protocolState.balance, 0);
+    }
+
+    receive() external payable {}
 }
