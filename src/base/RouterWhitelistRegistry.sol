@@ -2,7 +2,6 @@
 pragma solidity >=0.8.18;
 
 import {IRouterWhitelistRegistry} from "@src/interfaces/IRouterWhitelistRegistry.sol";
-import {ProtocolStateAccesor} from "@src/lib/ProtocolStateAccesor.sol";
 import {IProtocolState} from "@src/interfaces/IProtocolState.sol";
 import {BasePausable} from "@src/base/BasePausable.sol";
 

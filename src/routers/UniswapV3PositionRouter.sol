@@ -7,7 +7,6 @@ import {IERC721} from "@openzeppelin-contracts/token/ERC721/IERC721.sol";
 import {TransferHelper} from "@src/lib/TransferHelper.sol";
 import {IUniswapV3PositionRouter} from "@src/interfaces/IUniswapV3PositionRouter.sol";
 import {BaseRouter} from "@src/base/BaseRouter.sol";
-import "@src/lib/ProtocolStateAccesor.sol";
 import {IProtocolState} from "@src/interfaces/IProtocolState.sol";
 
 contract UniswapV3PositionRouter is BaseRouter, IUniswapV3PositionRouter {

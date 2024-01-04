@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity >=0.8.18;
 
-import "@src/lib/ProtocolStateAccesor.sol";
 import {IPausableState} from "@src/interfaces/libs/IPausableState.sol";
+import {IProtocolState} from "@src/interfaces/IProtocolState.sol";
 
 abstract contract BasePausable is IPausableState {
     IProtocolState private immutable protocolState;
