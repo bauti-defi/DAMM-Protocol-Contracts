@@ -7,8 +7,11 @@ import {IWETH9} from "@src/interfaces/external/IWETH9.sol";
 import {TransferHelper} from "@src/lib/TransferHelper.sol";
 import {IProtocolState} from "@src/interfaces/IProtocolState.sol";
 import {BasePausable} from "@src/base/BasePausable.sol";
+import {BytesLib} from "@src/lib/BytesLib.sol";
 
 abstract contract BaseRouter is BasePausable {
+    using BytesLib for bytes;
+
     error InvalidRecipient();
     error TokenNotWhitelisted();
 
@@ -43,7 +46,9 @@ abstract contract BaseRouter is BasePausable {
         if (!isTokenWhitelisted(user, token)) revert TokenNotWhitelisted();
     }
 
-    function _checkTokensAreWhitelisted(address user, address[] memory tokens) internal view {
+    function _checkTokensAreWhitelisted(address user, bytes memory packedTokens) internal view {
+        address[] memory tokens = packedTokens.unpackAddresses();
+
         uint256 length = tokens.length;
 
         require(length > 0, "Router: length must be > 0");
