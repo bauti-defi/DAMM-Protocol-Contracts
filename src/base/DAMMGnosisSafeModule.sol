@@ -8,8 +8,10 @@ import {IRouterWhitelistRegistry} from "@src/interfaces/IRouterWhitelistRegistry
 import {IDAMMGnosisSafeModule} from "@src/interfaces/IDAMMGnosisSafeModule.sol";
 import {BasePausable} from "@src/base/BasePausable.sol";
 import {IProtocolState} from "@src/interfaces/IProtocolState.sol";
+import {ReentrancyGuard} from "@openzeppelin-contracts/utils/ReentrancyGuard.sol";
+import {NoDelegateCall} from "@src/base/NoDelegateCall.sol";
 
-contract DAMMGnosisSafeModule is BasePausable, IDAMMGnosisSafeModule {
+contract DAMMGnosisSafeModule is ReentrancyGuard, BasePausable, NoDelegateCall, IDAMMGnosisSafeModule {
     IMulticallerWithSender public immutable multicallerWithSender;
     IRouterWhitelistRegistry public immutable routerWhitelistRegistry;
     IProtocolState public immutable protocolState;
@@ -42,8 +44,9 @@ contract DAMMGnosisSafeModule is BasePausable, IDAMMGnosisSafeModule {
         return keccak256(abi.encode(vault, operator));
     }
 
-    function setOperator(address operator, bool enabled) external {
+    function setOperator(address operator, bool enabled) external noDelegateCall {
         require(operator != address(0), "DAMMGnosisSafeModule: operator is zero address");
+
         if (paused() && enabled) revert ModulePaused();
 
         operators[_operatorPointer(msg.sender, operator)] = enabled;
@@ -75,10 +78,15 @@ contract DAMMGnosisSafeModule is BasePausable, IDAMMGnosisSafeModule {
         external
         override
         notPaused
+        nonReentrant
+        noDelegateCall
         tradingNotSuspended(vault)
         onlyOperator(vault, msg.sender)
         returns (bytes memory)
     {
+        require(vault != address(this), "DAMMGnosisSafeModule: vault is self address");
+        require(vault != msg.sender, "DAMMGnosisSafeModule: sender is vault");
+
         _checkTargetIsValid(vault, target);
 
         (bool success, bytes memory returnData) =
@@ -100,7 +108,19 @@ contract DAMMGnosisSafeModule is BasePausable, IDAMMGnosisSafeModule {
         address[] calldata targets,
         bytes[] calldata datas,
         uint256[] calldata values
-    ) external override notPaused tradingNotSuspended(vault) onlyOperator(vault, msg.sender) returns (bytes[] memory) {
+    )
+        external
+        override
+        notPaused
+        nonReentrant
+        noDelegateCall
+        tradingNotSuspended(vault)
+        onlyOperator(vault, msg.sender)
+        returns (bytes[] memory)
+    {
+        require(vault != address(this), "DAMMGnosisSafeModule: vault is self address");
+        require(vault != msg.sender, "DAMMGnosisSafeModule: sender is vault");
+
         uint256 length = targets.length;
 
         require(length == datas.length, "DAMMGnosisSafeModule: datas length mismatch");
