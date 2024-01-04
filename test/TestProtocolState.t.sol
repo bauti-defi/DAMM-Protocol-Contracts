@@ -63,7 +63,11 @@ contract TestProtocolState is Test {
 
         vm.prank(pauser);
         protocolState.pause();
+        assertTrue(protocolState.paused());
 
+        protocolState.unpause();
+        assertFalse(protocolState.paused());
+        protocolState.pause();
         assertTrue(protocolState.paused());
     }
 
