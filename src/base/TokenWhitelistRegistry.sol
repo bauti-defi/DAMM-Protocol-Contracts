@@ -32,7 +32,7 @@ contract TokenWhitelistRegistry is BasePausable, ITokenWhitelistRegistry {
         tokenWhitelist[_tokenPointer(msg.sender, router, token)] = true;
     }
 
-    function _blacklistToken(address router, address token) internal notPaused {
+    function _blacklistToken(address router, address token) internal {
         require(token != address(0), "TokenWhitelistRegistry: zero address");
 
         tokenWhitelist[_tokenPointer(msg.sender, router, token)] = false;

@@ -51,4 +51,21 @@ contract TestRouterWhitelistRegistry is SymTest, Test {
         vm.expectRevert("RouterWhitelistRegistry: self address");
         registry.whitelistRouter(address(registry));
     }
+
+    function test_cannot_whitelist_when_paused() public {
+        protocolState.pause();
+        vm.expectRevert("Pausable: paused");
+        registry.whitelistRouter(address(this));
+    }
+
+    function test_can_blacklist_when_paused(address router) public {
+        vm.assume(router != address(0));
+        vm.assume(router != address(this));
+
+        registry.whitelistRouter(router);
+        protocolState.pause();
+
+        registry.blacklistRouter(router);
+        assertFalse(registry.isRouterWhitelisted(address(this), router));
+    }
 }

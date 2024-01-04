@@ -30,7 +30,7 @@ contract RouterWhitelistRegistry is BasePausable, IRouterWhitelistRegistry {
         routerWhitelist[_pointer(msg.sender, router)] = true;
     }
 
-    function _blacklistRouter(address router) internal notPaused {
+    function _blacklistRouter(address router) internal {
         require(router != address(0), "RouterWhitelistRegistry: zero address");
 
         routerWhitelist[_pointer(msg.sender, router)] = false;

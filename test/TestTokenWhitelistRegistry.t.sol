@@ -59,4 +59,22 @@ contract TestTokenWhitelistRegistry is SymTest, Test {
         vm.expectRevert("TokenWhitelistRegistry: self address");
         registry.whitelistToken(address(this), address(registry));
     }
+
+    function test_cannot_whitelist_when_paused() public {
+        protocolState.pause();
+        vm.expectRevert("Pausable: paused");
+        registry.whitelistToken(address(this), address(this));
+    }
+
+    function test_can_blacklist_when_paused(address token, address router) public {
+        vm.assume(token != address(0));
+        vm.assume(token != address(this));
+        vm.assume(router != token);
+
+        registry.whitelistToken(router, token);
+        protocolState.pause();
+
+        registry.blacklistToken(router, token);
+        assertFalse(registry.isTokenWhitelisted(address(this), router, token));
+    }
 }
