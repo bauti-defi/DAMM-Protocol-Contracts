@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-only
+// SPDX-License-Identifier: GPL-2.0-or-later
 pragma solidity >=0.8.18;
 
 import {Test} from "@forge-std/Test.sol";
@@ -7,7 +7,7 @@ import {BaseRouter} from "@src/base/BaseRouter.sol";
 import {MulticallerEtcher} from "@vec-multicaller/MulticallerEtcher.sol";
 import {MulticallerWithSender} from "@vec-multicaller/MulticallerWithSender.sol";
 import {BaseMulticallerWithSender} from "@test/base/BaseMulticallerWithSender.sol";
-import {BaseWETH9} from "@test/base/BaseWETH9.sol";
+import {TestBaseWETH9} from "@test/base/TestBaseWETH9.sol";
 
 contract Router is BaseRouter {
     event CurrentCaller(address caller);
@@ -31,14 +31,13 @@ contract Router is BaseRouter {
     }
 }
 
-contract TestBaseRouter is BaseMulticallerWithSender, BaseWETH9 {
+contract TestBaseRouter is BaseMulticallerWithSender, TestBaseWETH9 {
     Router router;
 
-    function setUp() public override(BaseMulticallerWithSender, BaseWETH9) {
-        BaseMulticallerWithSender.setUp();
-        BaseWETH9.setUp();
+    function setUp() public override {
+        super.setUp();
 
-        router = new Router(address(WETH9), address(multicallerWithSender));
+        router = new Router(_getWETH9(), address(multicallerWithSender));
 
         vm.label(address(router), "Router");
     }
