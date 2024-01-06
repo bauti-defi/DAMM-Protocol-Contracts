@@ -40,9 +40,6 @@ contract VaultFactory is IVaultFactory {
 
         require(threshold > 0 && threshold <= owners.length, "VaultFactory: Invalid threshold");
 
-        // an incremental salt nonce to add with the safe deployment
-        uint256 saltNonce = nonce + 1;
-
         address tradingModule = ADDRESS_REGISTRY.getDAMMGnosisModule().orRevert();
         address vaultGuard = ADDRESS_REGISTRY.getVaultGuard().orRevert();
 
@@ -69,17 +66,14 @@ contract VaultFactory is IVaultFactory {
         // with a salt nonce that is unique to each chain to guarantee cross-chain unique safe addresses
         vault = address(
             SafeProxyFactory(safeFactory).createProxyWithNonce(
-                singleton, initializerPayload, uint256(keccak256(abi.encode(saltNonce, block.chainid)))
+                singleton, initializerPayload, uint256(keccak256(abi.encode(++nonce, block.chainid)))
             )
         );
 
         // register the vault with the factory
-        deployedVaults[vault] = saltNonce;
+        deployedVaults[vault] = nonce;
 
-        // increment nonce
-        nonce = saltNonce;
-
-        emit VaultDeployed(vault, owners, vaultGuard, tradingModule, saltNonce);
+        emit VaultDeployed(vault, owners, vaultGuard, tradingModule, nonce);
     }
 
     // INVARIANT: This function assumes the invariant that delegate call will be disabled on safe contracts

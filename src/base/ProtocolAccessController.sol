@@ -7,8 +7,6 @@ import {IProtocolAccessController} from "@src/interfaces/IProtocolAccessControll
 contract ProtocolAccessController is OwnableRoles, IProtocolAccessController {
     /// @notice The role which allows pausing the protocol incase of emergency
     uint256 public constant PAUSER_ROLE = _ROLE_0;
-    /// @notice The role which allows locking the protocol incase of admin key compromise
-    uint256 public constant LOCKER_ROLE = _ROLE_1;
 
     constructor(address _owner) {
         _initializeOwner(_owner);
@@ -22,15 +20,6 @@ contract ProtocolAccessController is OwnableRoles, IProtocolAccessController {
         return owner() == _address;
     }
 
-    function isLocker(address _address) external view returns (bool) {
-        return hasAnyRole(_address, LOCKER_ROLE);
-    }
-
-    function setLocker(address _locker) external override onlyOwner {
-        require(owner() != _locker, "ProtocolAccessController: owner cannot be locker");
-        _setRoles(_locker, LOCKER_ROLE);
-    }
-
     function setPauser(address _pauser) external override onlyOwner {
         _setRoles(_pauser, PAUSER_ROLE);
     }
@@ -38,5 +27,4 @@ contract ProtocolAccessController is OwnableRoles, IProtocolAccessController {
     function removePauser(address _pauser) external override onlyOwner {
         _removeRoles(_pauser, PAUSER_ROLE);
     }
-
 }

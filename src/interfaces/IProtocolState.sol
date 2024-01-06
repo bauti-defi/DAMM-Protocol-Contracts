@@ -2,8 +2,7 @@
 pragma solidity ^0.8.0;
 
 import {IPausable} from "@src/interfaces/libs/IPausable.sol";
-import {ILockable} from "@src/interfaces/libs/ILockable.sol";
 
-interface IProtocolState is IPausable, ILockable {
+interface IProtocolState is IPausable {
     function requireNotStopped() external view;
 }

@@ -33,5 +33,18 @@ contract TestVaultFactory is TestBaseProtocol {
             bytes32(bytes20(address(dammGuard)))
         );
         assertTrue(ISafe(vault).isModuleEnabled(address(dammModule)));
+
+        vm.prank(vaultOwner);
+        vault = vaultFactory.deployDAMMVault(owners, 1);
+
+        assertEq(vaultFactory.getDeployedVaultNonce(vault), 2);
+        assertEq(ISafe(vault).getOwners().length, 1);
+        assertEq(ISafe(vault).getOwners()[0], vaultOwner);
+        assertEq(ISafe(vault).getThreshold(), 1);
+        assertEq(
+            bytes32(IStorageAccesible(vault).getStorageAt(uint256(GUARD_STORAGE_SLOT), 32)) << 96,
+            bytes32(bytes20(address(dammGuard)))
+        );
+        assertTrue(ISafe(vault).isModuleEnabled(address(dammModule)));
     }
 }
