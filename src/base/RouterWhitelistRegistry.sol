@@ -3,15 +3,18 @@ pragma solidity >=0.8.18;
 
 import {IRouterWhitelistRegistry} from "@src/interfaces/IRouterWhitelistRegistry.sol";
 import {IProtocolState} from "@src/interfaces/IProtocolState.sol";
-import {BasePausable} from "@src/base/BasePausable.sol";
+import {IProtocolAddressRegistry} from "@src/interfaces/IProtocolAddressRegistry.sol";
+import {SafeGet} from "@src/lib/SafeGet.sol";
 
-contract RouterWhitelistRegistry is BasePausable, IRouterWhitelistRegistry {
-    IProtocolState public immutable protocolState;
+contract RouterWhitelistRegistry is IRouterWhitelistRegistry {
+    using SafeGet for address;
+
+    IProtocolAddressRegistry private immutable ADDRESS_REGISTRY;
 
     mapping(bytes32 pointer => bool whitelisted) internal routerWhitelist;
 
-    constructor(address _protocolState) BasePausable(_protocolState) {
-        protocolState = IProtocolState(_protocolState);
+    constructor(IProtocolAddressRegistry addressRegistry) {
+        ADDRESS_REGISTRY = IProtocolAddressRegistry(addressRegistry);
     }
 
     function _pointer(address vault, address router) internal pure returns (bytes32) {
@@ -22,7 +25,9 @@ contract RouterWhitelistRegistry is BasePausable, IRouterWhitelistRegistry {
         return routerWhitelist[_pointer(vault, router)];
     }
 
-    function _whitelistRouter(address router) internal notPaused {
+    function _whitelistRouter(address router) internal {
+        IProtocolState(ADDRESS_REGISTRY.getProtocolState().orRevert()).requireNotStopped();
+
         require(router != address(0), "RouterWhitelistRegistry: zero address");
         require(router != address(this), "RouterWhitelistRegistry: self address");
         require(router != msg.sender, "RouterWhitelistRegistry: sender address");

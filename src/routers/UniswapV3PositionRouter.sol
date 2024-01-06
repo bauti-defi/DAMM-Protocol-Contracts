@@ -7,19 +7,19 @@ import {IERC721} from "@openzeppelin-contracts/token/ERC721/IERC721.sol";
 import {TransferHelper} from "@src/lib/TransferHelper.sol";
 import {IUniswapV3PositionRouter} from "@src/interfaces/IUniswapV3PositionRouter.sol";
 import {BaseRouter} from "@src/base/BaseRouter.sol";
-import {IProtocolState} from "@src/interfaces/IProtocolState.sol";
+import {IProtocolAddressRegistry} from "@src/interfaces/IProtocolAddressRegistry.sol";
+import {IWETH9} from "@src/interfaces/external/IWETH9.sol";
+import {RouterPayments} from "@src/lib/RouterPayments.sol";
 
-contract UniswapV3PositionRouter is BaseRouter, IUniswapV3PositionRouter {
+contract UniswapV3PositionRouter is BaseRouter, RouterPayments, IUniswapV3PositionRouter {
     INonfungiblePositionManager public immutable uniswapV3PositionManager;
 
     constructor(
-        address _protocolState,
-        address _WETH9,
-        address _tokenWhitelistRegistry,
-        address _multicallerWithSender,
-        address _uniswapV3PositionManager
-    ) BaseRouter(_protocolState, _WETH9, _tokenWhitelistRegistry, _multicallerWithSender) {
-        uniswapV3PositionManager = INonfungiblePositionManager(_uniswapV3PositionManager);
+        IProtocolAddressRegistry _addressRegsitry,
+        IWETH9 _WETH9,
+        INonfungiblePositionManager _uniswapV3PositionManager
+    ) BaseRouter(_addressRegsitry) RouterPayments(_WETH9) {
+        uniswapV3PositionManager = _uniswapV3PositionManager;
     }
 
     function _ensureTokenAllowance(address token, uint256 allowanceRequired) internal {

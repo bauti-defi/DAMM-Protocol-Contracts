@@ -6,15 +6,12 @@ import {Vm} from "@forge-std/Vm.sol";
 import {BaseRouter} from "@src/base/BaseRouter.sol";
 import {MulticallerEtcher} from "@vec-multicaller/MulticallerEtcher.sol";
 import {MulticallerWithSender} from "@vec-multicaller/MulticallerWithSender.sol";
-import {BaseMulticallerWithSender} from "@test/base/BaseMulticallerWithSender.sol";
-import {TestBaseWETH9} from "@test/base/TestBaseWETH9.sol";
+import "@test/base/TestBaseProtocol.sol";
 
 contract Router is BaseRouter {
     event CurrentCaller(address caller);
 
-    constructor(address _weth9, address _multicallerWithSender)
-        BaseRouter(address(0), _weth9, address(0), _multicallerWithSender)
-    {}
+    constructor(IProtocolAddressRegistry addressRegistry) BaseRouter(addressRegistry) {}
 
     function fun4() external setCaller returns (uint256) {
         emit CurrentCaller(caller);
@@ -31,13 +28,13 @@ contract Router is BaseRouter {
     }
 }
 
-contract TestBaseRouter is BaseMulticallerWithSender, TestBaseWETH9 {
+contract TestBaseRouter is TestBaseProtocol {
     Router router;
 
     function setUp() public override {
         super.setUp();
 
-        router = new Router(_getWETH9(), address(multicallerWithSender));
+        router = new Router(protocolAddressRegistry);
 
         vm.label(address(router), "Router");
     }
@@ -50,19 +47,6 @@ contract TestBaseRouter is BaseMulticallerWithSender, TestBaseWETH9 {
         /// @notice the caller address is a transient variable that should be reset after each transaction
         callerAddress = vm.load(address(router), bytes32(uint256(0)));
         assertEq(bytes32(0), callerAddress);
-    }
-
-    function test_cannot_transfer_native_eth_to_router() public invariants {
-        vm.deal(address(this), 1 ether);
-
-        vm.expectRevert("Not WETH9");
-        payable(address(router)).transfer(1 ether);
-
-        (bool success,) = address(router).call{value: 1 ether}("");
-        assertEq(success, false);
-
-        assertEq(address(this).balance, 1 ether);
-        assertEq(address(router).balance, 0);
     }
 
     function test_caller_is_set() public invariants {

@@ -1,25 +1,59 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity >=0.8.18;
 
-import {OwnableRoles} from "@solady/auth/OwnableRoles.sol";
 import {Pausable} from "@openzeppelin-contracts/utils/Pausable.sol";
+import {Lockable} from "@src/lib/Lockable.sol";
+import {IProtocolAddressRegistry} from "@src/interfaces/IProtocolAddressRegistry.sol";
+import {IProtocolAccessController} from "@src/interfaces/IProtocolAccessController.sol";
+import "@src/interfaces/IProtocolState.sol";
+import {SafeGet} from "@src/lib/SafeGet.sol";
 
-contract ProtocolState is OwnableRoles, Pausable {
-    uint256 public constant PAUSER_ROLE = _ROLE_0;
+contract ProtocolState is Pausable, Lockable, IProtocolState {
+    using SafeGet for address;
 
-    constructor(address _owner) {
-        _initializeOwner(_owner);
+    IProtocolAddressRegistry private immutable ADDRESS_REGISTRY;
+
+    constructor(IProtocolAddressRegistry addressRegistry) {
+        ADDRESS_REGISTRY = addressRegistry;
     }
 
-    function pause() public onlyOwnerOrRoles(PAUSER_ROLE) {
+    function accessController() private view returns (IProtocolAccessController) {
+        return IProtocolAccessController(ADDRESS_REGISTRY.getAccessController().orRevert());
+    }
+
+    function lock() external override {
+        require(accessController().isLocker(msg.sender), "ProtocolState: Caller is not the owner");
+        _lock();
+    }
+
+    function unlock() external override {
+        require(_locked() && _locker() == msg.sender, "ProtocolState: Caller is not the locker");
+        _unlock();
+    }
+
+    function locked() public view override returns (bool) {
+        return _locked();
+    }
+
+    function locker() public view override returns (address) {
+        return _locker();
+    }
+
+    function pause() external override {
+        require(accessController().isOwnerOrPauser(msg.sender), "ProtocolState: permission denied");
         _pause();
     }
 
-    function unpause() public onlyOwner {
+    function paused() public view override(IPausable, Pausable) returns (bool) {
+        return super.paused();
+    }
+
+    function unpause() external override {
+        require(accessController().isOwner(msg.sender), "ProtocolState: permission denied");
         _unpause();
     }
 
-    function sweep() public onlyOwner {
-        payable(owner()).transfer(address(this).balance);
+    function requireNotStopped() external view override {
+        require(!paused() && !locked(), "ProtocolState: stopped");
     }
 }

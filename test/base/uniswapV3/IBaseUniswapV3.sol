@@ -2,11 +2,11 @@
 pragma solidity >=0.7.0;
 
 interface IBaseUniswapV3 {
-    function localUniV3Factory() external view returns (address);
+    function factory() external view returns (address);
     function weth9() external view returns (address);
-    function localUniV3TokenDescriptor() external view returns (address);
-    function localUniV3PM() external view returns (address);
-    function localUniV3Router() external view returns (address);
+    function tokenDescriptor() external view returns (address);
+    function positionManager() external view returns (address);
+    function router() external view returns (address);
     function deployPool(address token0, address token1, uint24 poolFee) external returns (address pool);
     function initializePool(address pool, int24 startTick) external;
 }

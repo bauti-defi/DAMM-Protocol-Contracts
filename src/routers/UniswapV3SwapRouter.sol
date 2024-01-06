@@ -6,18 +6,18 @@ import {IERC20} from "@openzeppelin-contracts/token/ERC20/IERC20.sol";
 import {IERC721} from "@openzeppelin-contracts/token/ERC721/IERC721.sol";
 import {BaseRouter} from "@src/base/BaseRouter.sol";
 import {IUniswapV3SwapRouter} from "@src/interfaces/IUniswapV3SwapRouter.sol";
+import {IProtocolAddressRegistry} from "@src/interfaces/IProtocolAddressRegistry.sol";
+import {IWETH9} from "@src/interfaces/external/IWETH9.sol";
+import {RouterPayments} from "@src/lib/RouterPayments.sol";
 
-contract UniswapV3SwapRouter is BaseRouter, IUniswapV3SwapRouter {
+contract UniswapV3SwapRouter is BaseRouter, RouterPayments, IUniswapV3SwapRouter {
     ISwapRouter public immutable uniswapV3SwapRouter;
 
-    constructor(
-        address _protocolState,
-        address _WETH9,
-        address _tokenWhitelistRegistry,
-        address _multicallerWithSender,
-        address _uniswapV3SwapRouter
-    ) BaseRouter(_protocolState, _WETH9, _tokenWhitelistRegistry, _multicallerWithSender) {
-        uniswapV3SwapRouter = ISwapRouter(_uniswapV3SwapRouter);
+    constructor(IProtocolAddressRegistry _addressRegsitry, IWETH9 _WETH9, ISwapRouter _uniswapV3SwapRouter)
+        BaseRouter(_addressRegsitry)
+        RouterPayments(_WETH9)
+    {
+        uniswapV3SwapRouter = _uniswapV3SwapRouter;
     }
 
     function _ensureTokenAllowance(address token, uint256 allowanceRequired) internal {

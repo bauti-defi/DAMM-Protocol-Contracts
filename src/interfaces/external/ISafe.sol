@@ -48,6 +48,8 @@ interface ISafe {
     /// @param guard The address of the guard to be used or the 0 address to disable the guard
     function setGuard(address guard) external;
 
+    function getGuard() external view returns (address guard);
+
     /// @dev Setup function sets initial storage of contract.
     /// @param _owners List of Safe owners.
     /// @param _threshold Number of required confirmations for a Safe transaction.
@@ -74,4 +76,7 @@ interface ISafe {
 
     /// @return True if address is owner of the Safe
     function isOwner(address owner) external view returns (bool);
+
+    /// @return Number of signers required for the the Safe
+    function getThreshold() external view returns (uint256);
 }

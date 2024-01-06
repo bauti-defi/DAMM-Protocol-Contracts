@@ -2,9 +2,9 @@
 pragma solidity >=0.8.18;
 
 import {Test} from "@forge-std/Test.sol";
-import {BaseVault} from "@test/base/BaseVault.sol";
+import {TestBaseProtocol} from "@test/base/TestBaseProtocol.sol";
 import {LibMulticaller} from "@vec-multicaller/LibMulticaller.sol";
-import {IDAMMGnosisSafeModule} from "@src/interfaces/IDAMMGnosisSafeModule.sol";
+import {IVaultRouterModule} from "@src/interfaces/IVaultRouterModule.sol";
 
 contract MockRouter {
     function fun1() external payable returns (address, uint256, uint256) {
@@ -20,14 +20,20 @@ contract MockRouter {
     }
 }
 
-contract TestDAMMGnosisSafeModule is BaseVault {
+contract TestVaultRouterModule is TestBaseProtocol {
     address public operator;
     MockRouter public mockRouter;
+
+    address vaultOwner;
+    address vault;
 
     function setUp() public override {
         super.setUp();
 
+        vaultOwner = makeAddr("VaultOwner");
         operator = makeAddr("Operator");
+
+        vault = deployVault(vaultOwner);
 
         vm.prank(vault);
         dammModule.setOperator(operator, true);
@@ -43,14 +49,14 @@ contract TestDAMMGnosisSafeModule is BaseVault {
 
     function test_only_operator_can_execute(address _op) public {
         vm.assume(_op != operator);
-        vm.expectRevert(IDAMMGnosisSafeModule.OnlyOperator.selector);
+        vm.expectRevert(IVaultRouterModule.OnlyOperator.selector);
         vm.prank(_op);
         dammModule.execute(vault, address(mockRouter), 0, abi.encodeWithSelector(mockRouter.fun1.selector));
     }
 
     function test_only_operator_can_execute_multicall(address _op) public {
         vm.assume(_op != operator);
-        vm.expectRevert(IDAMMGnosisSafeModule.OnlyOperator.selector);
+        vm.expectRevert(IVaultRouterModule.OnlyOperator.selector);
         vm.prank(_op);
         dammModule.executeMulticall(vault, new address[](0), new bytes[](0), new uint256[](0));
     }
@@ -58,7 +64,7 @@ contract TestDAMMGnosisSafeModule is BaseVault {
     function test_can_only_execute_when_not_suspended() public {
         vm.prank(vault);
         dammModule.suspendTrading();
-        vm.expectRevert(IDAMMGnosisSafeModule.TradingSuspended.selector);
+        vm.expectRevert(IVaultRouterModule.TradingSuspended.selector);
         dammModule.execute(vault, address(mockRouter), 0, abi.encodeWithSelector(mockRouter.fun1.selector));
 
         vm.prank(vault);
@@ -70,7 +76,7 @@ contract TestDAMMGnosisSafeModule is BaseVault {
     function test_can_only_execute_multicall_when_not_suspended() public {
         vm.prank(vault);
         dammModule.suspendTrading();
-        vm.expectRevert(IDAMMGnosisSafeModule.TradingSuspended.selector);
+        vm.expectRevert(IVaultRouterModule.TradingSuspended.selector);
         dammModule.executeMulticall(vault, new address[](0), new bytes[](0), new uint256[](0));
 
         vm.prank(vault);
@@ -139,7 +145,7 @@ contract TestDAMMGnosisSafeModule is BaseVault {
         vm.assume(badRouter != address(0));
 
         vm.prank(operator);
-        vm.expectRevert(IDAMMGnosisSafeModule.InvalidRouter.selector);
+        vm.expectRevert(IVaultRouterModule.InvalidRouter.selector);
         dammModule.execute(vault, badRouter, 0, abi.encodeWithSelector(mockRouter.fun1.selector));
 
         assertEq(1 ether, address(vault).balance);
@@ -245,7 +251,7 @@ contract TestDAMMGnosisSafeModule is BaseVault {
     }
 
     function test_cannot_set_zero_address_as_operator(address _vault) public {
-        vm.expectRevert("DAMMGnosisSafeModule: operator is zero address");
+        vm.expectRevert("VaultRouterModule: operator is zero address");
         vm.prank(_vault);
         dammModule.setOperator(address(0), true);
     }

@@ -2,18 +2,21 @@
 pragma solidity >=0.8.18;
 
 import {ITokenWhitelistRegistry} from "@src/interfaces/ITokenWhitelistRegistry.sol";
-import {BasePausable} from "@src/base/BasePausable.sol";
 import {IProtocolState} from "@src/interfaces/IProtocolState.sol";
+import {IProtocolAddressRegistry} from "@src/interfaces/IProtocolAddressRegistry.sol";
+import {SafeGet} from "@src/lib/SafeGet.sol";
 
 /// @notice This registry does not yet support native ethereum tokens
-contract TokenWhitelistRegistry is BasePausable, ITokenWhitelistRegistry {
-    IProtocolState public immutable protocolState;
+contract TokenWhitelistRegistry is ITokenWhitelistRegistry {
+    using SafeGet for address;
+
+    IProtocolAddressRegistry private immutable ADDRESS_REGISTRY;
 
     /// @notice keccak256(abi.encodePacked(user, router, token)) => whitelisted
     mapping(bytes32 pointer => bool whitelisted) internal tokenWhitelist;
 
-    constructor(address _protocolState) BasePausable(_protocolState) {
-        protocolState = IProtocolState(_protocolState);
+    constructor(IProtocolAddressRegistry addressRegistry) {
+        ADDRESS_REGISTRY = IProtocolAddressRegistry(addressRegistry);
     }
 
     function _tokenPointer(address user, address router, address token) internal pure returns (bytes32) {
@@ -24,7 +27,9 @@ contract TokenWhitelistRegistry is BasePausable, ITokenWhitelistRegistry {
         return tokenWhitelist[_tokenPointer(user, router, token)];
     }
 
-    function _whitelistToken(address router, address token) internal notPaused {
+    function _whitelistToken(address router, address token) internal {
+        IProtocolState(ADDRESS_REGISTRY.getProtocolState().orRevert()).requireNotStopped();
+
         require(token != address(0), "TokenWhitelistRegistry: zero address");
         require(token != address(this), "TokenWhitelistRegistry: self address");
         require(token != msg.sender, "TokenWhitelistRegistry: sender address");
