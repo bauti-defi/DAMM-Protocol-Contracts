@@ -3,6 +3,7 @@ pragma solidity >=0.8.18;
 
 import {IWETH9} from "@src/interfaces/external/IWETH9.sol";
 import "@src/lib/GPv2SafeERC20.sol";
+import "@openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
 
 abstract contract RouterPayments {
     using GPv2SafeERC20 for IERC20;
@@ -11,6 +12,16 @@ abstract contract RouterPayments {
 
     constructor(IWETH9 _WETH9) {
         WETH9 = _WETH9;
+    }
+
+    function _safelyEnsureTokenAllowance(address token, address to, uint256 allowanceRequired)
+        internal
+    {
+        IERC20 tokenToApprove = IERC20(token);
+
+        if (tokenToApprove.allowance(address(this), to) < allowanceRequired) {
+            SafeERC20.forceApprove(tokenToApprove, to, type(uint256).max);
+        }
     }
 
     /// @notice Transfers the full amount of a token held by this contract to recipient

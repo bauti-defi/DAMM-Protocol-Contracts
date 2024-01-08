@@ -36,16 +36,6 @@ abstract contract BaseRouter {
         ADDRESS_REGISTRY = _addressRegistry;
     }
 
-    function _safelyEnsureTokenAllowance(address token, address to, uint256 allowanceRequired)
-        internal
-    {
-        IERC20 tokenToApprove = IERC20(token);
-
-        if (tokenToApprove.allowance(address(this), to) < allowanceRequired) {
-            tokenToApprove.forceApprove(to, type(uint256).max);
-        }
-    }
-
     function isTokenWhitelisted(address user, address token) public view returns (bool) {
         return ITokenWhitelistRegistry(ADDRESS_REGISTRY.getTokenWhitelistRegistry())
             .isTokenWhitelisted(user, address(this), token);
