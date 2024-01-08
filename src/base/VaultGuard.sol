@@ -32,22 +32,16 @@ contract VaultGuard is BaseGuard, IVaultGuard {
         bytes memory,
         address
     ) external view override {
-        require(operation == Enum.Operation.Call, "VaultGuard: only call operation is allowed");
+        require(operation == Enum.Operation.Call, "VaultGuard: delegatecall not allowed");
 
         // block @here
-        // router whitelist
-        // token whitelist
-        // vault module
-
-        // actions allowed by vault owner
-        // enable operator
-        // disable operator
-        // whitelist token
-        // blacklist token
-        // whitelist router
-        // blacklist router
+        // enable/disable module
+        // enable/disable guard
 
         // actions allowed by vault
+        // enable/disable operator
+        // enable/disable router
+        // enable/disable token
         // transfer erc20
         // transfer erc721
         // transfer erc1155

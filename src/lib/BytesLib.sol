@@ -16,6 +16,10 @@ library BytesLib {
     {
         uint256 packedLength = packed.length;
 
+        if(packedLength == 0) {
+            return array;
+        }
+
         uint256 padLeft = leftAligned ? 0 : 256 - elementSize * 8;
         // Array length (number of elements)
         uint256 arrayLength;
