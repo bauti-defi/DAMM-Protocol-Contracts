@@ -9,9 +9,12 @@ interface ISafe {
     /// @param value Ether value of module transaction.
     /// @param data Data payload of module transaction.
     /// @param operation Operation type of module transaction.
-    function execTransactionFromModule(address to, uint256 value, bytes calldata data, Enum.Operation operation)
-        external
-        returns (bool success);
+    function execTransactionFromModule(
+        address to,
+        uint256 value,
+        bytes calldata data,
+        Enum.Operation operation
+    ) external returns (bool success);
 
     /**
      * @notice Execute `operation` (0: Call, 1: DelegateCall) to `to` with `value` (Native Token) and return data
@@ -22,9 +25,12 @@ interface ISafe {
      * @return success Boolean flag indicating if the call succeeded.
      * @return returnData Data returned by the call.
      */
-    function execTransactionFromModuleReturnData(address to, uint256 value, bytes memory data, Enum.Operation operation)
-        external
-        returns (bool success, bytes memory returnData);
+    function execTransactionFromModuleReturnData(
+        address to,
+        uint256 value,
+        bytes memory data,
+        Enum.Operation operation
+    ) external returns (bool success, bytes memory returnData);
 
     // @dev Allows to swap/replace an owner from the Safe with another address.
     ///      This can only be done via a Safe transaction.
@@ -47,6 +53,8 @@ interface ISafe {
     /// @dev Set a guard that checks transactions before execution
     /// @param guard The address of the guard to be used or the 0 address to disable the guard
     function setGuard(address guard) external;
+
+    function getGuard() external view returns (address guard);
 
     /// @dev Setup function sets initial storage of contract.
     /// @param _owners List of Safe owners.
@@ -74,4 +82,7 @@ interface ISafe {
 
     /// @return True if address is owner of the Safe
     function isOwner(address owner) external view returns (bool);
+
+    /// @return Number of signers required for the the Safe
+    function getThreshold() external view returns (uint256);
 }

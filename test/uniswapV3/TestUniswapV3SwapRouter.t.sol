@@ -4,18 +4,16 @@ pragma solidity >=0.8.0;
 import {Test, console2} from "@forge-std/Test.sol";
 import {MockERC20} from "@test/mocks/MockERC20.sol";
 import {TickMath} from "@test/utils/TickMath.sol";
-import {TokenWhitelistRegistry} from "@src/base/TokenWhitelistRegistry.sol";
 import {UniswapV3SwapRouter} from "@src/routers/UniswapV3SwapRouter.sol";
 import {ISwapRouter} from "@src/interfaces/external/ISwapRouter.sol";
 import {INonfungiblePositionManager} from "@src/interfaces/external/INonfungiblePositionManager.sol";
 import {IUniswapV3PoolActions} from "@src/interfaces/external/IUniswapV3PoolActions.sol";
 import {IUniswapV3PoolState} from "@src/interfaces/external/IUniswapV3PoolState.sol";
-import {BaseMulticallerWithSender} from "@test/base/BaseMulticallerWithSender.sol";
-import {BaseUniswapV3} from "@test/base/uniswapV3/BaseUniswapV3.sol";
-import {ProtocolState} from "@src/base/ProtocolState.sol";
+import "@test/base/uniswapV3/TestBaseUniswapV3.sol";
 import {BaseRouter} from "@src/base/BaseRouter.sol";
+import "src/interfaces/external/IWETH9.sol";
 
-contract TestUniswapV3SwapRouter is BaseUniswapV3, BaseMulticallerWithSender {
+contract TestUniswapV3SwapRouter is TestBaseUniswapV3 {
     struct MintCallbackData {
         address token0;
         address token1;
@@ -30,29 +28,26 @@ contract TestUniswapV3SwapRouter is BaseUniswapV3, BaseMulticallerWithSender {
     MockERC20 public token1;
     address public pool;
 
-    ProtocolState public protocolState;
-    TokenWhitelistRegistry public tokenWhitelistRegistry;
     UniswapV3SwapRouter public dammRouter;
 
     int24 startTick;
-    address public vault;
+    address public caller;
     address public trader;
     address public lp;
 
-    function setUp() public override(BaseUniswapV3, BaseMulticallerWithSender) {
-        BaseUniswapV3.setUp();
-        BaseMulticallerWithSender.setUp();
+    function setUp() public override {
+        super.setUp();
 
         trader = makeAddr("Trader");
         lp = makeAddr("LP");
-        vault = makeAddr("Vault");
+        caller = makeAddr("Caller");
 
         token0 = new MockERC20();
         token1 = new MockERC20();
 
-        // mint tokens to vault
-        token0.mint(vault, ONE_MILLION);
-        token1.mint(vault, ONE_MILLION);
+        // mint tokens to caller
+        token0.mint(caller, ONE_MILLION);
+        token1.mint(caller, ONE_MILLION);
 
         // mint tokens to LP
         token0.mint(lp, ONE_BILLION);
@@ -61,26 +56,14 @@ contract TestUniswapV3SwapRouter is BaseUniswapV3, BaseMulticallerWithSender {
         //deploy pool
         pool = uniswapV3.deployPool(address(token0), address(token1), POOL_FEE);
 
-        // deploy protocol state
-        protocolState = new ProtocolState(address(this));
-        vm.label(address(protocolState), "ProtocolState");
-
-        // deploy token whitelist registry
-        tokenWhitelistRegistry = new TokenWhitelistRegistry(address(protocolState));
-        vm.label(address(tokenWhitelistRegistry), "TokenWhitelistRegistry");
-
         // deploy damm uniswap v3 swap router
         dammRouter = new UniswapV3SwapRouter(
-            address(protocolState),
-            uniswapV3.weth9(),
-            address(tokenWhitelistRegistry),
-            address(multicallerWithSender),
-            uniswapV3.localUniV3Router()
+            protocolAddressRegistry, IWETH9(uniswapV3.weth9()), ISwapRouter(uniswapV3.router())
         );
 
         vm.label(address(dammRouter), "DammRouter");
 
-        vm.startPrank(vault);
+        vm.startPrank(caller);
         // add tokens to whitelist
         tokenWhitelistRegistry.whitelistToken(address(dammRouter), address(token0));
         tokenWhitelistRegistry.whitelistToken(address(dammRouter), address(token1));
@@ -109,7 +92,9 @@ contract TestUniswapV3SwapRouter is BaseUniswapV3, BaseMulticallerWithSender {
                 startTick - 500,
                 startTick + 500,
                 100_000_000,
-                abi.encode(MintCallbackData({token0: address(token0), token1: address(token1), payer: lp}))
+                abi.encode(
+                    MintCallbackData({token0: address(token0), token1: address(token1), payer: lp})
+                )
             )
         );
 
@@ -122,7 +107,9 @@ contract TestUniswapV3SwapRouter is BaseUniswapV3, BaseMulticallerWithSender {
     /// @param amount0Owed The amount of token0 due to the pool for the minted liquidity
     /// @param amount1Owed The amount of token1 due to the pool for the minted liquidity
     /// @param data Any data passed through by the caller via the IUniswapV3PoolActions#mint call
-    function uniswapV3MintCallback(uint256 amount0Owed, uint256 amount1Owed, bytes calldata data) external {
+    function uniswapV3MintCallback(uint256 amount0Owed, uint256 amount1Owed, bytes calldata data)
+        external
+    {
         MintCallbackData memory mintCallback = abi.decode(data, (MintCallbackData));
 
         if (amount0Owed > 0) token0.transferFrom(mintCallback.payer, address(pool), amount0Owed);
@@ -150,7 +137,11 @@ contract TestUniswapV3SwapRouter is BaseUniswapV3, BaseMulticallerWithSender {
         _;
     }
 
-    function test_swap(uint256 amount, bool zeroForOne) public useTokens(address(token0), address(token1)) invariants {
+    function test_swap(uint256 amount, bool zeroForOne)
+        public
+        useTokens(address(token0), address(token1))
+        invariants
+    {
         vm.assume(amount > 0);
         vm.assume(amount < ONE_MILLION);
 
@@ -160,13 +151,13 @@ contract TestUniswapV3SwapRouter is BaseUniswapV3, BaseMulticallerWithSender {
 
         if (zeroForOne) (tokenIn, tokenOut) = (address(token0), address(token1));
 
-        vm.prank(vault);
+        vm.prank(caller);
         uint256 amountOut = dammRouter.swapToken(
             ISwapRouter.ExactInputSingleParams({
                 tokenIn: tokenIn,
                 tokenOut: tokenOut,
                 fee: POOL_FEE,
-                recipient: vault,
+                recipient: caller,
                 deadline: block.timestamp + 10_000,
                 amountIn: amount,
                 amountOutMinimum: 0,
@@ -174,8 +165,8 @@ contract TestUniswapV3SwapRouter is BaseUniswapV3, BaseMulticallerWithSender {
             })
         );
 
-        assertEq(ONE_MILLION + amountOut, MockERC20(tokenOut).balanceOf(vault));
-        assertEq(ONE_MILLION - amount, MockERC20(tokenIn).balanceOf(vault));
+        assertEq(ONE_MILLION + amountOut, MockERC20(tokenOut).balanceOf(caller));
+        assertEq(ONE_MILLION - amount, MockERC20(tokenIn).balanceOf(caller));
     }
 
     function test_cannot_swap_unauthorized_token0(address token, bool zeroForOne)
@@ -192,14 +183,14 @@ contract TestUniswapV3SwapRouter is BaseUniswapV3, BaseMulticallerWithSender {
 
         if (zeroForOne) (tokenIn, tokenOut) = (address(token), address(token1));
 
-        vm.prank(vault);
+        vm.prank(caller);
         vm.expectRevert(BaseRouter.TokenNotWhitelisted.selector);
         dammRouter.swapToken(
             ISwapRouter.ExactInputSingleParams({
                 tokenIn: tokenIn,
                 tokenOut: tokenOut,
                 fee: POOL_FEE,
-                recipient: vault,
+                recipient: caller,
                 deadline: block.timestamp + 10_000,
                 amountIn: 100,
                 amountOutMinimum: 0,
@@ -222,14 +213,14 @@ contract TestUniswapV3SwapRouter is BaseUniswapV3, BaseMulticallerWithSender {
 
         if (zeroForOne) (tokenIn, tokenOut) = (address(token0), address(token));
 
-        vm.prank(vault);
+        vm.prank(caller);
         vm.expectRevert(BaseRouter.TokenNotWhitelisted.selector);
         dammRouter.swapToken(
             ISwapRouter.ExactInputSingleParams({
                 tokenIn: tokenIn,
                 tokenOut: tokenOut,
                 fee: POOL_FEE,
-                recipient: vault,
+                recipient: caller,
                 deadline: block.timestamp + 10_000,
                 amountIn: 100,
                 amountOutMinimum: 0,

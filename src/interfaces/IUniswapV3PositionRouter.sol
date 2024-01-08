@@ -14,11 +14,11 @@ interface IUniswapV3PositionRouter {
         external
         returns (uint256 amount0, uint256 amount1);
 
-    function increasePositionLiquidity(INonfungiblePositionManager.IncreaseLiquidityParams calldata params)
-        external
-        returns (uint128 liquidity, uint256 amount0, uint256 amount1);
+    function increasePositionLiquidity(
+        INonfungiblePositionManager.IncreaseLiquidityParams calldata params
+    ) external returns (uint128 liquidity, uint256 amount0, uint256 amount1);
 
-    function decreasePositionLiquidity(INonfungiblePositionManager.DecreaseLiquidityParams calldata params)
-        external
-        returns (uint256 amount0, uint256 amount1);
+    function decreasePositionLiquidity(
+        INonfungiblePositionManager.DecreaseLiquidityParams calldata params
+    ) external returns (uint256 amount0, uint256 amount1);
 }

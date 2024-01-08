@@ -8,7 +8,7 @@ Decentralized Autonomous Money Management **(DAMM)** is a protocol that facilita
 There are four main components that make the **DAMM** protocol:
 - Routers
 - TokenWhitelistRegistry
-- DAMMGnosisSafeModule
+- VaultRouterModule
 - RouterWhitelistRegistry
 
 ### Routers
@@ -26,13 +26,13 @@ The `TokenWhitelistRegistry` is a registry of whitelisted tokens. It is responsi
 
 ---
 
-### [DAMMGnosisSafeModule](./src/base/DAMMGnosisSafeModule.sol)
-The `DAMMGnosisSafeModule` is a Gnosis Safe module that allows operators to trade assets escrowed inside a safe on behalf of the owner(s). Operators are enabled by the safe owners. To enable operators to trade assets on their behalf, the Safe owner(s) must first: 
-- Enable the `DAMMGnosisSafeModule` module on the Gnosis Safe.
+### [VaultRouterModule](./src/base/VaultRouterModule.sol)
+The `VaultRouterModule` is a Gnosis Safe module that allows operators to trade assets escrowed inside a safe on behalf of the owner(s). Operators are enabled by the safe owners. To enable operators to trade assets on their behalf, the Safe owner(s) must first: 
+- Enable the `VaultRouterModule` module on the Gnosis Safe.
 - Whitelist the routers that the operator will be allowed to use to the `RouterWhitelistRegsitry`.
 - Whitelist the tokens that the operator will be allowed to trade to the `TokenWhitelistRegistry`.
 
-The `DAMMGnosisSafeModule` provides the following guarantees:
+The `VaultRouterModule` provides the following guarantees:
 - Only whitelisted routers can be used.
 - Only whitelisted tokens can be traded on the whitelisted routers.
 - Only whitelisted operators can execute trades that comply with the above whitelist permissions on behalf of the Gnosis Safe owner(s).

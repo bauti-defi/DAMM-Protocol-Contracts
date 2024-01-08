@@ -7,32 +7,40 @@ import {IERC721} from "@openzeppelin-contracts/token/ERC721/IERC721.sol";
 import {TransferHelper} from "@src/lib/TransferHelper.sol";
 import {IUniswapV3PositionRouter} from "@src/interfaces/IUniswapV3PositionRouter.sol";
 import {BaseRouter} from "@src/base/BaseRouter.sol";
-import {IProtocolState} from "@src/interfaces/IProtocolState.sol";
+import {IProtocolAddressRegistry} from "@src/interfaces/IProtocolAddressRegistry.sol";
+import {IWETH9} from "@src/interfaces/external/IWETH9.sol";
+import {RouterPayments} from "@src/lib/RouterPayments.sol";
+import {SafeERC20} from "@openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
 
-contract UniswapV3PositionRouter is BaseRouter, IUniswapV3PositionRouter {
+contract UniswapV3PositionRouter is BaseRouter, RouterPayments, IUniswapV3PositionRouter {
+    using SafeERC20 for IERC20;
+
     INonfungiblePositionManager public immutable uniswapV3PositionManager;
 
     constructor(
-        address _protocolState,
-        address _WETH9,
-        address _tokenWhitelistRegistry,
-        address _multicallerWithSender,
-        address _uniswapV3PositionManager
-    ) BaseRouter(_protocolState, _WETH9, _tokenWhitelistRegistry, _multicallerWithSender) {
-        uniswapV3PositionManager = INonfungiblePositionManager(_uniswapV3PositionManager);
+        IProtocolAddressRegistry _addressRegsitry,
+        IWETH9 _WETH9,
+        INonfungiblePositionManager _uniswapV3PositionManager
+    ) BaseRouter(_addressRegsitry) RouterPayments(_WETH9) {
+        uniswapV3PositionManager = _uniswapV3PositionManager;
     }
 
     function _ensureTokenAllowance(address token, uint256 allowanceRequired) internal {
         IERC20 tokenToApprove = IERC20(token);
 
-        if (tokenToApprove.allowance(address(this), address(uniswapV3PositionManager)) < allowanceRequired) {
-            require(
-                tokenToApprove.approve(address(uniswapV3PositionManager), type(uint256).max), "Router: approve failed"
-            );
+        if (
+            tokenToApprove.allowance(address(this), address(uniswapV3PositionManager))
+                < allowanceRequired
+        ) {
+            tokenToApprove.forceApprove(address(uniswapV3PositionManager), type(uint256).max);
         }
     }
 
-    function _getV3PositionTokenPair(uint256 tokenId) internal view returns (address token0, address token1) {
+    function _getV3PositionTokenPair(uint256 tokenId)
+        internal
+        view
+        returns (address token0, address token1)
+    {
         // get the position information
         (,, token0, token1,,,,,,,,) = uniswapV3PositionManager.positions(tokenId);
     }
@@ -87,7 +95,9 @@ contract UniswapV3PositionRouter is BaseRouter, IUniswapV3PositionRouter {
         (amount0, amount1) = uniswapV3PositionManager.collect(params);
     }
 
-    function increasePositionLiquidity(INonfungiblePositionManager.IncreaseLiquidityParams calldata params)
+    function increasePositionLiquidity(
+        INonfungiblePositionManager.IncreaseLiquidityParams calldata params
+    )
         external
         override
         notPaused
@@ -118,13 +128,9 @@ contract UniswapV3PositionRouter is BaseRouter, IUniswapV3PositionRouter {
         }
     }
 
-    function decreasePositionLiquidity(INonfungiblePositionManager.DecreaseLiquidityParams calldata params)
-        external
-        override
-        notPaused
-        setCaller
-        returns (uint256 amount0, uint256 amount1)
-    {
+    function decreasePositionLiquidity(
+        INonfungiblePositionManager.DecreaseLiquidityParams calldata params
+    ) external override notPaused setCaller returns (uint256 amount0, uint256 amount1) {
         address positionOwner = IERC721(address(uniswapV3PositionManager)).ownerOf(params.tokenId);
 
         if (positionOwner != caller) revert InvalidRecipient();

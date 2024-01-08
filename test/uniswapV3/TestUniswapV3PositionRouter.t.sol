@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity >=0.8.0;
 
-import {BaseMulticallerWithSender} from "@test/base/BaseMulticallerWithSender.sol";
-import {BaseUniswapV3} from "@test/base/uniswapV3/BaseUniswapV3.sol";
+import {TestBaseUniswapV3} from "@test/base/uniswapV3/TestBaseUniswapV3.sol";
 import {MockERC20} from "@test/mocks/MockERC20.sol";
 import {TokenWhitelistRegistry} from "@src/base/TokenWhitelistRegistry.sol";
 import {UniswapV3PositionRouter} from "@src/routers/UniswapV3PositionRouter.sol";
@@ -10,8 +9,9 @@ import {INonfungiblePositionManager} from "@src/interfaces/external/INonfungible
 import {IERC721} from "@openzeppelin-contracts/token/ERC721/IERC721.sol";
 import {ProtocolState} from "@src/base/ProtocolState.sol";
 import {BaseRouter} from "@src/base/BaseRouter.sol";
+import {IWETH9} from "@src/interfaces/external/IWETH9.sol";
 
-contract TestUniswapV3PositionRouter is BaseUniswapV3, BaseMulticallerWithSender {
+contract TestUniswapV3PositionRouter is TestBaseUniswapV3 {
     uint256 private constant ONE_BILLION = 1_000_000 * 1000;
     uint24 private constant POOL_FEE = 500;
 
@@ -29,13 +29,10 @@ contract TestUniswapV3PositionRouter is BaseUniswapV3, BaseMulticallerWithSender
     address public pool;
     address public unauthorizedPool0;
 
-    TokenWhitelistRegistry public tokenWhitelistRegistry;
-    ProtocolState public protocolState;
     UniswapV3PositionRouter public dammRouter;
 
-    function setUp() public override(BaseUniswapV3, BaseMulticallerWithSender) {
-        BaseUniswapV3.setUp();
-        BaseMulticallerWithSender.setUp();
+    function setUp() public override {
+        super.setUp();
 
         lp = makeAddr("LP");
         otherLP = makeAddr("otherLP");
@@ -54,27 +51,18 @@ contract TestUniswapV3PositionRouter is BaseUniswapV3, BaseMulticallerWithSender
 
         //deploy pools
         pool = uniswapV3.deployPool(address(authorizedToken0), address(authorizedToken1), POOL_FEE);
-        unauthorizedPool0 = uniswapV3.deployPool(address(unauthorizedToken), address(authorizedToken1), POOL_FEE);
+        unauthorizedPool0 =
+            uniswapV3.deployPool(address(unauthorizedToken), address(authorizedToken1), POOL_FEE);
 
         // initialize pools
         uniswapV3.initializePool(pool, START_TICK);
         uniswapV3.initializePool(unauthorizedPool0, START_TICK);
 
-        // deploy protocol state
-        protocolState = new ProtocolState(address(this));
-        vm.label(address(protocolState), "protocolState");
-
-        // deploy token whitelist registry
-        tokenWhitelistRegistry = new TokenWhitelistRegistry(address(protocolState));
-        vm.label(address(tokenWhitelistRegistry), "tokenWhitelistRegistry");
-
         // deploy router
         dammRouter = new UniswapV3PositionRouter(
-            address(protocolState),
-            uniswapV3.weth9(),
-            address(tokenWhitelistRegistry),
-            address(multicallerWithSender),
-            uniswapV3.localUniV3PM()
+            protocolAddressRegistry,
+            IWETH9(uniswapV3.weth9()),
+            INonfungiblePositionManager(uniswapV3.positionManager())
         );
 
         vm.label(address(dammRouter), "DAMM Router");
@@ -84,7 +72,7 @@ contract TestUniswapV3PositionRouter is BaseUniswapV3, BaseMulticallerWithSender
         authorizedToken0.approve(address(dammRouter), type(uint256).max);
         authorizedToken1.approve(address(dammRouter), type(uint256).max);
         unauthorizedToken.approve(address(dammRouter), type(uint256).max);
-        IERC721(uniswapV3.localUniV3PM()).setApprovalForAll(address(dammRouter), true);
+        IERC721(uniswapV3.positionManager()).setApprovalForAll(address(dammRouter), true);
 
         // whitelist tokens
         tokenWhitelistRegistry.whitelistToken(address(dammRouter), address(authorizedToken0));
@@ -93,10 +81,10 @@ contract TestUniswapV3PositionRouter is BaseUniswapV3, BaseMulticallerWithSender
 
         vm.startPrank(otherLP);
         // approve PM
-        authorizedToken0.approve(uniswapV3.localUniV3PM(), type(uint256).max);
-        authorizedToken1.approve(uniswapV3.localUniV3PM(), type(uint256).max);
-        unauthorizedToken.approve(uniswapV3.localUniV3PM(), type(uint256).max);
-        IERC721(uniswapV3.localUniV3PM()).setApprovalForAll(address(dammRouter), true);
+        authorizedToken0.approve(uniswapV3.positionManager(), type(uint256).max);
+        authorizedToken1.approve(uniswapV3.positionManager(), type(uint256).max);
+        unauthorizedToken.approve(uniswapV3.positionManager(), type(uint256).max);
+        IERC721(uniswapV3.positionManager()).setApprovalForAll(address(dammRouter), true);
         vm.stopPrank();
     }
 
@@ -104,11 +92,11 @@ contract TestUniswapV3PositionRouter is BaseUniswapV3, BaseMulticallerWithSender
         // damm router should never end up with any funds
         assertEq(token0.balanceOf(address(dammRouter)), 0);
         assertEq(token1.balanceOf(address(dammRouter)), 0);
-        assertEq(IERC721(uniswapV3.localUniV3PM()).balanceOf(address(dammRouter)), 0);
+        assertEq(IERC721(uniswapV3.positionManager()).balanceOf(address(dammRouter)), 0);
         _;
         assertEq(token0.balanceOf(address(dammRouter)), 0);
         assertEq(token1.balanceOf(address(dammRouter)), 0);
-        assertEq(IERC721(uniswapV3.localUniV3PM()).balanceOf(address(dammRouter)), 0);
+        assertEq(IERC721(uniswapV3.positionManager()).balanceOf(address(dammRouter)), 0);
     }
 
     modifier useTokens(MockERC20 t0, MockERC20 t1) {
@@ -128,10 +116,12 @@ contract TestUniswapV3PositionRouter is BaseUniswapV3, BaseMulticallerWithSender
         returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1)
     {
         vm.startPrank(minter);
-        token0.transfer(uniswapV3.localUniV3PM(), amount0Desired);
-        token1.transfer(uniswapV3.localUniV3PM(), amount1Desired);
+        token0.transfer(uniswapV3.positionManager(), amount0Desired);
+        token1.transfer(uniswapV3.positionManager(), amount1Desired);
 
-        (tokenId, liquidity, amount0, amount1) = INonfungiblePositionManager(uniswapV3.localUniV3PM()).mint(
+        (tokenId, liquidity, amount0, amount1) = INonfungiblePositionManager(
+            uniswapV3.positionManager()
+        ).mint(
             INonfungiblePositionManager.MintParams({
                 token0: address(token0),
                 token1: address(token1),
@@ -150,10 +140,11 @@ contract TestUniswapV3PositionRouter is BaseUniswapV3, BaseMulticallerWithSender
         vm.stopPrank();
     }
 
-    function _mint_position_with_router(address minter, uint256 amount0Desired, uint256 amount1Desired)
-        internal
-        returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1)
-    {
+    function _mint_position_with_router(
+        address minter,
+        uint256 amount0Desired,
+        uint256 amount1Desired
+    ) internal returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1) {
         vm.prank(minter);
         (tokenId, liquidity, amount0, amount1) = dammRouter.mintPosition(
             INonfungiblePositionManager.MintParams({
@@ -172,7 +163,11 @@ contract TestUniswapV3PositionRouter is BaseUniswapV3, BaseMulticallerWithSender
         );
     }
 
-    function test_mint_position_with_router() public useTokens(authorizedToken0, authorizedToken1) invariants {
+    function test_mint_position_with_router()
+        public
+        useTokens(authorizedToken0, authorizedToken1)
+        invariants
+    {
         (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1) =
             _mint_position_with_router(lp, 1000, 1000);
 
@@ -188,7 +183,7 @@ contract TestUniswapV3PositionRouter is BaseUniswapV3, BaseMulticallerWithSender
             ,
             ,
             ,
-        ) = INonfungiblePositionManager(uniswapV3.localUniV3PM()).positions(tokenId);
+        ) = INonfungiblePositionManager(uniswapV3.positionManager()).positions(tokenId);
 
         assertEq(operator, address(0));
         assertEq(_token0, address(token0));
@@ -201,7 +196,7 @@ contract TestUniswapV3PositionRouter is BaseUniswapV3, BaseMulticallerWithSender
         assertEq(amount0, 1000);
         assertEq(amount1, 1000);
 
-        assertEq(IERC721(uniswapV3.localUniV3PM()).ownerOf(tokenId), lp);
+        assertEq(IERC721(uniswapV3.positionManager()).ownerOf(tokenId), lp);
         assertEq(ONE_BILLION - 1000, token0.balanceOf(lp));
         assertEq(ONE_BILLION - 1000, token1.balanceOf(lp));
     }
@@ -280,12 +275,17 @@ contract TestUniswapV3PositionRouter is BaseUniswapV3, BaseMulticallerWithSender
         );
     }
 
-    function test_increase_liquidity() public useTokens(authorizedToken0, authorizedToken1) invariants {
+    function test_increase_liquidity()
+        public
+        useTokens(authorizedToken0, authorizedToken1)
+        invariants
+    {
         (uint256 tokenId, uint128 start_liquidity, uint256 start_amount0, uint256 start_amount1) =
             _mint_position_with_router(lp, 1000, 1000);
 
         vm.prank(lp);
-        (uint128 end_liquidity, uint256 amount0, uint256 amount1) = dammRouter.increasePositionLiquidity(
+        (uint128 end_liquidity, uint256 amount0, uint256 amount1) = dammRouter
+            .increasePositionLiquidity(
             INonfungiblePositionManager.IncreaseLiquidityParams({
                 tokenId: tokenId,
                 amount0Desired: 1000,
@@ -296,8 +296,8 @@ contract TestUniswapV3PositionRouter is BaseUniswapV3, BaseMulticallerWithSender
             })
         );
 
-        (, address operator, address _token0, address _token1, uint24 fee,,, uint128 _liquidity,,,,) =
-            INonfungiblePositionManager(uniswapV3.localUniV3PM()).positions(tokenId);
+        (, address operator, address _token0, address _token1, uint24 fee,,, uint128 _liquidity,,,,)
+        = INonfungiblePositionManager(uniswapV3.positionManager()).positions(tokenId);
 
         assertEq(operator, address(0));
         assertEq(_token0, address(token0));
@@ -308,7 +308,7 @@ contract TestUniswapV3PositionRouter is BaseUniswapV3, BaseMulticallerWithSender
         assertEq(token0.balanceOf(lp), ONE_BILLION - start_amount0 - amount0);
         assertEq(token1.balanceOf(lp), ONE_BILLION - start_amount1 - amount1);
 
-        assertEq(IERC721(uniswapV3.localUniV3PM()).ownerOf(tokenId), lp);
+        assertEq(IERC721(uniswapV3.positionManager()).ownerOf(tokenId), lp);
     }
 
     function test_can_only_increase_liquidity_of_own_position()
@@ -334,7 +334,10 @@ contract TestUniswapV3PositionRouter is BaseUniswapV3, BaseMulticallerWithSender
         );
     }
 
-    function test_cannot_increase_liquidity_of_null_position() public useTokens(authorizedToken0, authorizedToken1) {
+    function test_cannot_increase_liquidity_of_null_position()
+        public
+        useTokens(authorizedToken0, authorizedToken1)
+    {
         vm.prank(lp);
         vm.expectRevert("ERC721: owner query for nonexistent token");
         dammRouter.increasePositionLiquidity(
@@ -349,7 +352,11 @@ contract TestUniswapV3PositionRouter is BaseUniswapV3, BaseMulticallerWithSender
         );
     }
 
-    function test_decrease_liquidity() public useTokens(authorizedToken0, authorizedToken1) invariants {
+    function test_decrease_liquidity()
+        public
+        useTokens(authorizedToken0, authorizedToken1)
+        invariants
+    {
         (uint256 tokenId, uint128 start_liquidity, uint256 start_amount0, uint256 start_amount1) =
             _mint_position_with_router(lp, 1000, 1000);
 
@@ -377,7 +384,7 @@ contract TestUniswapV3PositionRouter is BaseUniswapV3, BaseMulticallerWithSender
             ,
             uint128 tokensOwed0,
             uint128 tokensOwed1
-        ) = INonfungiblePositionManager(uniswapV3.localUniV3PM()).positions(tokenId);
+        ) = INonfungiblePositionManager(uniswapV3.positionManager()).positions(tokenId);
 
         assertEq(operator, address(0));
         assertEq(_token0, address(token0));
@@ -389,7 +396,7 @@ contract TestUniswapV3PositionRouter is BaseUniswapV3, BaseMulticallerWithSender
 
         assertEq(token0.balanceOf(lp), ONE_BILLION - start_amount0);
         assertEq(token1.balanceOf(lp), ONE_BILLION - start_amount1);
-        assertEq(IERC721(uniswapV3.localUniV3PM()).ownerOf(tokenId), lp);
+        assertEq(IERC721(uniswapV3.positionManager()).ownerOf(tokenId), lp);
     }
 
     function test_can_only_decrease_liquidity_of_own_position()
@@ -414,7 +421,10 @@ contract TestUniswapV3PositionRouter is BaseUniswapV3, BaseMulticallerWithSender
         );
     }
 
-    function test_cannot_decrease_liquidity_of_null_position() public useTokens(authorizedToken0, authorizedToken1) {
+    function test_cannot_decrease_liquidity_of_null_position()
+        public
+        useTokens(authorizedToken0, authorizedToken1)
+    {
         vm.prank(lp);
         vm.expectRevert("ERC721: owner query for nonexistent token");
         dammRouter.decreasePositionLiquidity(
@@ -428,7 +438,11 @@ contract TestUniswapV3PositionRouter is BaseUniswapV3, BaseMulticallerWithSender
         );
     }
 
-    function test_collect_tokens_owed() public useTokens(authorizedToken0, authorizedToken1) invariants {
+    function test_collect_tokens_owed()
+        public
+        useTokens(authorizedToken0, authorizedToken1)
+        invariants
+    {
         (uint256 tokenId, uint128 start_liquidity,,) = _mint_position_with_router(lp, 1000, 1000);
 
         vm.startPrank(lp);
@@ -457,7 +471,7 @@ contract TestUniswapV3PositionRouter is BaseUniswapV3, BaseMulticallerWithSender
 
         assertEq(token0.balanceOf(lp), ONE_BILLION - 1); // -1 because of rounding errors from uniswap core
         assertEq(token1.balanceOf(lp), ONE_BILLION - 1); // -1 because of rounding errors from uniswap core
-        assertEq(IERC721(uniswapV3.localUniV3PM()).ownerOf(tokenId), lp);
+        assertEq(IERC721(uniswapV3.positionManager()).ownerOf(tokenId), lp);
     }
 
     function test_can_only_collect_tokens_of_own_position()

@@ -5,16 +5,17 @@ import {IMulticallerWithSender} from "@src/interfaces/external/IMulticallerWithS
 import {ISafe} from "@src/interfaces/external/ISafe.sol";
 import {Enum} from "@safe-contracts/common/Enum.sol";
 import {IRouterWhitelistRegistry} from "@src/interfaces/IRouterWhitelistRegistry.sol";
-import {IDAMMGnosisSafeModule} from "@src/interfaces/IDAMMGnosisSafeModule.sol";
-import {BasePausable} from "@src/base/BasePausable.sol";
+import {IVaultRouterModule} from "@src/interfaces/IVaultRouterModule.sol";
 import {IProtocolState} from "@src/interfaces/IProtocolState.sol";
 import {ReentrancyGuard} from "@openzeppelin-contracts/utils/ReentrancyGuard.sol";
-import {NoDelegateCall} from "@src/base/NoDelegateCall.sol";
+import {IVaultFactory} from "@src/interfaces/IVaultFactory.sol";
+import {IProtocolAddressRegistry} from "@src/interfaces/IProtocolAddressRegistry.sol";
+import {SafeGet} from "@src/lib/SafeGet.sol";
 
-contract DAMMGnosisSafeModule is ReentrancyGuard, BasePausable, NoDelegateCall, IDAMMGnosisSafeModule {
-    IMulticallerWithSender public immutable multicallerWithSender;
-    IRouterWhitelistRegistry public immutable routerWhitelistRegistry;
-    IProtocolState public immutable protocolState;
+contract VaultRouterModule is ReentrancyGuard, IVaultRouterModule {
+    using SafeGet for address;
+
+    IProtocolAddressRegistry private immutable ADDRESS_REGISTRY;
 
     /// @notice keccak256(abi.encodePacked(vault, operator)) => bool
     mapping(bytes32 operatorPointer => bool enabled) public operators;
@@ -22,12 +23,8 @@ contract DAMMGnosisSafeModule is ReentrancyGuard, BasePausable, NoDelegateCall, 
     /// @notice vaults can forcefully pause this module
     mapping(address vault => bool suspended) public tradingSuspended;
 
-    constructor(address _protocolState, address _routerWhitelistRegistry, address _multicallerWithSender)
-        BasePausable(_protocolState)
-    {
-        protocolState = IProtocolState(_protocolState);
-        routerWhitelistRegistry = IRouterWhitelistRegistry(_routerWhitelistRegistry);
-        multicallerWithSender = IMulticallerWithSender(_multicallerWithSender);
+    constructor(IProtocolAddressRegistry addressRegistry) {
+        ADDRESS_REGISTRY = addressRegistry;
     }
 
     modifier onlyOperator(address vault, address operator) {
@@ -35,7 +32,17 @@ contract DAMMGnosisSafeModule is ReentrancyGuard, BasePausable, NoDelegateCall, 
         _;
     }
 
-    modifier tradingNotSuspended(address vault) {
+    modifier onlyVault() {
+        if (!IVaultFactory(ADDRESS_REGISTRY.getVaultFactory().orRevert()).isDAMMVault(msg.sender)) {
+            revert NotDAMMVault();
+        }
+        _;
+    }
+
+    modifier canExecute(address vault) {
+        if (!IVaultFactory(ADDRESS_REGISTRY.getVaultFactory().orRevert()).isDAMMVault(vault)) {
+            revert NotDAMMVault();
+        }
         if (tradingSuspended[vault]) revert TradingSuspended();
         _;
     }
@@ -44,23 +51,34 @@ contract DAMMGnosisSafeModule is ReentrancyGuard, BasePausable, NoDelegateCall, 
         return keccak256(abi.encode(vault, operator));
     }
 
-    function setOperator(address operator, bool enabled) external noDelegateCall {
-        require(operator != address(0), "DAMMGnosisSafeModule: operator is zero address");
+    function setOperator(address operator, bool enabled) external onlyVault {
+        require(operator != address(0), "VaultRouterModule: operator is zero address");
+        require(operator != msg.sender, "VaultRouterModule: operator is self");
+        require(
+            !IVaultFactory(ADDRESS_REGISTRY.getVaultFactory().orRevert()).isDAMMVault(operator),
+            "VaultRouterModule: operator is vault"
+        );
 
-        if (paused() && enabled) revert ModulePaused();
+        if (IProtocolState(ADDRESS_REGISTRY.getProtocolState().orRevert()).paused() && enabled) {
+            revert ModulePaused();
+        }
 
         operators[_operatorPointer(msg.sender, operator)] = enabled;
 
         emit SetOperator(msg.sender, operator, enabled);
     }
 
-    function suspendTrading() external {
+    function suspendTrading() external onlyVault {
         tradingSuspended[msg.sender] = true;
 
         emit ResumeTrading(msg.sender);
     }
 
-    function resumeTrading() external {
+    function resumeTrading() external onlyVault {
+        if (IProtocolState(ADDRESS_REGISTRY.getProtocolState().orRevert()).paused()) {
+            revert ModulePaused();
+        }
+
         tradingSuspended[msg.sender] = false;
 
         emit SuspendTrading(msg.sender);
@@ -68,29 +86,28 @@ contract DAMMGnosisSafeModule is ReentrancyGuard, BasePausable, NoDelegateCall, 
 
     function _checkTargetIsValid(address vault, address target) internal view {
         if (
-            target == address(multicallerWithSender) || target == address(0) || target == address(this)
-                || target == address(protocolState) || target == address(routerWhitelistRegistry) || vault == target
-                || !routerWhitelistRegistry.isRouterWhitelisted(vault, target)
+            target == address(0) || target == address(this) || vault == target
+                || ADDRESS_REGISTRY.isRegistered(target)
+                || !IRouterWhitelistRegistry(ADDRESS_REGISTRY.getRouterWhitelistRegistry().orRevert())
+                    .isRouterWhitelisted(vault, target)
         ) revert InvalidRouter();
     }
 
     function execute(address vault, address target, uint256 value, bytes calldata data)
         external
         override
-        notPaused
         nonReentrant
-        noDelegateCall
-        tradingNotSuspended(vault)
+        canExecute(vault)
         onlyOperator(vault, msg.sender)
         returns (bytes memory)
     {
-        require(vault != address(this), "DAMMGnosisSafeModule: vault is self address");
-        require(vault != msg.sender, "DAMMGnosisSafeModule: sender is vault");
+        IProtocolState(ADDRESS_REGISTRY.getProtocolState().orRevert()).requireNotStopped();
 
         _checkTargetIsValid(vault, target);
 
-        (bool success, bytes memory returnData) =
-            ISafe(vault).execTransactionFromModuleReturnData(target, value, data, Enum.Operation.Call);
+        (bool success, bytes memory returnData) = ISafe(vault).execTransactionFromModuleReturnData(
+            target, value, data, Enum.Operation.Call
+        );
         if (!success) {
             // Next 5 lines from https://ethereum.stackexchange.com/a/83577
             if (returnData.length < 68) revert();
@@ -111,20 +128,17 @@ contract DAMMGnosisSafeModule is ReentrancyGuard, BasePausable, NoDelegateCall, 
     )
         external
         override
-        notPaused
         nonReentrant
-        noDelegateCall
-        tradingNotSuspended(vault)
+        canExecute(vault)
         onlyOperator(vault, msg.sender)
         returns (bytes[] memory)
     {
-        require(vault != address(this), "DAMMGnosisSafeModule: vault is self address");
-        require(vault != msg.sender, "DAMMGnosisSafeModule: sender is vault");
+        IProtocolState(ADDRESS_REGISTRY.getProtocolState().orRevert()).requireNotStopped();
 
         uint256 length = targets.length;
 
-        require(length == datas.length, "DAMMGnosisSafeModule: datas length mismatch");
-        require(length == values.length, "DAMMGnosisSafeModule: values length mismatch");
+        require(length == datas.length, "VaultRouterModule: datas length mismatch");
+        require(length == values.length, "VaultRouterModule: values length mismatch");
 
         // sum up how much ETH the safe will need to send to the multicaller
         uint256 value;
@@ -137,12 +151,13 @@ contract DAMMGnosisSafeModule is ReentrancyGuard, BasePausable, NoDelegateCall, 
             }
         }
 
-        bytes memory data =
-            abi.encodeWithSelector(IMulticallerWithSender.aggregateWithSender.selector, targets, datas, values);
+        bytes memory data = abi.encodeWithSelector(
+            IMulticallerWithSender.aggregateWithSender.selector, targets, datas, values
+        );
 
         /// @notice multicaller will revert if arrays are not of equal length
         (bool success, bytes memory returnData) = ISafe(vault).execTransactionFromModuleReturnData(
-            address(multicallerWithSender), value, data, Enum.Operation.Call
+            ADDRESS_REGISTRY.getMulticallerWithSender(), value, data, Enum.Operation.Call
         );
 
         if (!success) {

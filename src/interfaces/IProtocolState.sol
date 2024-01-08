@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 pragma solidity ^0.8.0;
 
-import {IPausableState} from "@src/interfaces/libs/IPausableState.sol";
-import {IOwnableState} from "@src/interfaces/libs/IOwnableState.sol";
+import {IPausable} from "@src/interfaces/libs/IPausable.sol";
 
-interface IProtocolState is IPausableState, IOwnableState {}
+interface IProtocolState is IPausable {
+    function requireNotStopped() external view;
+}

@@ -18,7 +18,8 @@ interface IPool {
      * @param referralCode Code used to register the integrator originating the operation, for potential rewards.
      *   0 if the action is executed directly by the user, without any middle-man
      */
-    function supply(address asset, uint256 amount, address onBehalfOf, uint16 referralCode) external;
+    function supply(address asset, uint256 amount, address onBehalfOf, uint16 referralCode)
+        external;
 
     /**
      * @notice Withdraws an `amount` of underlying asset from the reserve, burning the equivalent aTokens owned
@@ -48,8 +49,13 @@ interface IPool {
      * calling the function if he wants to borrow against his own collateral, or the address of the credit delegator
      * if he has been given credit delegation allowance
      */
-    function borrow(address asset, uint256 amount, uint256 interestRateMode, uint16 referralCode, address onBehalfOf)
-        external;
+    function borrow(
+        address asset,
+        uint256 amount,
+        uint256 interestRateMode,
+        uint16 referralCode,
+        address onBehalfOf
+    ) external;
 
     /**
      * @notice Repays a borrowed `amount` on a specific reserve, burning the equivalent debt tokens owned

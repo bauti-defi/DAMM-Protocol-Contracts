@@ -4,13 +4,15 @@ pragma solidity ^0.8.0;
 import {IRouterWhitelistRegistry} from "@src/interfaces/IRouterWhitelistRegistry.sol";
 import {IMulticallerWithSender} from "@src/interfaces/external/IMulticallerWithSender.sol";
 
-interface IDAMMGnosisSafeModule {
+interface IVaultRouterModule {
     error InvalidRouter();
     error OnlyOperator();
+    error onlyOwnerVault();
+    error NotDAMMVault();
     error TradingSuspended();
     error ModulePaused();
 
-    event SetOperator(address indexed caller, address indexed operator, bool enabled);
+    event SetOperator(address indexed vault, address operator, bool enabled);
     event SuspendTrading(address vault);
     event ResumeTrading(address vault);
 
@@ -34,8 +36,4 @@ interface IDAMMGnosisSafeModule {
     function setOperator(address operator, bool enabled) external;
 
     function operators(bytes32 operatorPointer) external view returns (bool);
-
-    function multicallerWithSender() external view returns (IMulticallerWithSender);
-
-    function routerWhitelistRegistry() external view returns (IRouterWhitelistRegistry);
 }

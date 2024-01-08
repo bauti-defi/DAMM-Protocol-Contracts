@@ -15,8 +15,9 @@ interface IMulticallerWithSender {
      * @param values  How much ETH to forward to each target.
      * @return An array of the returndata from each call.
      */
-    function aggregateWithSender(address[] calldata targets, bytes[] calldata data, uint256[] calldata values)
-        external
-        payable
-        returns (bytes[] memory);
+    function aggregateWithSender(
+        address[] calldata targets,
+        bytes[] calldata data,
+        uint256[] calldata values
+    ) external payable returns (bytes[] memory);
 }

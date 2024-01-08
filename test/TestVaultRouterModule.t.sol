@@ -2,9 +2,9 @@
 pragma solidity >=0.8.18;
 
 import {Test} from "@forge-std/Test.sol";
-import {BaseVault} from "@test/base/BaseVault.sol";
+import {TestBaseProtocol} from "@test/base/TestBaseProtocol.sol";
 import {LibMulticaller} from "@vec-multicaller/LibMulticaller.sol";
-import {IDAMMGnosisSafeModule} from "@src/interfaces/IDAMMGnosisSafeModule.sol";
+import {IVaultRouterModule} from "@src/interfaces/IVaultRouterModule.sol";
 
 contract MockRouter {
     function fun1() external payable returns (address, uint256, uint256) {
@@ -20,14 +20,20 @@ contract MockRouter {
     }
 }
 
-contract TestDAMMGnosisSafeModule is BaseVault {
+contract TestVaultRouterModule is TestBaseProtocol {
     address public operator;
     MockRouter public mockRouter;
+
+    address vaultOwner;
+    address vault;
 
     function setUp() public override {
         super.setUp();
 
+        vaultOwner = makeAddr("VaultOwner");
         operator = makeAddr("Operator");
+
+        vault = deployVault(vaultOwner);
 
         vm.prank(vault);
         dammModule.setOperator(operator, true);
@@ -43,14 +49,16 @@ contract TestDAMMGnosisSafeModule is BaseVault {
 
     function test_only_operator_can_execute(address _op) public {
         vm.assume(_op != operator);
-        vm.expectRevert(IDAMMGnosisSafeModule.OnlyOperator.selector);
+        vm.expectRevert(IVaultRouterModule.OnlyOperator.selector);
         vm.prank(_op);
-        dammModule.execute(vault, address(mockRouter), 0, abi.encodeWithSelector(mockRouter.fun1.selector));
+        dammModule.execute(
+            vault, address(mockRouter), 0, abi.encodeWithSelector(mockRouter.fun1.selector)
+        );
     }
 
     function test_only_operator_can_execute_multicall(address _op) public {
         vm.assume(_op != operator);
-        vm.expectRevert(IDAMMGnosisSafeModule.OnlyOperator.selector);
+        vm.expectRevert(IVaultRouterModule.OnlyOperator.selector);
         vm.prank(_op);
         dammModule.executeMulticall(vault, new address[](0), new bytes[](0), new uint256[](0));
     }
@@ -58,19 +66,23 @@ contract TestDAMMGnosisSafeModule is BaseVault {
     function test_can_only_execute_when_not_suspended() public {
         vm.prank(vault);
         dammModule.suspendTrading();
-        vm.expectRevert(IDAMMGnosisSafeModule.TradingSuspended.selector);
-        dammModule.execute(vault, address(mockRouter), 0, abi.encodeWithSelector(mockRouter.fun1.selector));
+        vm.expectRevert(IVaultRouterModule.TradingSuspended.selector);
+        dammModule.execute(
+            vault, address(mockRouter), 0, abi.encodeWithSelector(mockRouter.fun1.selector)
+        );
 
         vm.prank(vault);
         dammModule.resumeTrading();
         vm.prank(operator);
-        dammModule.execute(vault, address(mockRouter), 0, abi.encodeWithSelector(mockRouter.fun1.selector));
+        dammModule.execute(
+            vault, address(mockRouter), 0, abi.encodeWithSelector(mockRouter.fun1.selector)
+        );
     }
 
     function test_can_only_execute_multicall_when_not_suspended() public {
         vm.prank(vault);
         dammModule.suspendTrading();
-        vm.expectRevert(IDAMMGnosisSafeModule.TradingSuspended.selector);
+        vm.expectRevert(IVaultRouterModule.TradingSuspended.selector);
         dammModule.executeMulticall(vault, new address[](0), new bytes[](0), new uint256[](0));
 
         vm.prank(vault);
@@ -88,7 +100,8 @@ contract TestDAMMGnosisSafeModule is BaseVault {
         vm.prank(operator);
         bytes[] memory results = dammModule.executeMulticall(vault, targets, datas, values);
 
-        (address caller1, uint256 res1, uint256 value1) = abi.decode(results[0], (address, uint256, uint256));
+        (address caller1, uint256 res1, uint256 value1) =
+            abi.decode(results[0], (address, uint256, uint256));
 
         assertEq(1, res1);
         assertEq(0, value1);
@@ -99,9 +112,11 @@ contract TestDAMMGnosisSafeModule is BaseVault {
 
     function test_execute() public {
         vm.prank(operator);
-        bytes memory result =
-            dammModule.execute(vault, address(mockRouter), 0, abi.encodeWithSelector(mockRouter.fun1.selector));
-        (address caller, uint256 res, uint256 value) = abi.decode(result, (address, uint256, uint256));
+        bytes memory result = dammModule.execute(
+            vault, address(mockRouter), 0, abi.encodeWithSelector(mockRouter.fun1.selector)
+        );
+        (address caller, uint256 res, uint256 value) =
+            abi.decode(result, (address, uint256, uint256));
 
         assertEq(1, res);
         assertEq(0, value);
@@ -112,9 +127,11 @@ contract TestDAMMGnosisSafeModule is BaseVault {
 
     function test_execute_with_value() public {
         vm.prank(operator);
-        bytes memory result =
-            dammModule.execute(vault, address(mockRouter), 10, abi.encodeWithSelector(mockRouter.fun1.selector));
-        (address caller, uint256 res, uint256 value) = abi.decode(result, (address, uint256, uint256));
+        bytes memory result = dammModule.execute(
+            vault, address(mockRouter), 10, abi.encodeWithSelector(mockRouter.fun1.selector)
+        );
+        (address caller, uint256 res, uint256 value) =
+            abi.decode(result, (address, uint256, uint256));
         assertEq(10, value);
         assertEq(1, res);
         assertEq(vault, caller);
@@ -125,8 +142,9 @@ contract TestDAMMGnosisSafeModule is BaseVault {
 
     function testFails_execute_with_revert() public {
         vm.prank(operator);
-        bytes memory result =
-            dammModule.execute(vault, address(mockRouter), 0, abi.encodeWithSelector(mockRouter.shouldRevert1.selector));
+        bytes memory result = dammModule.execute(
+            vault, address(mockRouter), 0, abi.encodeWithSelector(mockRouter.shouldRevert1.selector)
+        );
         bytes memory error = abi.decode(result, (bytes));
 
         assertEq("should revert 1", string(error));
@@ -139,7 +157,7 @@ contract TestDAMMGnosisSafeModule is BaseVault {
         vm.assume(badRouter != address(0));
 
         vm.prank(operator);
-        vm.expectRevert(IDAMMGnosisSafeModule.InvalidRouter.selector);
+        vm.expectRevert(IVaultRouterModule.InvalidRouter.selector);
         dammModule.execute(vault, badRouter, 0, abi.encodeWithSelector(mockRouter.fun1.selector));
 
         assertEq(1 ether, address(vault).balance);
@@ -161,8 +179,10 @@ contract TestDAMMGnosisSafeModule is BaseVault {
         vm.prank(operator);
         bytes[] memory results = dammModule.executeMulticall(vault, targets, datas, values);
 
-        (address caller1, uint256 res1, uint256 value1) = abi.decode(results[0], (address, uint256, uint256));
-        (address caller2, uint256 res2, uint256 value2) = abi.decode(results[1], (address, uint256, uint256));
+        (address caller1, uint256 res1, uint256 value1) =
+            abi.decode(results[0], (address, uint256, uint256));
+        (address caller2, uint256 res2, uint256 value2) =
+            abi.decode(results[1], (address, uint256, uint256));
 
         assertEq(1, res1);
         assertEq(2, res2);
@@ -190,8 +210,10 @@ contract TestDAMMGnosisSafeModule is BaseVault {
         vm.prank(operator);
         bytes[] memory results = dammModule.executeMulticall(vault, targets, datas, values);
 
-        (address caller1, uint256 res1, uint256 value1) = abi.decode(results[0], (address, uint256, uint256));
-        (address caller2, uint256 res2, uint256 value2) = abi.decode(results[1], (address, uint256, uint256));
+        (address caller1, uint256 res1, uint256 value1) =
+            abi.decode(results[0], (address, uint256, uint256));
+        (address caller2, uint256 res2, uint256 value2) =
+            abi.decode(results[1], (address, uint256, uint256));
 
         assertEq(1, res1);
         assertEq(2, res2);
@@ -220,7 +242,8 @@ contract TestDAMMGnosisSafeModule is BaseVault {
         vm.prank(operator);
         bytes[] memory results = dammModule.executeMulticall(vault, targets, datas, values);
 
-        (address caller1, uint256 res1, uint256 value1) = abi.decode(results[0], (address, uint256, uint256));
+        (address caller1, uint256 res1, uint256 value1) =
+            abi.decode(results[0], (address, uint256, uint256));
         bytes memory error = abi.decode(results[1], (bytes));
 
         assertEq("should revert 1", string(error));
@@ -231,22 +254,53 @@ contract TestDAMMGnosisSafeModule is BaseVault {
         assertEq(1 ether, address(vault).balance);
     }
 
-    function test_enable_operator(address _vault, address op) public {
-        vm.assume(_vault != address(0));
+    function test_enable_operator(address op) public {
         vm.assume(op != address(0));
 
-        vm.prank(_vault);
+        vm.prank(vault);
         dammModule.setOperator(op, true);
-        assertTrue(dammModule.operators(keccak256(abi.encode(_vault, op))));
+        assertTrue(dammModule.operators(keccak256(abi.encode(vault, op))));
 
-        vm.prank(_vault);
+        vm.prank(vault);
         dammModule.setOperator(op, false);
-        assertFalse(dammModule.operators(keccak256(abi.encode(_vault, op))));
+        assertFalse(dammModule.operators(keccak256(abi.encode(vault, op))));
     }
 
-    function test_cannot_set_zero_address_as_operator(address _vault) public {
-        vm.expectRevert("DAMMGnosisSafeModule: operator is zero address");
-        vm.prank(_vault);
+    function test_only_vault_can_enable_operator(address notVault) public {
+        vm.assume(notVault != vault);
+
+        vm.expectRevert(IVaultRouterModule.NotDAMMVault.selector);
+        vm.prank(notVault);
+        dammModule.setOperator(operator, true);
+    }
+
+    function test_cannot_set_zero_address_as_operator() public {
+        vm.expectRevert("VaultRouterModule: operator is zero address");
+        vm.prank(vault);
         dammModule.setOperator(address(0), true);
+    }
+
+    function test_cannot_set_self_as_operator() public {
+        vm.expectRevert("VaultRouterModule: operator is self");
+        vm.prank(vault);
+        dammModule.setOperator(vault, true);
+    }
+
+    function test_suspend_trading() public {
+        vm.prank(vault);
+        dammModule.suspendTrading();
+        assertTrue(dammModule.tradingSuspended(vault));
+
+        vm.prank(vault);
+        dammModule.resumeTrading();
+        assertFalse(dammModule.tradingSuspended(vault));
+    }
+
+    function test_only_vault_can_suspend_trading(address notVault) public {
+        vm.assume(notVault != vault);
+
+        vm.expectRevert(IVaultRouterModule.NotDAMMVault.selector);
+        vm.prank(notVault);
+        dammModule.suspendTrading();
     }
 }
