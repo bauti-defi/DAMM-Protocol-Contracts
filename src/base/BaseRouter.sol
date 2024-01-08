@@ -6,9 +6,12 @@ import {LibMulticaller} from "@vec-multicaller/LibMulticaller.sol";
 import {BytesLib} from "@src/lib/BytesLib.sol";
 import {IProtocolState} from "@src/interfaces/IProtocolState.sol";
 import {IProtocolAddressRegistry} from "@src/interfaces/IProtocolAddressRegistry.sol";
+import {IERC20} from "@openzeppelin-contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
 
 abstract contract BaseRouter {
     using BytesLib for bytes;
+    using SafeERC20 for IERC20;
 
     error InvalidRecipient();
     error TokenNotWhitelisted();
@@ -31,6 +34,14 @@ abstract contract BaseRouter {
 
     constructor(IProtocolAddressRegistry _addressRegistry) {
         ADDRESS_REGISTRY = _addressRegistry;
+    }
+
+    function _safelyEnsureTokenAllowance(address token, address to, uint256 allowanceRequired) internal {
+        IERC20 tokenToApprove = IERC20(token);
+
+        if (tokenToApprove.allowance(address(this), to) < allowanceRequired) {
+            tokenToApprove.forceApprove(to, type(uint256).max);
+        }
     }
 
     function isTokenWhitelisted(address user, address token) public view returns (bool) {

@@ -24,14 +24,21 @@ contract TestTokenWhitelistRegistry is Test {
         addressRegistry.setTokenWhitelistRegistry(address(registry));
     }
 
-    function test_whitelist_token(address token, address otherToken, address router) external {
+    modifier validAddress(address token) {
         vm.assume(token != address(0));
         vm.assume(token != address(this));
-        vm.assume(token != otherToken);
         vm.assume(token != address(registry));
+        _;
+    }
+
+    function test_whitelist_token(address token, address otherToken, address router)
+        external
+        validAddress(token)
+        validAddress(otherToken)
+        validAddress(router)
+    {
         vm.assume(router != token);
         vm.assume(router != otherToken);
-        vm.assume(router != address(registry));
 
         registry.whitelistToken(router, token);
         assertFalse(registry.isTokenWhitelisted(address(this), router, otherToken));
@@ -40,10 +47,12 @@ contract TestTokenWhitelistRegistry is Test {
         assertTrue(registry.isTokenWhitelisted(address(this), router, token));
     }
 
-    function test_blacklist_token(address token, address otherToken, address router) external {
-        vm.assume(token != address(0));
-        vm.assume(token != address(this));
-        vm.assume(token != otherToken);
+    function test_blacklist_token(address token, address otherToken, address router)
+        external
+        validAddress(token)
+        validAddress(otherToken)
+        validAddress(router)
+    {
         vm.assume(router != token);
         vm.assume(router != otherToken);
 
@@ -76,12 +85,12 @@ contract TestTokenWhitelistRegistry is Test {
         registry.whitelistToken(address(this), address(this));
     }
 
-    function test_can_blacklist_when_paused(address token, address router) public {
-        vm.assume(token != address(0));
-        vm.assume(token != address(this));
-        vm.assume(token != address(registry));
+    function test_can_blacklist_when_paused(address token, address router)
+        public
+        validAddress(token)
+        validAddress(router)
+    {
         vm.assume(router != token);
-        vm.assume(router != address(registry));
 
         registry.whitelistToken(router, token);
         protocolState.pause();

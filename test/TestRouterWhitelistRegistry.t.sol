@@ -24,21 +24,30 @@ contract TestRouterWhitelistRegistry is Test {
         addressRegistry.setRouterWhitelistRegistry(address(registry));
     }
 
-    function test_whitelist_router(address router, address otherRouter) external {
+    modifier validAddress(address router) {
         vm.assume(router != address(0));
         vm.assume(router != address(this));
-        vm.assume(router != otherRouter);
         vm.assume(router != address(registry));
+        _;
+    }
+
+    function test_whitelist_router(address router, address otherRouter)
+        external
+        validAddress(router)
+        validAddress(otherRouter)
+    {
+        vm.assume(router != otherRouter);
 
         registry.whitelistRouter(router);
         assertFalse(registry.isRouterWhitelisted(address(this), otherRouter));
         assertTrue(registry.isRouterWhitelisted(address(this), router));
     }
 
-    function test_blacklist_router(address router, address otherRouter) external {
-        vm.assume(router != address(0));
-        vm.assume(router != address(this));
-        vm.assume(router != address(registry));
+    function test_blacklist_router(address router, address otherRouter)
+        external
+        validAddress(router)
+        validAddress(otherRouter)
+    {
         vm.assume(router != otherRouter);
 
         registry.whitelistRouter(router);
@@ -68,11 +77,7 @@ contract TestRouterWhitelistRegistry is Test {
         registry.whitelistRouter(address(this));
     }
 
-    function test_can_blacklist_when_paused(address router) public {
-        vm.assume(router != address(0));
-        vm.assume(router != address(this));
-        vm.assume(router != address(registry));
-
+    function test_can_blacklist_when_paused(address router) public validAddress(router) {
         registry.whitelistRouter(router);
         protocolState.pause();
 

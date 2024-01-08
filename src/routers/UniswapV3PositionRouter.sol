@@ -2,19 +2,14 @@
 pragma solidity >=0.8.18;
 
 import {INonfungiblePositionManager} from "@src/interfaces/external/INonfungiblePositionManager.sol";
-import {IERC20} from "@openzeppelin-contracts/token/ERC20/IERC20.sol";
 import {IERC721} from "@openzeppelin-contracts/token/ERC721/IERC721.sol";
 import {TransferHelper} from "@src/lib/TransferHelper.sol";
 import {IUniswapV3PositionRouter} from "@src/interfaces/IUniswapV3PositionRouter.sol";
 import {BaseRouter} from "@src/base/BaseRouter.sol";
 import {IProtocolAddressRegistry} from "@src/interfaces/IProtocolAddressRegistry.sol";
-import {IWETH9} from "@src/interfaces/external/IWETH9.sol";
-import {RouterPayments} from "@src/lib/RouterPayments.sol";
-import {SafeERC20} from "@openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
+import "@src/lib/RouterPayments.sol";
 
 contract UniswapV3PositionRouter is BaseRouter, RouterPayments, IUniswapV3PositionRouter {
-    using SafeERC20 for IERC20;
-
     INonfungiblePositionManager public immutable uniswapV3PositionManager;
 
     constructor(
@@ -23,17 +18,6 @@ contract UniswapV3PositionRouter is BaseRouter, RouterPayments, IUniswapV3Positi
         INonfungiblePositionManager _uniswapV3PositionManager
     ) BaseRouter(_addressRegsitry) RouterPayments(_WETH9) {
         uniswapV3PositionManager = _uniswapV3PositionManager;
-    }
-
-    function _ensureTokenAllowance(address token, uint256 allowanceRequired) internal {
-        IERC20 tokenToApprove = IERC20(token);
-
-        if (
-            tokenToApprove.allowance(address(this), address(uniswapV3PositionManager))
-                < allowanceRequired
-        ) {
-            tokenToApprove.forceApprove(address(uniswapV3PositionManager), type(uint256).max);
-        }
     }
 
     function _getV3PositionTokenPair(uint256 tokenId)
@@ -58,8 +42,12 @@ contract UniswapV3PositionRouter is BaseRouter, RouterPayments, IUniswapV3Positi
         _checkTokensAreWhitelisted(caller, abi.encodePacked(params.token0, params.token1));
 
         // ensure uniswap has enough allowance to spend our routers tokens
-        _ensureTokenAllowance(params.token0, params.amount0Desired);
-        _ensureTokenAllowance(params.token1, params.amount1Desired);
+        _safelyEnsureTokenAllowance(
+            params.token0, address(uniswapV3PositionManager), params.amount0Desired
+        );
+        _safelyEnsureTokenAllowance(
+            params.token1, address(uniswapV3PositionManager), params.amount1Desired
+        );
 
         // transfer funds into router
         transfer(params.token0, caller, address(this), params.amount0Desired);
@@ -112,8 +100,8 @@ contract UniswapV3PositionRouter is BaseRouter, RouterPayments, IUniswapV3Positi
 
         _checkTokensAreWhitelisted(caller, abi.encodePacked(token0, token1));
 
-        _ensureTokenAllowance(token0, params.amount0Desired);
-        _ensureTokenAllowance(token1, params.amount1Desired);
+        _safelyEnsureTokenAllowance(token0, address(uniswapV3PositionManager), params.amount0Desired);
+        _safelyEnsureTokenAllowance(token1, address(uniswapV3PositionManager), params.amount1Desired);
 
         transfer(token0, caller, address(this), params.amount0Desired);
         transfer(token1, caller, address(this), params.amount1Desired);
