@@ -16,7 +16,7 @@ library BytesLib {
     {
         uint256 packedLength = packed.length;
 
-        if(packedLength == 0) {
+        if (packedLength == 0) {
             return array;
         }
 

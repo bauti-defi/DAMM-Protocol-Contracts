@@ -53,6 +53,11 @@ contract VaultRouterModule is ReentrancyGuard, IVaultRouterModule {
 
     function setOperator(address operator, bool enabled) external onlyVault {
         require(operator != address(0), "VaultRouterModule: operator is zero address");
+        require(operator != msg.sender, "VaultRouterModule: operator is self");
+        require(
+            !IVaultFactory(ADDRESS_REGISTRY.getVaultFactory().orRevert()).isDAMMVault(operator),
+            "VaultRouterModule: operator is vault"
+        );
 
         if (IProtocolState(ADDRESS_REGISTRY.getProtocolState().orRevert()).paused() && enabled) {
             revert ModulePaused();

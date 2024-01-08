@@ -10,8 +10,11 @@ import {BaseRouter} from "@src/base/BaseRouter.sol";
 import {IProtocolAddressRegistry} from "@src/interfaces/IProtocolAddressRegistry.sol";
 import {IWETH9} from "@src/interfaces/external/IWETH9.sol";
 import {RouterPayments} from "@src/lib/RouterPayments.sol";
+import {SafeERC20} from "@openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
 
 contract UniswapV3PositionRouter is BaseRouter, RouterPayments, IUniswapV3PositionRouter {
+    using SafeERC20 for IERC20;
+
     INonfungiblePositionManager public immutable uniswapV3PositionManager;
 
     constructor(
@@ -29,10 +32,7 @@ contract UniswapV3PositionRouter is BaseRouter, RouterPayments, IUniswapV3Positi
             tokenToApprove.allowance(address(this), address(uniswapV3PositionManager))
                 < allowanceRequired
         ) {
-            require(
-                tokenToApprove.approve(address(uniswapV3PositionManager), type(uint256).max),
-                "Router: approve failed"
-            );
+            tokenToApprove.forceApprove(address(uniswapV3PositionManager), type(uint256).max);
         }
     }
 

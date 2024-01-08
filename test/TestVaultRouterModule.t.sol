@@ -280,6 +280,12 @@ contract TestVaultRouterModule is TestBaseProtocol {
         dammModule.setOperator(address(0), true);
     }
 
+    function test_cannot_set_self_as_operator() public {
+        vm.expectRevert("VaultRouterModule: operator is self");
+        vm.prank(vault);
+        dammModule.setOperator(vault, true);
+    }
+
     function test_suspend_trading() public {
         vm.prank(vault);
         dammModule.suspendTrading();
