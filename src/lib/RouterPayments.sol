@@ -2,10 +2,11 @@
 pragma solidity >=0.8.18;
 
 import {IWETH9} from "@src/interfaces/external/IWETH9.sol";
-import {IERC20} from "@openzeppelin-contracts/token/ERC20/IERC20.sol";
-import {TransferHelper} from "@src/lib/TransferHelper.sol";
+import "@src/lib/GPv2SafeERC20.sol";
 
 abstract contract RouterPayments {
+    using GPv2SafeERC20 for IERC20;
+
     IWETH9 internal immutable WETH9;
 
     constructor(IWETH9 _WETH9) {
@@ -22,7 +23,7 @@ abstract contract RouterPayments {
         require(balanceToken >= amountMinimum, "Insufficient token");
 
         if (balanceToken > 0) {
-            TransferHelper.safeTransfer(token, recipient, balanceToken);
+            IERC20(token).safeTransfer(recipient, balanceToken);
         }
     }
 
@@ -41,10 +42,10 @@ abstract contract RouterPayments {
             WETH9.transfer(recipient, value);
         } else if (payer == address(this)) {
             // pay with tokens already in the contract (for the exact input multihop case)
-            TransferHelper.safeTransfer(token, recipient, value);
+            IERC20(token).safeTransfer(recipient, value);
         } else {
             // pull payment
-            TransferHelper.safeTransferFrom(token, payer, recipient, value);
+            IERC20(token).safeTransferFrom(payer, recipient, value);
         }
     }
 }

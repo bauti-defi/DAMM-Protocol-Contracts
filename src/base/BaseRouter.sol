@@ -36,7 +36,9 @@ abstract contract BaseRouter {
         ADDRESS_REGISTRY = _addressRegistry;
     }
 
-    function _safelyEnsureTokenAllowance(address token, address to, uint256 allowanceRequired) internal {
+    function _safelyEnsureTokenAllowance(address token, address to, uint256 allowanceRequired)
+        internal
+    {
         IERC20 tokenToApprove = IERC20(token);
 
         if (tokenToApprove.allowance(address(this), to) < allowanceRequired) {

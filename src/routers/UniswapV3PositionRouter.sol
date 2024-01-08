@@ -3,7 +3,6 @@ pragma solidity >=0.8.18;
 
 import {INonfungiblePositionManager} from "@src/interfaces/external/INonfungiblePositionManager.sol";
 import {IERC721} from "@openzeppelin-contracts/token/ERC721/IERC721.sol";
-import {TransferHelper} from "@src/lib/TransferHelper.sol";
 import {IUniswapV3PositionRouter} from "@src/interfaces/IUniswapV3PositionRouter.sol";
 import {BaseRouter} from "@src/base/BaseRouter.sol";
 import {IProtocolAddressRegistry} from "@src/interfaces/IProtocolAddressRegistry.sol";
@@ -100,8 +99,12 @@ contract UniswapV3PositionRouter is BaseRouter, RouterPayments, IUniswapV3Positi
 
         _checkTokensAreWhitelisted(caller, abi.encodePacked(token0, token1));
 
-        _safelyEnsureTokenAllowance(token0, address(uniswapV3PositionManager), params.amount0Desired);
-        _safelyEnsureTokenAllowance(token1, address(uniswapV3PositionManager), params.amount1Desired);
+        _safelyEnsureTokenAllowance(
+            token0, address(uniswapV3PositionManager), params.amount0Desired
+        );
+        _safelyEnsureTokenAllowance(
+            token1, address(uniswapV3PositionManager), params.amount1Desired
+        );
 
         transfer(token0, caller, address(this), params.amount0Desired);
         transfer(token1, caller, address(this), params.amount1Desired);
