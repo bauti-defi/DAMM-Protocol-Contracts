@@ -35,7 +35,7 @@ contract TokenWhitelistRegistry is ITokenWhitelistRegistry {
         return tokenWhitelist[_tokenPointer(user, router, token)];
     }
 
-    function _whitelistToken(address to, address router, address token) internal {
+    function _whitelistToken(address router, address token) internal {
         IProtocolState(ADDRESS_REGISTRY.getProtocolState().orRevert()).requireNotStopped();
 
         require(token != address(0), "TokenWhitelistRegistry: zero address");
@@ -46,14 +46,12 @@ contract TokenWhitelistRegistry is ITokenWhitelistRegistry {
     }
 
     function whitelistToken(address router, address token) external {
-        _whitelistToken(msg.sender, router, token);
+        _whitelistToken(router, token);
 
         emit TokenWhitelisted(msg.sender, router, token);
     }
 
-    function _whitelistTokens(address to, address[] memory routers, address[] memory tokens)
-        internal
-    {
+    function whitelistTokens(address[] memory routers, address[] memory tokens) external {
         uint256 length = tokens.length;
 
         require(
@@ -61,35 +59,29 @@ contract TokenWhitelistRegistry is ITokenWhitelistRegistry {
         );
 
         for (uint256 i = 0; i < length;) {
-            _whitelistToken(to, routers[i], tokens[i]);
+            _whitelistToken(routers[i], tokens[i]);
 
             unchecked {
                 ++i;
             }
         }
 
-        emit TokensWhitelisted(to, routers, tokens);
+        emit TokensWhitelisted(msg.sender, routers, tokens);
     }
 
-    function whitelistTokens(address[] memory routers, address[] memory tokens) external {
-        _whitelistTokens(msg.sender, routers, tokens);
-    }
-
-    function _blacklistToken(address to, address router, address token) internal {
+    function _blacklistToken(address router, address token) internal {
         require(token != address(0), "TokenWhitelistRegistry: zero address");
 
         tokenWhitelist[_tokenPointer(msg.sender, router, token)] = false;
     }
 
     function blacklistToken(address router, address token) external {
-        _blacklistToken(msg.sender, router, token);
+        _blacklistToken(router, token);
 
         emit TokenBlacklisted(msg.sender, router, token);
     }
 
-    function _blacklistTokens(address to, address[] memory routers, address[] memory tokens)
-        internal
-    {
+    function blacklistTokens(address[] memory routers, address[] memory tokens) external {
         uint256 length = tokens.length;
 
         require(
@@ -97,17 +89,13 @@ contract TokenWhitelistRegistry is ITokenWhitelistRegistry {
         );
 
         for (uint256 i = 0; i < length;) {
-            _blacklistToken(to, routers[i], tokens[i]);
+            _blacklistToken(routers[i], tokens[i]);
 
             unchecked {
                 ++i;
             }
         }
 
-        emit TokensBlacklisted(to, routers, tokens);
-    }
-
-    function blacklistTokens(address[] memory routers, address[] memory tokens) external {
-        _blacklistTokens(msg.sender, routers, tokens);
+        emit TokensBlacklisted(msg.sender, routers, tokens);
     }
 }

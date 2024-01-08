@@ -266,9 +266,35 @@ contract TestVaultRouterModule is TestBaseProtocol {
         assertFalse(dammModule.operators(keccak256(abi.encode(vault, op))));
     }
 
+    function test_only_vault_can_enable_operator(address notVault) public {
+        vm.assume(notVault != vault);
+
+        vm.expectRevert(IVaultRouterModule.NotDAMMVault.selector);
+        vm.prank(notVault);
+        dammModule.setOperator(operator, true);
+    }
+
     function test_cannot_set_zero_address_as_operator() public {
         vm.expectRevert("VaultRouterModule: operator is zero address");
         vm.prank(vault);
         dammModule.setOperator(address(0), true);
+    }
+
+    function test_suspend_trading() public {
+        vm.prank(vault);
+        dammModule.suspendTrading();
+        assertTrue(dammModule.tradingSuspended(vault));
+
+        vm.prank(vault);
+        dammModule.resumeTrading();
+        assertFalse(dammModule.tradingSuspended(vault));
+    }
+
+    function test_only_vault_can_suspend_trading(address notVault) public {
+        vm.assume(notVault != vault);
+
+        vm.expectRevert(IVaultRouterModule.NotDAMMVault.selector);
+        vm.prank(notVault);
+        dammModule.suspendTrading();
     }
 }

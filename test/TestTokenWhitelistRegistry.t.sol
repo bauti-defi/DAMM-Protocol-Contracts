@@ -79,6 +79,7 @@ contract TestTokenWhitelistRegistry is Test {
     function test_can_blacklist_when_paused(address token, address router) public {
         vm.assume(token != address(0));
         vm.assume(token != address(this));
+        vm.assume(token != address(registry));
         vm.assume(router != token);
         vm.assume(router != address(registry));
 

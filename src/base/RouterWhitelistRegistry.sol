@@ -25,67 +25,59 @@ contract RouterWhitelistRegistry is IRouterWhitelistRegistry {
         return routerWhitelist[_pointer(vault, router)];
     }
 
-    function _whitelistRouter(address to, address router) internal {
+    function _whitelistRouter(address router) internal {
         IProtocolState(ADDRESS_REGISTRY.getProtocolState().orRevert()).requireNotStopped();
 
         require(router != address(0), "RouterWhitelistRegistry: zero address");
         require(router != address(this), "RouterWhitelistRegistry: self address");
-        require(router != to, "RouterWhitelistRegistry: sender address");
+        require(router != msg.sender, "RouterWhitelistRegistry: sender address");
 
-        routerWhitelist[_pointer(to, router)] = true;
+        routerWhitelist[_pointer(msg.sender, router)] = true;
     }
 
     function whitelistRouter(address router) external {
-        _whitelistRouter(msg.sender, router);
+        _whitelistRouter(router);
 
         emit RouterWhitelisted(msg.sender, router);
     }
 
-    function _whitelistRouters(address to, address[] memory routers) internal {
+    function whitelistRouters(address[] memory routers) external {
         uint256 length = routers.length;
 
         for (uint256 i = 0; i < length;) {
-            _whitelistRouter(to, routers[i]);
+            _whitelistRouter(routers[i]);
 
             unchecked {
                 ++i;
             }
         }
 
-        emit RoutersWhitelisted(to, routers);
+        emit RoutersWhitelisted(msg.sender, routers);
     }
 
-    function whitelistRouters(address[] memory routers) external {
-        _whitelistRouters(msg.sender, routers);
-    }
-
-    function _blacklistRouter(address to, address router) internal {
+    function _blacklistRouter(address router) internal {
         require(router != address(0), "RouterWhitelistRegistry: zero address");
 
-        routerWhitelist[_pointer(to, router)] = false;
+        routerWhitelist[_pointer(msg.sender, router)] = false;
     }
 
     function blacklistRouter(address router) external {
-        _blacklistRouter(msg.sender, router);
+        _blacklistRouter(router);
 
         emit RouterBlacklisted(msg.sender, router);
     }
 
-    function _blacklistRouters(address to, address[] memory routers) internal {
+    function blacklistRouters(address[] memory routers) external {
         uint256 length = routers.length;
 
         for (uint256 i = 0; i < length;) {
-            _blacklistRouter(to, routers[i]);
+            _blacklistRouter(routers[i]);
 
             unchecked {
                 ++i;
             }
         }
 
-        emit RoutersBlacklisted(to, routers);
-    }
-
-    function blacklistRouters(address[] memory routers) external {
-        _blacklistRouters(msg.sender, routers);
+        emit RoutersBlacklisted(msg.sender, routers);
     }
 }
