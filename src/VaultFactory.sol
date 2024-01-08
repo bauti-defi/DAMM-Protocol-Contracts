@@ -35,7 +35,10 @@ contract VaultFactory is IVaultFactory {
         nonce = 0;
     }
 
-    function deployDAMMVault(address[] memory owners, uint256 threshold) public returns (address vault) {
+    function deployDAMMVault(address[] memory owners, uint256 threshold)
+        public
+        returns (address vault)
+    {
         IProtocolState(ADDRESS_REGISTRY.getProtocolState().orRevert()).requireNotStopped();
 
         require(threshold > 0 && threshold <= owners.length, "VaultFactory: Invalid threshold");
@@ -45,7 +48,8 @@ contract VaultFactory is IVaultFactory {
 
         // Delegate call from the vault so that the trading module module can be enabled right after the vault is deployed
         // and the guard is set.
-        bytes memory data = abi.encodeCall(VaultFactory.vaultDeploymentCallback, (tradingModule, vaultGuard));
+        bytes memory data =
+            abi.encodeCall(VaultFactory.vaultDeploymentCallback, (tradingModule, vaultGuard));
 
         // create gnosis safe initializer payload
         bytes memory initializerPayload = abi.encodeCall(
@@ -66,7 +70,9 @@ contract VaultFactory is IVaultFactory {
         // with a salt nonce that is unique to each chain to guarantee cross-chain unique safe addresses
         vault = address(
             SafeProxyFactory(safeFactory).createProxyWithNonce(
-                singleton, initializerPayload, uint256(keccak256(abi.encode(++nonce, block.chainid)))
+                singleton,
+                initializerPayload,
+                uint256(keccak256(abi.encode(++nonce, block.chainid)))
             )
         );
 
@@ -87,5 +93,9 @@ contract VaultFactory is IVaultFactory {
 
     function getDeployedVaultNonce(address vault) public view returns (uint256) {
         return deployedVaults[vault];
+    }
+
+    function isDAMMVault(address vault) public view override returns (bool) {
+        return deployedVaults[vault] != 0;
     }
 }

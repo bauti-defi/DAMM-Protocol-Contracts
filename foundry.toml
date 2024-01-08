@@ -2,7 +2,8 @@
 src = "src"
 out = "out"
 libs = ["lib"]
-
+optimizer = true
+optimizer_runs = 1_000
 
 remappings = [
     "@ds-test/=lib/forge-std/lib/ds-test/src/",
@@ -37,3 +38,10 @@ gas_reports = [
     "UniswapV3PositionRouter", 
     "UniswapV3SwapRouter"
 ]
+
+
+[profile.default.fuzz]
+runs = 4096
+
+[fmt]
+line_length = 100

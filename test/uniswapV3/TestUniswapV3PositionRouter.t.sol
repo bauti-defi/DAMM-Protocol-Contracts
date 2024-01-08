@@ -51,7 +51,8 @@ contract TestUniswapV3PositionRouter is TestBaseUniswapV3 {
 
         //deploy pools
         pool = uniswapV3.deployPool(address(authorizedToken0), address(authorizedToken1), POOL_FEE);
-        unauthorizedPool0 = uniswapV3.deployPool(address(unauthorizedToken), address(authorizedToken1), POOL_FEE);
+        unauthorizedPool0 =
+            uniswapV3.deployPool(address(unauthorizedToken), address(authorizedToken1), POOL_FEE);
 
         // initialize pools
         uniswapV3.initializePool(pool, START_TICK);
@@ -59,7 +60,9 @@ contract TestUniswapV3PositionRouter is TestBaseUniswapV3 {
 
         // deploy router
         dammRouter = new UniswapV3PositionRouter(
-            protocolAddressRegistry, IWETH9(uniswapV3.weth9()), INonfungiblePositionManager(uniswapV3.positionManager())
+            protocolAddressRegistry,
+            IWETH9(uniswapV3.weth9()),
+            INonfungiblePositionManager(uniswapV3.positionManager())
         );
 
         vm.label(address(dammRouter), "DAMM Router");
@@ -116,7 +119,9 @@ contract TestUniswapV3PositionRouter is TestBaseUniswapV3 {
         token0.transfer(uniswapV3.positionManager(), amount0Desired);
         token1.transfer(uniswapV3.positionManager(), amount1Desired);
 
-        (tokenId, liquidity, amount0, amount1) = INonfungiblePositionManager(uniswapV3.positionManager()).mint(
+        (tokenId, liquidity, amount0, amount1) = INonfungiblePositionManager(
+            uniswapV3.positionManager()
+        ).mint(
             INonfungiblePositionManager.MintParams({
                 token0: address(token0),
                 token1: address(token1),
@@ -135,10 +140,11 @@ contract TestUniswapV3PositionRouter is TestBaseUniswapV3 {
         vm.stopPrank();
     }
 
-    function _mint_position_with_router(address minter, uint256 amount0Desired, uint256 amount1Desired)
-        internal
-        returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1)
-    {
+    function _mint_position_with_router(
+        address minter,
+        uint256 amount0Desired,
+        uint256 amount1Desired
+    ) internal returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1) {
         vm.prank(minter);
         (tokenId, liquidity, amount0, amount1) = dammRouter.mintPosition(
             INonfungiblePositionManager.MintParams({
@@ -157,7 +163,11 @@ contract TestUniswapV3PositionRouter is TestBaseUniswapV3 {
         );
     }
 
-    function test_mint_position_with_router() public useTokens(authorizedToken0, authorizedToken1) invariants {
+    function test_mint_position_with_router()
+        public
+        useTokens(authorizedToken0, authorizedToken1)
+        invariants
+    {
         (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1) =
             _mint_position_with_router(lp, 1000, 1000);
 
@@ -265,12 +275,17 @@ contract TestUniswapV3PositionRouter is TestBaseUniswapV3 {
         );
     }
 
-    function test_increase_liquidity() public useTokens(authorizedToken0, authorizedToken1) invariants {
+    function test_increase_liquidity()
+        public
+        useTokens(authorizedToken0, authorizedToken1)
+        invariants
+    {
         (uint256 tokenId, uint128 start_liquidity, uint256 start_amount0, uint256 start_amount1) =
             _mint_position_with_router(lp, 1000, 1000);
 
         vm.prank(lp);
-        (uint128 end_liquidity, uint256 amount0, uint256 amount1) = dammRouter.increasePositionLiquidity(
+        (uint128 end_liquidity, uint256 amount0, uint256 amount1) = dammRouter
+            .increasePositionLiquidity(
             INonfungiblePositionManager.IncreaseLiquidityParams({
                 tokenId: tokenId,
                 amount0Desired: 1000,
@@ -281,8 +296,8 @@ contract TestUniswapV3PositionRouter is TestBaseUniswapV3 {
             })
         );
 
-        (, address operator, address _token0, address _token1, uint24 fee,,, uint128 _liquidity,,,,) =
-            INonfungiblePositionManager(uniswapV3.positionManager()).positions(tokenId);
+        (, address operator, address _token0, address _token1, uint24 fee,,, uint128 _liquidity,,,,)
+        = INonfungiblePositionManager(uniswapV3.positionManager()).positions(tokenId);
 
         assertEq(operator, address(0));
         assertEq(_token0, address(token0));
@@ -319,7 +334,10 @@ contract TestUniswapV3PositionRouter is TestBaseUniswapV3 {
         );
     }
 
-    function test_cannot_increase_liquidity_of_null_position() public useTokens(authorizedToken0, authorizedToken1) {
+    function test_cannot_increase_liquidity_of_null_position()
+        public
+        useTokens(authorizedToken0, authorizedToken1)
+    {
         vm.prank(lp);
         vm.expectRevert("ERC721: owner query for nonexistent token");
         dammRouter.increasePositionLiquidity(
@@ -334,7 +352,11 @@ contract TestUniswapV3PositionRouter is TestBaseUniswapV3 {
         );
     }
 
-    function test_decrease_liquidity() public useTokens(authorizedToken0, authorizedToken1) invariants {
+    function test_decrease_liquidity()
+        public
+        useTokens(authorizedToken0, authorizedToken1)
+        invariants
+    {
         (uint256 tokenId, uint128 start_liquidity, uint256 start_amount0, uint256 start_amount1) =
             _mint_position_with_router(lp, 1000, 1000);
 
@@ -399,7 +421,10 @@ contract TestUniswapV3PositionRouter is TestBaseUniswapV3 {
         );
     }
 
-    function test_cannot_decrease_liquidity_of_null_position() public useTokens(authorizedToken0, authorizedToken1) {
+    function test_cannot_decrease_liquidity_of_null_position()
+        public
+        useTokens(authorizedToken0, authorizedToken1)
+    {
         vm.prank(lp);
         vm.expectRevert("ERC721: owner query for nonexistent token");
         dammRouter.decreasePositionLiquidity(
@@ -413,7 +438,11 @@ contract TestUniswapV3PositionRouter is TestBaseUniswapV3 {
         );
     }
 
-    function test_collect_tokens_owed() public useTokens(authorizedToken0, authorizedToken1) invariants {
+    function test_collect_tokens_owed()
+        public
+        useTokens(authorizedToken0, authorizedToken1)
+        invariants
+    {
         (uint256 tokenId, uint128 start_liquidity,,) = _mint_position_with_router(lp, 1000, 1000);
 
         vm.startPrank(lp);

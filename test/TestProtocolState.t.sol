@@ -31,9 +31,18 @@ contract TestProtocolState is Test {
         assertFalse(protocolState.paused());
     }
 
-    function test_only_owner_or_pauser_can_pause(address pauser, address notPauser, uint256 randomRole) public {
+    function test_only_owner_or_pauser_can_pause(address pauser, address notPauser, uint8 offset)
+        public
+    {
         vm.assume(pauser != address(this));
         vm.assume(pauser != notPauser);
+        vm.assume(notPauser != address(this));
+
+        vm.label(pauser, "pauser");
+        vm.label(notPauser, "notPauser");
+
+        uint256 randomRole = 1 << uint256(offset);
+
         vm.assume(randomRole & PAUSER_ROLE == 0);
 
         protocolAccessController.grantRoles(pauser, PAUSER_ROLE);

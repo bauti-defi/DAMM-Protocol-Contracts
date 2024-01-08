@@ -34,9 +34,8 @@ abstract contract BaseRouter {
     }
 
     function isTokenWhitelisted(address user, address token) public view returns (bool) {
-        return ITokenWhitelistRegistry(ADDRESS_REGISTRY.getTokenWhitelistRegistry()).isTokenWhitelisted(
-            user, address(this), token
-        );
+        return ITokenWhitelistRegistry(ADDRESS_REGISTRY.getTokenWhitelistRegistry())
+            .isTokenWhitelisted(user, address(this), token);
     }
 
     function _checkTokenIsWhitelisted(address user, address token) internal view {

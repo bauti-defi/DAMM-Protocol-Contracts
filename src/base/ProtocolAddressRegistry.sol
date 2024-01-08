@@ -18,7 +18,10 @@ contract ProtocolAddressRegistry is IProtocolAddressRegistry {
     mapping(address => bytes32 identifier) private _identifiers;
 
     constructor(address _protocolAccessController) {
-        require(_protocolAccessController != address(0), "ProtocolAddressRegistry: Invalid access controller");
+        require(
+            _protocolAccessController != address(0),
+            "ProtocolAddressRegistry: Invalid access controller"
+        );
         require(
             IProtocolAccessController(_protocolAccessController).isOwner(msg.sender),
             "ProtocolAddressRegistry: Caller is not the owner"

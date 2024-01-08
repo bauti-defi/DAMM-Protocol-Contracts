@@ -32,8 +32,15 @@ contract VaultRouterModule is ReentrancyGuard, IVaultRouterModule {
         _;
     }
 
-    modifier validVault(address vault) {
-        if (IVaultFactory(ADDRESS_REGISTRY.getVaultFactory().orRevert()).getDeployedVaultNonce(vault) == 0) {
+    modifier onlyVault() {
+        if (!IVaultFactory(ADDRESS_REGISTRY.getVaultFactory().orRevert()).isDAMMVault(msg.sender)) {
+            revert NotDAMMVault();
+        }
+        _;
+    }
+
+    modifier canExecute(address vault) {
+        if (!IVaultFactory(ADDRESS_REGISTRY.getVaultFactory().orRevert()).isDAMMVault(vault)) {
             revert NotDAMMVault();
         }
         if (tradingSuspended[vault]) revert TradingSuspended();
@@ -44,23 +51,29 @@ contract VaultRouterModule is ReentrancyGuard, IVaultRouterModule {
         return keccak256(abi.encode(vault, operator));
     }
 
-    function setOperator(address operator, bool enabled) external {
+    function setOperator(address operator, bool enabled) external onlyVault {
         require(operator != address(0), "VaultRouterModule: operator is zero address");
 
-        if (IProtocolState(ADDRESS_REGISTRY.getProtocolState().orRevert()).paused() && enabled) revert ModulePaused();
+        if (IProtocolState(ADDRESS_REGISTRY.getProtocolState().orRevert()).paused() && enabled) {
+            revert ModulePaused();
+        }
 
         operators[_operatorPointer(msg.sender, operator)] = enabled;
 
         emit SetOperator(msg.sender, operator, enabled);
     }
 
-    function suspendTrading() external {
+    function suspendTrading() external onlyVault {
         tradingSuspended[msg.sender] = true;
 
         emit ResumeTrading(msg.sender);
     }
 
-    function resumeTrading() external {
+    function resumeTrading() external onlyVault {
+        if (IProtocolState(ADDRESS_REGISTRY.getProtocolState().orRevert()).paused()) {
+            revert ModulePaused();
+        }
+
         tradingSuspended[msg.sender] = false;
 
         emit SuspendTrading(msg.sender);
@@ -68,10 +81,10 @@ contract VaultRouterModule is ReentrancyGuard, IVaultRouterModule {
 
     function _checkTargetIsValid(address vault, address target) internal view {
         if (
-            target == address(0) || target == address(this) || vault == target || ADDRESS_REGISTRY.isRegistered(target)
-                || !IRouterWhitelistRegistry(ADDRESS_REGISTRY.getRouterWhitelistRegistry().orRevert()).isRouterWhitelisted(
-                    vault, target
-                )
+            target == address(0) || target == address(this) || vault == target
+                || ADDRESS_REGISTRY.isRegistered(target)
+                || !IRouterWhitelistRegistry(ADDRESS_REGISTRY.getRouterWhitelistRegistry().orRevert())
+                    .isRouterWhitelisted(vault, target)
         ) revert InvalidRouter();
     }
 
@@ -79,7 +92,7 @@ contract VaultRouterModule is ReentrancyGuard, IVaultRouterModule {
         external
         override
         nonReentrant
-        validVault(vault)
+        canExecute(vault)
         onlyOperator(vault, msg.sender)
         returns (bytes memory)
     {
@@ -87,8 +100,9 @@ contract VaultRouterModule is ReentrancyGuard, IVaultRouterModule {
 
         _checkTargetIsValid(vault, target);
 
-        (bool success, bytes memory returnData) =
-            ISafe(vault).execTransactionFromModuleReturnData(target, value, data, Enum.Operation.Call);
+        (bool success, bytes memory returnData) = ISafe(vault).execTransactionFromModuleReturnData(
+            target, value, data, Enum.Operation.Call
+        );
         if (!success) {
             // Next 5 lines from https://ethereum.stackexchange.com/a/83577
             if (returnData.length < 68) revert();
@@ -106,7 +120,14 @@ contract VaultRouterModule is ReentrancyGuard, IVaultRouterModule {
         address[] calldata targets,
         bytes[] calldata datas,
         uint256[] calldata values
-    ) external override nonReentrant validVault(vault) onlyOperator(vault, msg.sender) returns (bytes[] memory) {
+    )
+        external
+        override
+        nonReentrant
+        canExecute(vault)
+        onlyOperator(vault, msg.sender)
+        returns (bytes[] memory)
+    {
         IProtocolState(ADDRESS_REGISTRY.getProtocolState().orRevert()).requireNotStopped();
 
         uint256 length = targets.length;
@@ -125,8 +146,9 @@ contract VaultRouterModule is ReentrancyGuard, IVaultRouterModule {
             }
         }
 
-        bytes memory data =
-            abi.encodeWithSelector(IMulticallerWithSender.aggregateWithSender.selector, targets, datas, values);
+        bytes memory data = abi.encodeWithSelector(
+            IMulticallerWithSender.aggregateWithSender.selector, targets, datas, values
+        );
 
         /// @notice multicaller will revert if arrays are not of equal length
         (bool success, bytes memory returnData) = ISafe(vault).execTransactionFromModuleReturnData(

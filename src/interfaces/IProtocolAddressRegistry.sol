@@ -2,7 +2,9 @@
 pragma solidity ^0.8.0;
 
 interface IProtocolAddressRegistry {
-    event AddressSet(bytes32 indexed identifier, address indexed newAddress, address indexed oldAddress);
+    event AddressSet(
+        bytes32 indexed identifier, address indexed newAddress, address indexed oldAddress
+    );
 
     function getAddress(bytes32 identifier) external view returns (address);
 

@@ -13,18 +13,25 @@ import {RouterPayments} from "@src/lib/RouterPayments.sol";
 contract UniswapV3SwapRouter is BaseRouter, RouterPayments, IUniswapV3SwapRouter {
     ISwapRouter public immutable uniswapV3SwapRouter;
 
-    constructor(IProtocolAddressRegistry _addressRegsitry, IWETH9 _WETH9, ISwapRouter _uniswapV3SwapRouter)
-        BaseRouter(_addressRegsitry)
-        RouterPayments(_WETH9)
-    {
+    constructor(
+        IProtocolAddressRegistry _addressRegsitry,
+        IWETH9 _WETH9,
+        ISwapRouter _uniswapV3SwapRouter
+    ) BaseRouter(_addressRegsitry) RouterPayments(_WETH9) {
         uniswapV3SwapRouter = _uniswapV3SwapRouter;
     }
 
     function _ensureTokenAllowance(address token, uint256 allowanceRequired) internal {
         IERC20 tokenToApprove = IERC20(token);
 
-        if (tokenToApprove.allowance(address(this), address(uniswapV3SwapRouter)) < allowanceRequired) {
-            require(tokenToApprove.approve(address(uniswapV3SwapRouter), type(uint256).max), "Router: approve failed");
+        if (
+            tokenToApprove.allowance(address(this), address(uniswapV3SwapRouter))
+                < allowanceRequired
+        ) {
+            require(
+                tokenToApprove.approve(address(uniswapV3SwapRouter), type(uint256).max),
+                "Router: approve failed"
+            );
         }
     }
 

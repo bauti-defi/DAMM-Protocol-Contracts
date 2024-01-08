@@ -7,7 +7,10 @@ interface ITokenWhitelistRegistry {
     event TokenBlacklisted(address indexed user, address router, address token);
     event TokensBlacklisted(address indexed user, address[] routers, address[] tokens);
 
-    function isTokenWhitelisted(address user, address router, address token) external view returns (bool);
+    function isTokenWhitelisted(address user, address router, address token)
+        external
+        view
+        returns (bool);
 
     function whitelistToken(address router, address token) external;
 

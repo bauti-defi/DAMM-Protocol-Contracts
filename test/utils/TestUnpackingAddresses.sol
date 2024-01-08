@@ -41,6 +41,10 @@ contract TestUnpackingAddresses is Test {
         assertEq(array.length, 3);
     }
 
+    /**
+     * forge-config: default.fuzz.runs = 1024
+     * forge-config: default.fuzz.max-test-rejects = 500
+     */
     function testN(bytes memory packed) public {
         uint256 elementSize = 20;
 

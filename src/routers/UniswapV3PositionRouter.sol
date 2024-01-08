@@ -25,14 +25,22 @@ contract UniswapV3PositionRouter is BaseRouter, RouterPayments, IUniswapV3Positi
     function _ensureTokenAllowance(address token, uint256 allowanceRequired) internal {
         IERC20 tokenToApprove = IERC20(token);
 
-        if (tokenToApprove.allowance(address(this), address(uniswapV3PositionManager)) < allowanceRequired) {
+        if (
+            tokenToApprove.allowance(address(this), address(uniswapV3PositionManager))
+                < allowanceRequired
+        ) {
             require(
-                tokenToApprove.approve(address(uniswapV3PositionManager), type(uint256).max), "Router: approve failed"
+                tokenToApprove.approve(address(uniswapV3PositionManager), type(uint256).max),
+                "Router: approve failed"
             );
         }
     }
 
-    function _getV3PositionTokenPair(uint256 tokenId) internal view returns (address token0, address token1) {
+    function _getV3PositionTokenPair(uint256 tokenId)
+        internal
+        view
+        returns (address token0, address token1)
+    {
         // get the position information
         (,, token0, token1,,,,,,,,) = uniswapV3PositionManager.positions(tokenId);
     }
@@ -87,7 +95,9 @@ contract UniswapV3PositionRouter is BaseRouter, RouterPayments, IUniswapV3Positi
         (amount0, amount1) = uniswapV3PositionManager.collect(params);
     }
 
-    function increasePositionLiquidity(INonfungiblePositionManager.IncreaseLiquidityParams calldata params)
+    function increasePositionLiquidity(
+        INonfungiblePositionManager.IncreaseLiquidityParams calldata params
+    )
         external
         override
         notPaused
@@ -118,13 +128,9 @@ contract UniswapV3PositionRouter is BaseRouter, RouterPayments, IUniswapV3Positi
         }
     }
 
-    function decreasePositionLiquidity(INonfungiblePositionManager.DecreaseLiquidityParams calldata params)
-        external
-        override
-        notPaused
-        setCaller
-        returns (uint256 amount0, uint256 amount1)
-    {
+    function decreasePositionLiquidity(
+        INonfungiblePositionManager.DecreaseLiquidityParams calldata params
+    ) external override notPaused setCaller returns (uint256 amount0, uint256 amount1) {
         address positionOwner = IERC721(address(uniswapV3PositionManager)).ownerOf(params.tokenId);
 
         if (positionOwner != caller) revert InvalidRecipient();

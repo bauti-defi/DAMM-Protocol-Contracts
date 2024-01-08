@@ -7,11 +7,12 @@ import {IMulticallerWithSender} from "@src/interfaces/external/IMulticallerWithS
 interface IVaultRouterModule {
     error InvalidRouter();
     error OnlyOperator();
+    error onlyOwnerVault();
     error NotDAMMVault();
     error TradingSuspended();
     error ModulePaused();
 
-    event SetOperator(address indexed caller, address indexed operator, bool enabled);
+    event SetOperator(address indexed vault, address operator, bool enabled);
     event SuspendTrading(address vault);
     event ResumeTrading(address vault);
 

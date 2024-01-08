@@ -57,8 +57,9 @@ contract TestUniswapV3SwapRouter is TestBaseUniswapV3 {
         pool = uniswapV3.deployPool(address(token0), address(token1), POOL_FEE);
 
         // deploy damm uniswap v3 swap router
-        dammRouter =
-            new UniswapV3SwapRouter(protocolAddressRegistry, IWETH9(uniswapV3.weth9()), ISwapRouter(uniswapV3.router()));
+        dammRouter = new UniswapV3SwapRouter(
+            protocolAddressRegistry, IWETH9(uniswapV3.weth9()), ISwapRouter(uniswapV3.router())
+        );
 
         vm.label(address(dammRouter), "DammRouter");
 
@@ -91,7 +92,9 @@ contract TestUniswapV3SwapRouter is TestBaseUniswapV3 {
                 startTick - 500,
                 startTick + 500,
                 100_000_000,
-                abi.encode(MintCallbackData({token0: address(token0), token1: address(token1), payer: lp}))
+                abi.encode(
+                    MintCallbackData({token0: address(token0), token1: address(token1), payer: lp})
+                )
             )
         );
 
@@ -104,7 +107,9 @@ contract TestUniswapV3SwapRouter is TestBaseUniswapV3 {
     /// @param amount0Owed The amount of token0 due to the pool for the minted liquidity
     /// @param amount1Owed The amount of token1 due to the pool for the minted liquidity
     /// @param data Any data passed through by the caller via the IUniswapV3PoolActions#mint call
-    function uniswapV3MintCallback(uint256 amount0Owed, uint256 amount1Owed, bytes calldata data) external {
+    function uniswapV3MintCallback(uint256 amount0Owed, uint256 amount1Owed, bytes calldata data)
+        external
+    {
         MintCallbackData memory mintCallback = abi.decode(data, (MintCallbackData));
 
         if (amount0Owed > 0) token0.transferFrom(mintCallback.payer, address(pool), amount0Owed);
@@ -132,7 +137,11 @@ contract TestUniswapV3SwapRouter is TestBaseUniswapV3 {
         _;
     }
 
-    function test_swap(uint256 amount, bool zeroForOne) public useTokens(address(token0), address(token1)) invariants {
+    function test_swap(uint256 amount, bool zeroForOne)
+        public
+        useTokens(address(token0), address(token1))
+        invariants
+    {
         vm.assume(amount > 0);
         vm.assume(amount < ONE_MILLION);
 

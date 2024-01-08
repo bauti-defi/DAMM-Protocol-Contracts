@@ -38,6 +38,7 @@ contract TestRouterWhitelistRegistry is Test {
     function test_blacklist_router(address router, address otherRouter) external {
         vm.assume(router != address(0));
         vm.assume(router != address(this));
+        vm.assume(router != address(registry));
         vm.assume(router != otherRouter);
 
         registry.whitelistRouter(router);

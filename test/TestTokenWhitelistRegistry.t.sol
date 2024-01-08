@@ -28,6 +28,7 @@ contract TestTokenWhitelistRegistry is Test {
         vm.assume(token != address(0));
         vm.assume(token != address(this));
         vm.assume(token != otherToken);
+        vm.assume(token != address(registry));
         vm.assume(router != token);
         vm.assume(router != otherToken);
         vm.assume(router != address(registry));

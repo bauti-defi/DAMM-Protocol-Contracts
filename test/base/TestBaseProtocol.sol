@@ -38,16 +38,20 @@ abstract contract TestBaseProtocol is Test, TestBaseGnosis {
         owner = makeAddr("Owner");
 
         vm.startPrank(owner, owner);
-        protocolAccessController = IProtocolAccessController(address(new ProtocolAccessController(owner)));
-        protocolAddressRegistry =
-            IProtocolAddressRegistry(address(new ProtocolAddressRegistry(address(protocolAccessController))));
+        protocolAccessController =
+            IProtocolAccessController(address(new ProtocolAccessController(owner)));
+        protocolAddressRegistry = IProtocolAddressRegistry(
+            address(new ProtocolAddressRegistry(address(protocolAccessController)))
+        );
 
-        multicallerWithSender = IMulticallerWithSender(address(MulticallerEtcher.multicallerWithSender()));
+        multicallerWithSender =
+            IMulticallerWithSender(address(MulticallerEtcher.multicallerWithSender()));
 
         protocolState = IProtocolState(address(new ProtocolState(protocolAddressRegistry)));
         routerWhitelistRegistry =
             IRouterWhitelistRegistry(address(new RouterWhitelistRegistry(protocolAddressRegistry)));
-        tokenWhitelistRegistry = ITokenWhitelistRegistry(address(new TokenWhitelistRegistry(protocolAddressRegistry)));
+        tokenWhitelistRegistry =
+            ITokenWhitelistRegistry(address(new TokenWhitelistRegistry(protocolAddressRegistry)));
 
         vaultFactory = IVaultFactory(
             address(

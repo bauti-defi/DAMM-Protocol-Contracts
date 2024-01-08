@@ -5,7 +5,8 @@ pragma abicoder v2;
 import {UniswapV3Factory} from "@uniswap-v3-core/UniswapV3Factory.sol";
 import {IUniswapV3Factory} from "@uniswap-v3-core/interfaces/IUniswapV3Factory.sol";
 import {NonfungiblePositionManager} from "@uniswap-v3-periphery/NonfungiblePositionManager.sol";
-import {INonfungiblePositionManager} from "@uniswap-v3-periphery/interfaces/INonfungiblePositionManager.sol";
+import {INonfungiblePositionManager} from
+    "@uniswap-v3-periphery/interfaces/INonfungiblePositionManager.sol";
 import {SwapRouter} from "@uniswap-v3-periphery/SwapRouter.sol";
 import {ISwapRouter} from "@uniswap-v3-periphery/interfaces/ISwapRouter.sol";
 import {IBaseUniswapV3} from "@test/base/uniswapV3/IBaseUniswapV3.sol";
@@ -60,7 +61,9 @@ contract Deployer is TestBase, TestBaseWETH9, IBaseUniswapV3 {
         returns (address pool)
     {
         (bool success, bytes memory result) = factory.call(
-            abi.encodeWithSelector(bytes4(keccak256("createPool(address,address,uint24)")), token0, token1, poolFee)
+            abi.encodeWithSelector(
+                bytes4(keccak256("createPool(address,address,uint24)")), token0, token1, poolFee
+            )
         );
 
         require(success, "createPool failed");
@@ -71,7 +74,9 @@ contract Deployer is TestBase, TestBaseWETH9, IBaseUniswapV3 {
 
     function initializePool(address pool, int24 startTick) external override initialized {
         (bool success,) = pool.call(
-            abi.encodeWithSelector(bytes4(keccak256("initialize(uint160)")), TickMath.getSqrtRatioAtTick(startTick))
+            abi.encodeWithSelector(
+                bytes4(keccak256("initialize(uint160)")), TickMath.getSqrtRatioAtTick(startTick)
+            )
         );
 
         require(success, "pool initialize failed");

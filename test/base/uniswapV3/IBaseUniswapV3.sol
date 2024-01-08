@@ -7,6 +7,8 @@ interface IBaseUniswapV3 {
     function tokenDescriptor() external view returns (address);
     function positionManager() external view returns (address);
     function router() external view returns (address);
-    function deployPool(address token0, address token1, uint24 poolFee) external returns (address pool);
+    function deployPool(address token0, address token1, uint24 poolFee)
+        external
+        returns (address pool);
     function initializePool(address pool, int24 startTick) external;
 }
