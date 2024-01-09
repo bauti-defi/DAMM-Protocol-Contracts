@@ -12,13 +12,12 @@ contract AaveV3Router is BaseRouter, IAaveV3Router {
     constructor(IProtocolAddressRegistry _addressRegsitry, IPool _aaveV3Pool)
         BaseRouter(_addressRegsitry)
     {
-        ADDRESS_REGISTRY = _addressRegsitry;
         aaveV3Pool = _aaveV3Pool;
     }
 
     function deposit(address token, uint256 amount) external override notPaused setCaller {
         _checkTokenIsWhitelisted(caller, token);
-        // _safelyEnsureTokenAllowance(token, address(aaveV3Pool), type(uint256).max);
+        // safelyEnsureTokenAllowance(token, address(aaveV3Pool), type(uint256).max);
 
         aaveV3Pool.supply(token, amount, caller, 0);
     }
@@ -31,7 +30,7 @@ contract AaveV3Router is BaseRouter, IAaveV3Router {
         returns (uint256)
     {
         _checkTokenIsWhitelisted(caller, token);
-        // _safelyEnsureTokenAllowance(token, address(aaveV3Pool), type(uint256).max);
+        // safelyEnsureTokenAllowance(token, address(aaveV3Pool), type(uint256).max);
 
         return aaveV3Pool.withdraw(token, amount, caller);
     }

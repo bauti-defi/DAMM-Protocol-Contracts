@@ -123,6 +123,6 @@ contract ProtocolAddressRegistry is IProtocolAddressRegistry {
     }
 
     function isRegistered(address _address) external view override returns (bool) {
-        return _identifiers[_address] != bytes32(0);
+        return _address == address(this) || _identifiers[_address] != bytes32(0);
     }
 }

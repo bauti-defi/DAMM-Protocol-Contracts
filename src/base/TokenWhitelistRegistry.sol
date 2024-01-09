@@ -38,9 +38,18 @@ contract TokenWhitelistRegistry is ITokenWhitelistRegistry {
     function _whitelistToken(address router, address token) internal {
         IProtocolState(ADDRESS_REGISTRY.getProtocolState().orRevert()).requireNotStopped();
 
-        require(token != address(0), "TokenWhitelistRegistry: zero address");
-        require(token != address(this), "TokenWhitelistRegistry: self address");
-        require(token != msg.sender, "TokenWhitelistRegistry: sender address");
+        require(token != address(0) && router != address(0), "TokenWhitelistRegistry: zero address");
+        require(
+            token != address(this) && router != address(this),
+            "TokenWhitelistRegistry: self address"
+        );
+        require(
+            token != msg.sender && router != msg.sender, "TokenWhitelistRegistry: sender address"
+        );
+        require(
+            !ADDRESS_REGISTRY.isRegistered(token) && !ADDRESS_REGISTRY.isRegistered(router),
+            "TokenWhitelistRegistry: reserved address"
+        );
 
         tokenWhitelist[_tokenPointer(msg.sender, router, token)] = true;
     }
@@ -70,7 +79,10 @@ contract TokenWhitelistRegistry is ITokenWhitelistRegistry {
     }
 
     function _blacklistToken(address router, address token) internal {
-        require(token != address(0), "TokenWhitelistRegistry: zero address");
+        require(
+            tokenWhitelist[_tokenPointer(msg.sender, router, token)],
+            "TokenWhitelistRegistry: not whitelisted"
+        );
 
         tokenWhitelist[_tokenPointer(msg.sender, router, token)] = false;
     }

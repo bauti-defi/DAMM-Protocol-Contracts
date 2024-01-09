@@ -14,7 +14,7 @@ abstract contract RouterPayments {
         WETH9 = _WETH9;
     }
 
-    function _safelyEnsureTokenAllowance(address token, address to, uint256 allowanceRequired)
+    function safelyEnsureTokenAllowance(address token, address to, uint256 allowanceRequired)
         internal
     {
         IERC20 tokenToApprove = IERC20(token);

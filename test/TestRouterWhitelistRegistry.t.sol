@@ -10,11 +10,12 @@ import "@src/base/ProtocolAddressRegistry.sol";
 
 contract TestRouterWhitelistRegistry is Test {
     RouterWhitelistRegistry public registry;
+    IProtocolAddressRegistry public addressRegistry;
     ProtocolState public protocolState;
 
     function setUp() public {
         ProtocolAccessController accessController = new ProtocolAccessController(address(this));
-        IProtocolAddressRegistry addressRegistry =
+        addressRegistry =
             IProtocolAddressRegistry(new ProtocolAddressRegistry(address(accessController)));
 
         protocolState = new ProtocolState(addressRegistry);
@@ -28,6 +29,7 @@ contract TestRouterWhitelistRegistry is Test {
         vm.assume(router != address(0));
         vm.assume(router != address(this));
         vm.assume(router != address(registry));
+        vm.assume(!addressRegistry.isRegistered(router));
         _;
     }
 
@@ -69,6 +71,11 @@ contract TestRouterWhitelistRegistry is Test {
     function test_cannot_whitelist_registry() public {
         vm.expectRevert("RouterWhitelistRegistry: self address");
         registry.whitelistRouter(address(registry));
+    }
+
+    function test_cannot_whitelist_reserved_address() public {
+        vm.expectRevert("RouterWhitelistRegistry: reserved address");
+        registry.whitelistRouter(address(addressRegistry));
     }
 
     function test_cannot_whitelist_when_paused() public {

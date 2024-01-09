@@ -32,7 +32,7 @@ contract UniswapV3SwapRouter is BaseRouter, RouterPayments, IUniswapV3SwapRouter
         _checkTokensAreWhitelisted(caller, abi.encodePacked(params.tokenIn, params.tokenOut));
 
         // ensure uniswap has enough allowance to spend our routers tokens
-        _safelyEnsureTokenAllowance(params.tokenIn, address(uniswapV3SwapRouter), params.amountIn);
+        safelyEnsureTokenAllowance(params.tokenIn, address(uniswapV3SwapRouter), params.amountIn);
 
         // store our current balance of the input token
         uint256 startBalance = IERC20(params.tokenIn).balanceOf(address(this));

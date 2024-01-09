@@ -58,6 +58,10 @@ contract VaultRouterModule is ReentrancyGuard, IVaultRouterModule {
             !IVaultFactory(ADDRESS_REGISTRY.getVaultFactory().orRevert()).isDAMMVault(operator),
             "VaultRouterModule: operator is vault"
         );
+        require(
+            !ADDRESS_REGISTRY.isRegistered(operator),
+            "VaultRouterModule: operator is reserved address"
+        );
 
         if (IProtocolState(ADDRESS_REGISTRY.getProtocolState().orRevert()).paused() && enabled) {
             revert ModulePaused();
@@ -120,6 +124,8 @@ contract VaultRouterModule is ReentrancyGuard, IVaultRouterModule {
         return returnData;
     }
 
+    /// @dev Multicallers will revert if arrays are not of equal length
+    /// @dev Multicaller will revert upon reentrancy
     function executeMulticall(
         address vault,
         address[] calldata targets,
@@ -128,7 +134,6 @@ contract VaultRouterModule is ReentrancyGuard, IVaultRouterModule {
     )
         external
         override
-        nonReentrant
         canExecute(vault)
         onlyOperator(vault, msg.sender)
         returns (bytes[] memory)
@@ -136,9 +141,6 @@ contract VaultRouterModule is ReentrancyGuard, IVaultRouterModule {
         IProtocolState(ADDRESS_REGISTRY.getProtocolState().orRevert()).requireNotStopped();
 
         uint256 length = targets.length;
-
-        require(length == datas.length, "VaultRouterModule: datas length mismatch");
-        require(length == values.length, "VaultRouterModule: values length mismatch");
 
         // sum up how much ETH the safe will need to send to the multicaller
         uint256 value;
@@ -155,7 +157,6 @@ contract VaultRouterModule is ReentrancyGuard, IVaultRouterModule {
             IMulticallerWithSender.aggregateWithSender.selector, targets, datas, values
         );
 
-        /// @notice multicaller will revert if arrays are not of equal length
         (bool success, bytes memory returnData) = ISafe(vault).execTransactionFromModuleReturnData(
             ADDRESS_REGISTRY.getMulticallerWithSender(), value, data, Enum.Operation.Call
         );

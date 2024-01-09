@@ -31,6 +31,7 @@ contract RouterWhitelistRegistry is IRouterWhitelistRegistry {
         require(router != address(0), "RouterWhitelistRegistry: zero address");
         require(router != address(this), "RouterWhitelistRegistry: self address");
         require(router != msg.sender, "RouterWhitelistRegistry: sender address");
+        require(!ADDRESS_REGISTRY.isRegistered(router), "RouterWhitelistRegistry: reserved address");
 
         routerWhitelist[_pointer(msg.sender, router)] = true;
     }
@@ -56,7 +57,10 @@ contract RouterWhitelistRegistry is IRouterWhitelistRegistry {
     }
 
     function _blacklistRouter(address router) internal {
-        require(router != address(0), "RouterWhitelistRegistry: zero address");
+        require(
+            routerWhitelist[_pointer(msg.sender, router)],
+            "RouterWhitelistRegistry: not whitelisted"
+        );
 
         routerWhitelist[_pointer(msg.sender, router)] = false;
     }

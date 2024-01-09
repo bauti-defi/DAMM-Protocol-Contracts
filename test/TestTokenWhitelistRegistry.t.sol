@@ -10,11 +10,12 @@ import "@src/base/ProtocolAddressRegistry.sol";
 
 contract TestTokenWhitelistRegistry is Test {
     TokenWhitelistRegistry public registry;
+    IProtocolAddressRegistry public addressRegistry;
     ProtocolState public protocolState;
 
     function setUp() public {
         ProtocolAccessController accessController = new ProtocolAccessController(address(this));
-        IProtocolAddressRegistry addressRegistry =
+        addressRegistry =
             IProtocolAddressRegistry(new ProtocolAddressRegistry(address(accessController)));
 
         protocolState = new ProtocolState(addressRegistry);
@@ -24,10 +25,10 @@ contract TestTokenWhitelistRegistry is Test {
         addressRegistry.setTokenWhitelistRegistry(address(registry));
     }
 
-    modifier validAddress(address token) {
-        vm.assume(token != address(0));
-        vm.assume(token != address(this));
-        vm.assume(token != address(registry));
+    modifier validAddress(address addr) {
+        vm.assume(addr != address(0));
+        vm.assume(addr != address(this));
+        vm.assume(!addressRegistry.isRegistered(addr));
         _;
     }
 
@@ -39,6 +40,7 @@ contract TestTokenWhitelistRegistry is Test {
     {
         vm.assume(router != token);
         vm.assume(router != otherToken);
+        vm.assume(token != otherToken);
 
         registry.whitelistToken(router, token);
         assertFalse(registry.isTokenWhitelisted(address(this), router, otherToken));
@@ -55,6 +57,7 @@ contract TestTokenWhitelistRegistry is Test {
     {
         vm.assume(router != token);
         vm.assume(router != otherToken);
+        vm.assume(token != otherToken);
 
         registry.whitelistToken(router, token);
         registry.blacklistToken(router, token);
@@ -64,19 +67,44 @@ contract TestTokenWhitelistRegistry is Test {
         assertFalse(registry.isTokenWhitelisted(address(this), token, router));
     }
 
-    function test_cannot_whitelist_self() public {
+    function test_cannot_whitelist_self_as_token() public {
         vm.expectRevert("TokenWhitelistRegistry: sender address");
-        registry.whitelistToken(address(this), address(this));
+        registry.whitelistToken(address(999), address(this));
     }
 
-    function test_cannot_whitelist_zero() public {
+    function test_cannot_whitelist_self_as_router() public {
+        vm.expectRevert("TokenWhitelistRegistry: sender address");
+        registry.whitelistToken(address(this), address(999));
+    }
+
+    function test_cannot_whitelist_zero_as_token() public {
         vm.expectRevert("TokenWhitelistRegistry: zero address");
-        registry.whitelistToken(address(this), address(0));
+        registry.whitelistToken(address(999), address(0));
     }
 
-    function test_cannot_whitelist_registry() public {
+    function test_cannot_whitelist_zero_as_router() public {
+        vm.expectRevert("TokenWhitelistRegistry: zero address");
+        registry.whitelistToken(address(0), address(999));
+    }
+
+    function test_cannot_whitelist_registry_as_token() public {
         vm.expectRevert("TokenWhitelistRegistry: self address");
-        registry.whitelistToken(address(this), address(registry));
+        registry.whitelistToken(address(registry), address(999));
+    }
+
+    function test_cannot_whitelist_registry_as_router() public {
+        vm.expectRevert("TokenWhitelistRegistry: self address");
+        registry.whitelistToken(address(999), address(registry));
+    }
+
+    function test_cannot_whitelist_reserved_address_as_router() public {
+        vm.expectRevert("TokenWhitelistRegistry: reserved address");
+        registry.whitelistToken(address(addressRegistry), address(999));
+    }
+
+    function test_cannot_whitelist_reserved_address_as_token() public {
+        vm.expectRevert("TokenWhitelistRegistry: reserved address");
+        registry.whitelistToken(address(999), address(addressRegistry));
     }
 
     function test_cannot_whitelist_when_paused() public {

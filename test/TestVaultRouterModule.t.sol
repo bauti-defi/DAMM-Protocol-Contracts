@@ -256,6 +256,8 @@ contract TestVaultRouterModule is TestBaseProtocol {
 
     function test_enable_operator(address op) public {
         vm.assume(op != address(0));
+        vm.assume(op != vault);
+        vm.assume(!protocolAddressRegistry.isRegistered(op));
 
         vm.prank(vault);
         dammModule.setOperator(op, true);
@@ -284,6 +286,12 @@ contract TestVaultRouterModule is TestBaseProtocol {
         vm.expectRevert("VaultRouterModule: operator is self");
         vm.prank(vault);
         dammModule.setOperator(vault, true);
+    }
+
+    function test_cannot_set_reserved_address_as_operator() public {
+        vm.expectRevert("VaultRouterModule: operator is reserved address");
+        vm.prank(vault);
+        dammModule.setOperator(address(dammModule), true);
     }
 
     function test_suspend_trading() public {

@@ -41,10 +41,10 @@ contract UniswapV3PositionRouter is BaseRouter, RouterPayments, IUniswapV3Positi
         _checkTokensAreWhitelisted(caller, abi.encodePacked(params.token0, params.token1));
 
         // ensure uniswap has enough allowance to spend our routers tokens
-        _safelyEnsureTokenAllowance(
+        safelyEnsureTokenAllowance(
             params.token0, address(uniswapV3PositionManager), params.amount0Desired
         );
-        _safelyEnsureTokenAllowance(
+        safelyEnsureTokenAllowance(
             params.token1, address(uniswapV3PositionManager), params.amount1Desired
         );
 
@@ -99,12 +99,8 @@ contract UniswapV3PositionRouter is BaseRouter, RouterPayments, IUniswapV3Positi
 
         _checkTokensAreWhitelisted(caller, abi.encodePacked(token0, token1));
 
-        _safelyEnsureTokenAllowance(
-            token0, address(uniswapV3PositionManager), params.amount0Desired
-        );
-        _safelyEnsureTokenAllowance(
-            token1, address(uniswapV3PositionManager), params.amount1Desired
-        );
+        safelyEnsureTokenAllowance(token0, address(uniswapV3PositionManager), params.amount0Desired);
+        safelyEnsureTokenAllowance(token1, address(uniswapV3PositionManager), params.amount1Desired);
 
         transfer(token0, caller, address(this), params.amount0Desired);
         transfer(token1, caller, address(this), params.amount1Desired);

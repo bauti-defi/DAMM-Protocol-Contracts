@@ -6,12 +6,9 @@ import {LibMulticaller} from "@vec-multicaller/LibMulticaller.sol";
 import {BytesLib} from "@src/lib/BytesLib.sol";
 import {IProtocolState} from "@src/interfaces/IProtocolState.sol";
 import {IProtocolAddressRegistry} from "@src/interfaces/IProtocolAddressRegistry.sol";
-import {IERC20} from "@openzeppelin-contracts/token/ERC20/IERC20.sol";
-import {SafeERC20} from "@openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
 
 abstract contract BaseRouter {
     using BytesLib for bytes;
-    using SafeERC20 for IERC20;
 
     error InvalidRecipient();
     error TokenNotWhitelisted();
