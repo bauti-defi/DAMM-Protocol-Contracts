@@ -6,51 +6,13 @@ import {Enum} from "@safe-contracts/common/Enum.sol";
 import {ITradingModule} from "@src/interfaces/ITradingModule.sol";
 import {IBeforeTransaction, IAfterTransaction} from "@src/interfaces/ITransactionHooks.sol";
 import {ReentrancyGuard} from "@openzeppelin-contracts/utils/ReentrancyGuard.sol";
-
-library HookLib {
-    function pointer(ITradingModule.HookConfig memory config) internal pure returns (bytes32) {
-        return hookPointer(config.operator, config.target, config.operation, config.targetSelector);
-    }
-
-    function checkConfigIsValid(ITradingModule.HookConfig memory config, address fund)
-        internal
-        view
-    {
-        require(config.operator != address(0), "operator is zero address");
-        require(config.operator != fund, "operator is fund");
-        require(config.operator != address(this), "operator is self");
-
-        require(config.target != address(0), "target is zero address");
-        require(config.target != address(this), "target is self");
-
-        require(config.beforeTrxHook != address(this), "beforeTrxHook is self");
-        require(config.beforeTrxHook != config.operator, "beforeTrxHook is operator");
-
-        require(config.afterTrxHook != address(this), "afterTrxHook is self");
-        require(config.afterTrxHook != config.operator, "afterTrxHook is operator");
-
-        require(config.targetSelector != bytes4(0), "target selector is zero");
-        // only 0 or 1 allowed (0 = call, 1 = delegatecall)
-        require(
-            config.operation == uint8(Enum.Operation.Call)
-                || config.operation == uint8(Enum.Operation.DelegateCall),
-            "operation is invalid"
-        );
-    }
-
-    function hookPointer(address operator, address target, uint8 operation, bytes4 selector)
-        internal
-        pure
-        returns (bytes32)
-    {
-        return keccak256(abi.encode(operator, target, operation, selector));
-    }
-}
+import "@src/lib/Hooks.sol";
 
 contract TradingModule is ITradingModule, ReentrancyGuard {
-    using HookLib for ITradingModule.HookConfig;
+    using HookLib for HookConfig;
 
     address public immutable fund;
+    uint256 public maxMinerTipInBasisPoints;
     bool public paused;
 
     // keccak256(abi.encode(operator, target, operation, selector)) => hooks
@@ -67,8 +29,38 @@ contract TradingModule is ITradingModule, ReentrancyGuard {
         _;
     }
 
+    // TODO: calculate the gas overhead of the calculations so we can refund the correct amount of gas
+    // will never be able to refund 100% but we can get close
+    modifier refundGasToCaller() {
+        uint256 gasAtStart = gasleft();
+
+        // failsafe for caller not to be able to set a gas price that is too high
+        // the fund can update this limit in moments of emergency (e.g. high gas prices, network congestion, etc.)
+        // miner tip = tx.gasprice - block.basefee
+        if (
+            maxMinerTipInBasisPoints > 0 && tx.gasprice > block.basefee
+                && ((tx.gasprice - block.basefee) * 10000) / tx.gasprice >= maxMinerTipInBasisPoints
+        ) {
+            revert GasLimitExceeded();
+        }
+
+        _;
+
+        require(
+            ISafe(fund).execTransactionFromModule(
+                msg.sender, (gasAtStart - gasleft()) * tx.gasprice, "", Enum.Operation.Call
+            ),
+            "gas refund failed"
+        );
+    }
+
     constructor(address owner) {
         fund = owner;
+        maxMinerTipInBasisPoints = 500; // 5% as default
+    }
+
+    function setMaxMinerTipInBasisPoints(uint256 newMaxMinerTipInBasisPoints) external onlyFund {
+        maxMinerTipInBasisPoints = newMaxMinerTipInBasisPoints;
     }
 
     function _setHooks(HookConfig calldata config) internal notPaused {
@@ -79,7 +71,7 @@ contract TradingModule is ITradingModule, ReentrancyGuard {
         hooks[pointer] = Hooks({
             beforeTrxHook: config.beforeTrxHook,
             afterTrxHook: config.afterTrxHook,
-            defined: true
+            defined: true // TODO: change to status code, same cost but more descriptive
         });
 
         emit HookSet(pointer);
@@ -148,7 +140,7 @@ contract TradingModule is ITradingModule, ReentrancyGuard {
      * @notice This method is payable as delegatecalls keep the msg.value from the previous call
      *         If the calling method (e.g. execTransaction) received ETH this would revert otherwise
      */
-    function execute(bytes memory transactions) external notPaused nonReentrant {
+    function execute(bytes memory transactions) external nonReentrant refundGasToCaller notPaused {
         uint256 transactionsLength = transactions.length;
 
         /// @notice min transaction length is 85 bytes (a single function selector with no calldata)

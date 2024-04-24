@@ -1,25 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.0;
 
+import {Hooks, HookConfig} from "@src/lib/Hooks.sol";
+
 interface ITradingModule {
-    struct Hooks {
-        address beforeTrxHook;
-        address afterTrxHook;
-        bool defined;
-    }
-
-    struct HookConfig {
-        address operator;
-        address target;
-        address beforeTrxHook;
-        address afterTrxHook;
-        uint8 operation;
-        bytes4 targetSelector;
-    }
-
     error UndefinedHooks();
     error TransactionExecutionFailed(string returnData);
     error InvalidTransactionLength();
+    error GasLimitExceeded();
 
     event HookSet(bytes32 pointer);
     event HookRemoved(address operator, address target, uint8 operation, bytes4 selector);
