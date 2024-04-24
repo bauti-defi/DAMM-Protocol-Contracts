@@ -3,7 +3,6 @@ pragma solidity ^0.8.0;
 
 interface IBeforeTransaction {
     function checkBeforeTransaction(
-        address fund,
         address target,
         bytes4 selector,
         uint8 operation,
@@ -14,7 +13,6 @@ interface IBeforeTransaction {
 
 interface IAfterTransaction {
     function checkAfterTransaction(
-        address fund,
         address target,
         bytes4 selector,
         uint8 operation,

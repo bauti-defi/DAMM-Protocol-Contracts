@@ -128,6 +128,27 @@ contract TradingModule is ITradingModule, ReentrancyGuard {
         _removeHooks(config.operator, config.target, config.operation, config.targetSelector);
     }
 
+    function _executeAndReturnDataOrRevert(
+        address target,
+        uint256 value,
+        bytes memory data,
+        Enum.Operation operation
+    ) internal returns (bytes memory) {
+        (bool success, bytes memory returnData) =
+            ISafe(fund).execTransactionFromModuleReturnData(target, value, data, operation);
+
+        if (!success) {
+            assembly {
+                // bubble up revert reason
+                if gt(mload(returnData), 0) { revert(add(returnData, 0x20), mload(returnData)) }
+                // else revert with no reason
+                revert(0, 0)
+            }
+        }
+
+        return returnData;
+    }
+
     /**
      * @dev Sends multiple transactions and reverts all if one fails.
      * @param transactions Encoded transactions. Each transaction is encoded as a packed bytes of
@@ -200,13 +221,22 @@ contract TradingModule is ITradingModule, ReentrancyGuard {
             }
 
             if (hook.beforeTrxHook != address(0)) {
-                IBeforeTransaction(hook.beforeTrxHook).checkBeforeTransaction(
-                    fund, target, targetSelector, operation, value, data
+                _executeAndReturnDataOrRevert(
+                    hook.beforeTrxHook,
+                    0,
+                    abi.encodeWithSelector(
+                        IBeforeTransaction.checkBeforeTransaction.selector,
+                        target,
+                        targetSelector,
+                        operation,
+                        value,
+                        data
+                    ),
+                    Enum.Operation.Call
                 );
             }
 
-            (bool success, bytes memory returnData) = ISafe(fund)
-                .execTransactionFromModuleReturnData(
+            bytes memory returnData = _executeAndReturnDataOrRevert(
                 target,
                 value,
                 data,
@@ -215,28 +245,20 @@ contract TradingModule is ITradingModule, ReentrancyGuard {
                     : Enum.Operation.Call
             );
 
-            if (!success) {
-                // Decode the return data to get the error message
-                if (returnData.length > 0) {
-                    string memory errorMessage;
-
-                    assembly {
-                        // skip: 1 word (length of the return data)
-                        // skip: 4 bytes (error message signature)
-                        // skip: 1 word (length of the error message)
-                        // total skipped: 0x44 bytes
-                        errorMessage := add(returnData, 0x44)
-                    }
-
-                    revert TransactionExecutionFailed(errorMessage);
-                } else {
-                    revert TransactionExecutionFailed("No error provided");
-                }
-            }
-
             if (hook.afterTrxHook != address(0)) {
-                IAfterTransaction(hook.afterTrxHook).checkAfterTransaction(
-                    fund, target, targetSelector, operation, value, data, returnData
+                _executeAndReturnDataOrRevert(
+                    hook.afterTrxHook,
+                    0,
+                    abi.encodeWithSelector(
+                        IAfterTransaction.checkAfterTransaction.selector,
+                        target,
+                        targetSelector,
+                        operation,
+                        value,
+                        data,
+                        returnData
+                    ),
+                    Enum.Operation.Call
                 );
             }
 

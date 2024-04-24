@@ -33,7 +33,7 @@ contract MockTarget {
 }
 
 contract VerifyValueHook is IBeforeTransaction {
-    function checkBeforeTransaction(address, address, bytes4, uint8, uint256 value, bytes memory)
+    function checkBeforeTransaction(address, bytes4, uint8, uint256 value, bytes memory)
         external
         override
     {
@@ -42,7 +42,7 @@ contract VerifyValueHook is IBeforeTransaction {
 }
 
 contract RevertBeforeHook is IBeforeTransaction {
-    function checkBeforeTransaction(address, address, bytes4, uint8, uint256, bytes memory)
+    function checkBeforeTransaction(address, bytes4, uint8, uint256, bytes memory)
         external
         override
     {
@@ -59,7 +59,6 @@ contract VerifyCallbackHook is IAfterTransaction {
 
     function checkAfterTransaction(
         address,
-        address,
         bytes4,
         uint8,
         uint256,
@@ -75,15 +74,10 @@ contract VerifyCallbackHook is IAfterTransaction {
 }
 
 contract RevertAfterHook is IAfterTransaction {
-    function checkAfterTransaction(
-        address,
-        address,
-        bytes4,
-        uint8,
-        uint256,
-        bytes memory,
-        bytes memory
-    ) external override {
+    function checkAfterTransaction(address, bytes4, uint8, uint256, bytes memory, bytes memory)
+        external
+        override
+    {
         revert("RevertAfterHook");
     }
 }
@@ -338,11 +332,7 @@ contract TestTradingModule is Test, TestBaseGnosis, TestBaseProtocol {
     }
 
     function test_execute_reverts() public withHook(mock_trigger_revert_hook()) {
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ITradingModule.TransactionExecutionFailed.selector, "MockTarget revert"
-            )
-        );
+        vm.expectRevert("MockTarget revert");
         vm.prank(operator);
         tradingModule.execute(triggerRevertCall());
     }
