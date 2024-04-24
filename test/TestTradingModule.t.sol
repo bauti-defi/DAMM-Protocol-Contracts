@@ -11,6 +11,7 @@ import {Enum} from "@safe-contracts/common/Enum.sol";
 import {SafeUtils, SafeTransaction} from "@test/utils/SafeUtils.sol";
 import {IBeforeTransaction, IAfterTransaction} from "@src/interfaces/ITransactionHooks.sol";
 import "@src/lib/Hooks.sol";
+import "@src/HookRegistry.sol";
 
 contract MockTarget {
     uint256 public value;
@@ -88,6 +89,7 @@ contract TestTradingModule is Test, TestBaseGnosis, TestBaseProtocol {
     address internal fundAdmin;
     uint256 internal fundAdminPK;
     SafeL2 internal fund;
+    HookRegistry internal hookRegistry;
     TradingModule internal tradingModule;
     MockTarget internal target;
     address internal revertBeforeHook;
@@ -113,6 +115,19 @@ contract TestTradingModule is Test, TestBaseGnosis, TestBaseProtocol {
 
         vm.deal(address(fund), 1000 ether);
 
+        hookRegistry = HookRegistry(
+            deployModule(
+                payable(address(fund)),
+                fundAdmin,
+                fundAdminPK,
+                bytes32("hookRegistry"),
+                0,
+                abi.encodePacked(type(HookRegistry).creationCode, abi.encode(address(fund)))
+            )
+        );
+
+        vm.label(address(hookRegistry), "HookRegistry");
+
         tradingModule = TradingModule(
             deployModule(
                 payable(address(fund)),
@@ -120,7 +135,10 @@ contract TestTradingModule is Test, TestBaseGnosis, TestBaseProtocol {
                 fundAdminPK,
                 bytes32("tradingModule"),
                 0,
-                abi.encodePacked(type(TradingModule).creationCode, abi.encode(address(fund)))
+                abi.encodePacked(
+                    type(TradingModule).creationCode,
+                    abi.encode(address(fund), address(hookRegistry))
+                )
             )
         );
         vm.label(address(tradingModule), "TradingModule");
@@ -143,7 +161,7 @@ contract TestTradingModule is Test, TestBaseGnosis, TestBaseProtocol {
 
     modifier withHook(HookConfig memory config) {
         vm.prank(address(fund));
-        tradingModule.setHooks(config);
+        hookRegistry.setHooks(config);
         _;
     }
 
@@ -182,76 +200,6 @@ contract TestTradingModule is Test, TestBaseGnosis, TestBaseProtocol {
 
         config.beforeTrxHook = beforeHook;
         config.afterTrxHook = afterHook;
-    }
-
-    function test_set_hook() public {
-        HookConfig memory config = mock_hook();
-
-        //create safe transaction as admin. this transaction will call the setHook() on the tradingModule
-        bytes memory transaction = abi.encodeWithSelector(tradingModule.setHooks.selector, config);
-
-        bool success = fund.executeTrx(
-            fundAdminPK,
-            SafeTransaction({
-                value: 0,
-                target: address(tradingModule),
-                operation: Enum.Operation.Call,
-                transaction: transaction
-            })
-        );
-
-        assertTrue(success, "Failed to set hook");
-
-        Hooks memory hooks = tradingModule.getHooks(
-            config.operator, config.target, config.operation, config.targetSelector
-        );
-
-        assertTrue(hooks.defined, "Hook not defined");
-    }
-
-    function test_only_fund_can_set_hook(address attacker) public {
-        vm.assume(attacker != address(fund));
-
-        vm.expectRevert("only fund");
-        vm.prank(attacker);
-        tradingModule.setHooks(mock_hook());
-    }
-
-    function test_unset_hook() public {
-        HookConfig memory config = mock_hook();
-
-        vm.prank(address(fund));
-        tradingModule.setHooks(config);
-
-        //create safe transaction as admin. this transaction will call the removeHook() on the tradingModule
-        bytes memory transaction =
-            abi.encodeWithSelector(tradingModule.removeHooks.selector, config);
-
-        bool success = fund.executeTrx(
-            fundAdminPK,
-            SafeTransaction({
-                value: 0,
-                target: address(tradingModule),
-                operation: Enum.Operation.Call,
-                transaction: transaction
-            })
-        );
-
-        assertTrue(success, "Failed to remove hook");
-
-        Hooks memory hooks = tradingModule.getHooks(
-            config.operator, config.target, config.operation, config.targetSelector
-        );
-
-        assertFalse(hooks.defined, "Hook not removed");
-    }
-
-    function test_only_fund_can_unset_hook(address attacker) public withHook(mock_hook()) {
-        vm.assume(attacker != address(fund));
-
-        vm.expectRevert("only fund");
-        vm.prank(attacker);
-        tradingModule.removeHooks(mock_hook());
     }
 
     function incrementCall(uint256 _value) private view returns (bytes memory) {

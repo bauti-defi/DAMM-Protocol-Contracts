@@ -7,17 +7,15 @@ import {ITradingModule} from "@src/interfaces/ITradingModule.sol";
 import {IBeforeTransaction, IAfterTransaction} from "@src/interfaces/ITransactionHooks.sol";
 import {ReentrancyGuard} from "@openzeppelin-contracts/utils/ReentrancyGuard.sol";
 import "@src/lib/Hooks.sol";
+import "@src/interfaces/IHookRegistry.sol";
 
 contract TradingModule is ITradingModule, ReentrancyGuard {
     using HookLib for HookConfig;
 
     address public immutable fund;
+    IHookRegistry public immutable hookRegistry;
     uint256 public maxMinerTipInBasisPoints;
     bool public paused;
-
-    // keccak256(abi.encode(operator, target, operation, selector)) => hooks
-    // bytes20 + bytes20 + bytes8 + bytes4 = 52 bytes
-    mapping(bytes32 hookPointer => Hooks) private hooks;
 
     modifier onlyFund() {
         require(msg.sender == fund, "only fund");
@@ -54,78 +52,14 @@ contract TradingModule is ITradingModule, ReentrancyGuard {
         );
     }
 
-    constructor(address owner) {
+    constructor(address owner, address _hookRegistry) {
         fund = owner;
+        hookRegistry = IHookRegistry(_hookRegistry);
         maxMinerTipInBasisPoints = 500; // 5% as default
     }
 
     function setMaxMinerTipInBasisPoints(uint256 newMaxMinerTipInBasisPoints) external onlyFund {
         maxMinerTipInBasisPoints = newMaxMinerTipInBasisPoints;
-    }
-
-    function _setHooks(HookConfig calldata config) internal notPaused {
-        config.checkConfigIsValid(fund);
-
-        bytes32 pointer = config.pointer();
-
-        hooks[pointer] = Hooks({
-            beforeTrxHook: config.beforeTrxHook,
-            afterTrxHook: config.afterTrxHook,
-            defined: true // TODO: change to status code, same cost but more descriptive
-        });
-
-        emit HookSet(pointer);
-    }
-
-    function batchSetHooks(HookConfig[] calldata configs) external onlyFund {
-        uint256 length = configs.length;
-        for (uint256 i = 0; i < length;) {
-            _setHooks(configs[i]);
-
-            unchecked {
-                ++i;
-            }
-        }
-    }
-
-    function getHooks(address operator, address target, uint8 operation, bytes4 selector)
-        external
-        view
-        returns (Hooks memory)
-    {
-        return hooks[HookLib.hookPointer(operator, target, operation, selector)];
-    }
-
-    function setHooks(HookConfig calldata config) external onlyFund {
-        _setHooks(config);
-    }
-
-    function _removeHooks(address operator, address target, uint8 operation, bytes4 selector)
-        internal
-    {
-        delete hooks[HookLib.hookPointer(operator, target, operation, selector)];
-
-        emit HookRemoved(operator, target, operation, selector);
-    }
-
-    function batchRemoveHooks(HookConfig[] calldata configs) external onlyFund {
-        uint256 length = configs.length;
-        for (uint256 i = 0; i < length;) {
-            _removeHooks(
-                configs[i].operator,
-                configs[i].target,
-                configs[i].operation,
-                configs[i].targetSelector
-            );
-
-            unchecked {
-                ++i;
-            }
-        }
-    }
-
-    function removeHooks(HookConfig calldata config) external onlyFund {
-        _removeHooks(config.operator, config.target, config.operation, config.targetSelector);
     }
 
     function _executeAndReturnDataOrRevert(
@@ -139,7 +73,7 @@ contract TradingModule is ITradingModule, ReentrancyGuard {
 
         if (!success) {
             assembly {
-                // bubble up revert reason
+                // bubble up revert reason if length > 0
                 if gt(mload(returnData), 0) { revert(add(returnData, 0x20), mload(returnData)) }
                 // else revert with no reason
                 revert(0, 0)
@@ -213,8 +147,7 @@ contract TradingModule is ITradingModule, ReentrancyGuard {
                     )
             }
 
-            bytes32 hookPointer = HookLib.hookPointer(operator, target, operation, targetSelector);
-            Hooks memory hook = hooks[hookPointer];
+            Hooks memory hook = hookRegistry.getHooks(operator, target, operation, targetSelector);
 
             if (!hook.defined) {
                 revert UndefinedHooks();
