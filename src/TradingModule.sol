@@ -6,15 +6,12 @@ import {Enum} from "@safe-contracts/common/Enum.sol";
 import {ITradingModule} from "@src/interfaces/ITradingModule.sol";
 import {IBeforeTransaction, IAfterTransaction} from "@src/interfaces/ITransactionHooks.sol";
 import {ReentrancyGuard} from "@openzeppelin-contracts/utils/ReentrancyGuard.sol";
-import "@src/lib/Hooks.sol";
 import "@src/interfaces/IHookRegistry.sol";
 
 contract TradingModule is ITradingModule, ReentrancyGuard {
-    using HookLib for HookConfig;
-
     address public immutable fund;
     IHookRegistry public immutable hookRegistry;
-    uint256 public maxMinerTipInBasisPoints;
+    uint256 public maxGasPriorityInBasisPoints;
     bool public paused;
 
     modifier onlyFund() {
@@ -27,17 +24,17 @@ contract TradingModule is ITradingModule, ReentrancyGuard {
         _;
     }
 
-    // TODO: calculate the gas overhead of the calculations so we can refund the correct amount of gas
+    // TODO: calculate the gas overhead of the refunding logic so we can refund the correct amount of gas
     // will never be able to refund 100% but we can get close
     modifier refundGasToCaller() {
         uint256 gasAtStart = gasleft();
 
         // failsafe for caller not to be able to set a gas price that is too high
         // the fund can update this limit in moments of emergency (e.g. high gas prices, network congestion, etc.)
-        // miner tip = tx.gasprice - block.basefee
+        // gasPriority = tx.gasprice - block.basefee
         if (
-            maxMinerTipInBasisPoints > 0 && tx.gasprice > block.basefee
-                && ((tx.gasprice - block.basefee) * 10000) / tx.gasprice >= maxMinerTipInBasisPoints
+            maxGasPriorityInBasisPoints > 0 && tx.gasprice > block.basefee
+                && ((tx.gasprice - block.basefee) * 10000) / tx.gasprice >= maxGasPriorityInBasisPoints
         ) {
             revert GasLimitExceeded();
         }
@@ -55,11 +52,11 @@ contract TradingModule is ITradingModule, ReentrancyGuard {
     constructor(address owner, address _hookRegistry) {
         fund = owner;
         hookRegistry = IHookRegistry(_hookRegistry);
-        maxMinerTipInBasisPoints = 500; // 5% as default
+        maxGasPriorityInBasisPoints = 500; // 5% as default
     }
 
-    function setMaxMinerTipInBasisPoints(uint256 newMaxMinerTipInBasisPoints) external onlyFund {
-        maxMinerTipInBasisPoints = newMaxMinerTipInBasisPoints;
+    function setMaxGasPriorityInBasisPoints(uint256 newMaxGasPriorityInBasisPoints) external onlyFund {
+        maxGasPriorityInBasisPoints = newMaxGasPriorityInBasisPoints;
     }
 
     function _executeAndReturnDataOrRevert(
@@ -100,9 +97,6 @@ contract TradingModule is ITradingModule, ReentrancyGuard {
 
         /// @notice min transaction length is 85 bytes (a single function selector with no calldata)
         if (transactionsLength < 85) revert InvalidTransactionLength();
-
-        // the caller is the operator
-        address operator = msg.sender;
 
         // lets iterate over the transactions. Each transaction will be verified and then executed through the safe.
         for (uint256 i = 0; i < transactionsLength;) {
@@ -147,7 +141,8 @@ contract TradingModule is ITradingModule, ReentrancyGuard {
                     )
             }
 
-            Hooks memory hook = hookRegistry.getHooks(operator, target, operation, targetSelector);
+            // msg.sender is operator
+            Hooks memory hook = hookRegistry.getHooks(msg.sender, target, operation, targetSelector);
 
             if (!hook.defined) {
                 revert UndefinedHooks();
@@ -155,8 +150,8 @@ contract TradingModule is ITradingModule, ReentrancyGuard {
 
             if (hook.beforeTrxHook != address(0)) {
                 _executeAndReturnDataOrRevert(
-                    hook.beforeTrxHook,
-                    0,
+                    hook.beforeTrxHook, // target
+                    0, // value
                     abi.encodeWithSelector(
                         IBeforeTransaction.checkBeforeTransaction.selector,
                         target,
@@ -164,8 +159,8 @@ contract TradingModule is ITradingModule, ReentrancyGuard {
                         operation,
                         value,
                         data
-                    ),
-                    Enum.Operation.Call
+                    ), // data
+                    Enum.Operation.Call // operation
                 );
             }
 

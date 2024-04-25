@@ -13,7 +13,7 @@ interface ITradingModule {
     function fund() external returns (address);
 
     function execute(bytes memory transaction) external;
-    function setMaxMinerTipInBasisPoints(uint256 maxMinerTipInBasisPoints) external;
+    function setMaxGasPriorityInBasisPoints(uint256 maxMinerTipInBasisPoints) external;
 
     function pause() external;
     function unpause() external;

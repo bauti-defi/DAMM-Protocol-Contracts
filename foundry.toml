@@ -8,11 +8,14 @@ optimizer_runs = 1_000
 remappings = [
     "@ds-test/=lib/forge-std/lib/ds-test/src/",
     "@forge-std/=lib/forge-std/src/",
-    "@safe-contracts/=lib/safe-contracts/contracts/",
-    "@openzeppelin-contracts/=lib/openzeppelin-contracts/contracts/",
     "@src/=src/",
     "@test/=test/",
     "@script/=script/",
+
+    # deps
+    "@aave-v3-core/=lib/aave-v3-core/contracts/",
+    "@safe-contracts/=lib/safe-contracts/contracts/",
+    "@openzeppelin-contracts/=lib/openzeppelin-contracts/contracts/",
 ]
 
 fs_permissions = [{ access = "read", path = "./"}]
