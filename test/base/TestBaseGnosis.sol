@@ -8,12 +8,14 @@ import {SafeProxyFactory} from "@safe-contracts/proxies/SafeProxyFactory.sol";
 import {SafeProxy} from "@safe-contracts/proxies/SafeProxy.sol";
 import {TokenCallbackHandler} from "@safe-contracts/handler/TokenCallbackHandler.sol";
 import {MultiSend} from "@safe-contracts/libraries/MultiSend.sol";
+import {CreateCall} from "@safe-contracts/libraries/CreateCall.sol";
 
 abstract contract TestBaseGnosis is Test {
     MultiSend internal multiSend;
     SafeL2 internal safeSingleton;
     SafeProxyFactory internal safeProxyFactory;
     TokenCallbackHandler internal tokenCallbackHandler;
+    CreateCall internal createCall;
     uint256 internal safeSaltNonce;
 
     function setUp() public virtual {
@@ -28,6 +30,9 @@ abstract contract TestBaseGnosis is Test {
 
         tokenCallbackHandler = new TokenCallbackHandler();
         vm.label(address(tokenCallbackHandler), "TokenCallbackHandler");
+
+        createCall = new CreateCall();
+        vm.label(address(createCall), "CreateCall");
     }
 
     function deploySafe(address[] memory admins, uint256 threshold) internal returns (SafeL2) {

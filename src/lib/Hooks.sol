@@ -42,7 +42,6 @@ library HookLib {
         require(config.afterTrxHook != address(this), "afterTrxHook is self");
         require(config.afterTrxHook != config.operator, "afterTrxHook is operator");
 
-        require(config.targetSelector != bytes4(0), "target selector is zero");
         // only 0 or 1 allowed (0 = call, 1 = delegatecall)
         require(config.operation == 0 || config.operation == 1, "operation is invalid");
     }

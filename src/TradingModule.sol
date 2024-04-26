@@ -55,7 +55,10 @@ contract TradingModule is ITradingModule, ReentrancyGuard {
         maxGasPriorityInBasisPoints = 500; // 5% as default
     }
 
-    function setMaxGasPriorityInBasisPoints(uint256 newMaxGasPriorityInBasisPoints) external onlyFund {
+    function setMaxGasPriorityInBasisPoints(uint256 newMaxGasPriorityInBasisPoints)
+        external
+        onlyFund
+    {
         maxGasPriorityInBasisPoints = newMaxGasPriorityInBasisPoints;
     }
 
@@ -131,14 +134,15 @@ contract TradingModule is ITradingModule, ReentrancyGuard {
                 cursor := add(cursor, 0x20)
                 dataLength := mload(cursor)
 
-                data := cursor
                 targetSelector :=
                     and(
-                        // we skip the first 32 bytes (length of the data array)
-                        mload(add(data, 0x20)),
-                        /// bitmask to get the first 4 bytes (the selector)
+                        mload(add(cursor, 0x20)), // skip array length, grab the first word, first 4 bytes is the function selector
                         0xFFFFFFFF00000000000000000000000000000000000000000000000000000000
                     )
+
+                mstore(cursor, sub(dataLength, 0x04)) // now we overwrite the data length to subtract the selector length
+                mcopy(add(cursor, 0x20), add(cursor, 0x24), sub(dataLength, 0x04)) // now we copy the data without the selector
+                data := cursor
             }
 
             // msg.sender is operator
@@ -167,7 +171,7 @@ contract TradingModule is ITradingModule, ReentrancyGuard {
             bytes memory returnData = _executeAndReturnDataOrRevert(
                 target,
                 value,
-                data,
+                abi.encodePacked(targetSelector, data),
                 operation == uint8(Enum.Operation.DelegateCall)
                     ? Enum.Operation.DelegateCall
                     : Enum.Operation.Call
