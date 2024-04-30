@@ -96,7 +96,12 @@ contract TradingModule is ITradingModule, ReentrancyGuard {
      * @notice This method is payable as delegatecalls keep the msg.value from the previous call
      *         If the calling method (e.g. execTransaction) received ETH this would revert otherwise
      */
-    function execute(bytes memory transactions) external nonReentrant refundGasToCaller notPaused {
+    function execute(bytes calldata transactions)
+        external
+        nonReentrant
+        refundGasToCaller
+        notPaused
+    {
         uint256 transactionsLength = transactions.length;
 
         /// @notice min transaction length is 85 bytes (a single function selector with no calldata)
@@ -115,43 +120,55 @@ contract TradingModule is ITradingModule, ReentrancyGuard {
             /// @dev a lot of this code is heavily inspired by
             /// -> https://github.com/safe-global/safe-smart-account/blob/main/contracts/libraries/MultiSend.sol
             assembly {
+                cursor := add(cursor, transactions.offset)
                 // offset 32 bytes to skip the length of the transactions array
-                cursor := add(cursor, 0x20)
+                // cursor := add(cursor, 0x20)
 
                 // First byte of the data is the operation.
                 // We shift by 248 bits (256 - 8 [operation byte]) it right since mload will always load 32 bytes (a word).
                 // This will also zero out unused data.
-                cursor := add(transactions, cursor)
-                operation := shr(0xf8, mload(cursor))
+                // cursor := add(transactions, cursor)
+                operation := shr(0xf8, calldataload(cursor))
 
                 // We offset the cursor by 1 byte (operation byte)
                 // We shift it right by 96 bits (256 - 160 [20 address bytes]) to right-align the data and zero out unused data.
                 cursor := add(cursor, 0x01)
-                target := shr(0x60, mload(cursor))
+                target := shr(0x60, calldataload(cursor))
 
                 // We offset the cursor by 21 byte (operation byte + 20 address bytes)
                 cursor := add(cursor, 0x14)
-                value := mload(cursor)
+                value := calldataload(cursor)
 
                 // We offset the cursor by another 32 bytes to read the data length
                 cursor := add(cursor, 0x20)
-                dataLength := mload(cursor)
+                dataLength := calldataload(cursor)
 
                 // if the data length is not zero, we process the data as calldata
                 if not(iszero(dataLength)) {
+                    cursor := add(cursor, 0x20)
+
                     targetSelector :=
                         and(
-                            mload(add(cursor, 0x20)), // skip array length, grab the first word, first 4 bytes is the function selector
+                            calldataload(cursor), // skip array length, grab the first word, first 4 bytes is the function selector
                             0xFFFFFFFF00000000000000000000000000000000000000000000000000000000
                         )
 
-                    if gt(targetSelector, 0) {
-                        mstore(cursor, sub(dataLength, 0x04)) // now we overwrite the data length to subtract the selector length
+                    // lets copy the data from the calldata to memory.
+                    if gt(dataLength, 0x03) {
+                        // we will start by fetching the free memory pointer location
+                        let ptr := mload(0x40)
 
-                        /// @dev make sure mcopy is supported on the target chain
-                        mcopy(add(cursor, 0x20), add(cursor, 0x24), sub(dataLength, 0x04)) // now we copy the data without the selector
+                        // data is a byte array so the first word is the length
+                        // but since we dont want the selector to be included in the data array
+                        // we will need to subtract selector length from data length
+                        mstore(ptr, sub(dataLength, 0x04))
 
-                        data := cursor
+                        // copy the rest of the calldata to memory
+                        calldatacopy(add(ptr, 0x20), add(cursor, 0x04), sub(dataLength, 0x04))
+                        data := ptr // point data variable to it
+
+                        // reset free memory pointer
+                        mstore(0x40, add(ptr, add(dataLength, 0x20)))
                     }
                 }
             }
