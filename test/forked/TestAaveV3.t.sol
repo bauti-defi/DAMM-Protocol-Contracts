@@ -180,9 +180,8 @@ contract TestAaveV3 is TestBaseGnosis, TestBaseProtocol, BaseAaveV3, TokenMinter
         assertEq(aUSDC.balanceOf(address(fund)), 1000);
         assertEq(USDC.balanceOf(address(fund)), BIG_NUMBER - 1000);
 
-        bytes memory withdrawAaveCall = abi.encodeWithSelector(
-            aaveV3Pool.withdraw.selector, ARB_USDC, 1000, address(fund)
-        );
+        bytes memory withdrawAaveCall =
+            abi.encodeWithSelector(aaveV3Pool.withdraw.selector, ARB_USDC, 1000, address(fund));
 
         payload = abi.encodePacked(
             uint8(Enum.Operation.Call),

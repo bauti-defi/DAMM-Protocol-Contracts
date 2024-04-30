@@ -9,45 +9,43 @@ contract AaveV3Hooks is IBeforeTransaction {
 
     address public immutable fund;
 
-    // TODO: bitmap of enabled assets
-    mapping(address asset => bool enabled) public enabledAssets;
+    mapping(address asset => bool whitelisted) public assetWhitelist;
 
     constructor(address _fund) {
         fund = _fund;
     }
 
-    function checkBeforeTransaction(address, bytes4 selector, uint8, uint256, bytes memory data)
-        external
-        view
-        override
-    {
+    function checkBeforeTransaction(
+        address,
+        bytes4 selector,
+        uint8,
+        uint256 value,
+        bytes memory data
+    ) external view override {
         require(msg.sender == fund, "only fund");
 
         address asset;
         address onBehalfOf;
-        uint256 _amount;
-        uint16 _code;
 
         if (selector == L1_SUPPLY_SELECTOR) {
-            (asset, _amount, onBehalfOf, _code) =
-                abi.decode(data, (address, uint256, address, uint16));
+            (asset,, onBehalfOf,) = abi.decode(data, (address, uint256, address, uint16));
         } else if (selector == L1_WITHDRAW_SELECTOR) {
-            (asset, _amount, onBehalfOf) = abi.decode(data, (address, uint256, address));
+            (asset,, onBehalfOf) = abi.decode(data, (address, uint256, address));
         } else {
             revert("unsupported selector");
         }
 
-        require(enabledAssets[asset], "asset not enabled");
+        require(assetWhitelist[asset], "asset not enabled");
         require(onBehalfOf == fund, "only fund");
     }
 
     function enableAsset(address asset) external {
         require(msg.sender == fund, "only fund");
-        enabledAssets[asset] = true;
+        assetWhitelist[asset] = true;
     }
 
     function disableAsset(address asset) external {
         require(msg.sender == fund, "only fund");
-        enabledAssets[asset] = false;
+        assetWhitelist[asset] = false;
     }
 }

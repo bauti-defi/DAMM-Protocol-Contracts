@@ -26,6 +26,7 @@ contract TradingModule is ITradingModule, ReentrancyGuard {
 
     // TODO: calculate the gas overhead of the refunding logic so we can refund the correct amount of gas
     // will never be able to refund 100% but we can get close
+    /// @dev the chain must be EIP1559 complient to support `basefee`
     modifier refundGasToCaller() {
         uint256 gasAtStart = gasleft();
 
@@ -111,6 +112,8 @@ contract TradingModule is ITradingModule, ReentrancyGuard {
             bytes memory data;
             uint256 cursor = i;
 
+            /// @dev a lot of this code is heavily inspired by
+            /// -> https://github.com/safe-global/safe-smart-account/blob/main/contracts/libraries/MultiSend.sol
             assembly {
                 // offset 32 bytes to skip the length of the transactions array
                 cursor := add(cursor, 0x20)
@@ -134,15 +137,23 @@ contract TradingModule is ITradingModule, ReentrancyGuard {
                 cursor := add(cursor, 0x20)
                 dataLength := mload(cursor)
 
-                targetSelector :=
-                    and(
-                        mload(add(cursor, 0x20)), // skip array length, grab the first word, first 4 bytes is the function selector
-                        0xFFFFFFFF00000000000000000000000000000000000000000000000000000000
-                    )
+                // if the data length is not zero, we process the data as calldata
+                if not(iszero(dataLength)) {
+                    targetSelector :=
+                        and(
+                            mload(add(cursor, 0x20)), // skip array length, grab the first word, first 4 bytes is the function selector
+                            0xFFFFFFFF00000000000000000000000000000000000000000000000000000000
+                        )
 
-                mstore(cursor, sub(dataLength, 0x04)) // now we overwrite the data length to subtract the selector length
-                mcopy(add(cursor, 0x20), add(cursor, 0x24), sub(dataLength, 0x04)) // now we copy the data without the selector
-                data := cursor
+                    if gt(targetSelector, 0) {
+                        mstore(cursor, sub(dataLength, 0x04)) // now we overwrite the data length to subtract the selector length
+
+                        /// @dev make sure mcopy is supported on the target chain
+                        mcopy(add(cursor, 0x20), add(cursor, 0x24), sub(dataLength, 0x04)) // now we copy the data without the selector
+
+                        data := cursor
+                    }
+                }
             }
 
             // msg.sender is operator
