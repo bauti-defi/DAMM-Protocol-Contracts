@@ -7,7 +7,7 @@ interface IBeforeTransaction {
         bytes4 selector,
         uint8 operation,
         uint256 value,
-        bytes memory data
+        bytes calldata data
     ) external;
 }
 
@@ -17,7 +17,7 @@ interface IAfterTransaction {
         bytes4 selector,
         uint8 operation,
         uint256 value,
-        bytes memory data,
-        bytes memory returnData
+        bytes calldata data,
+        bytes calldata returnData
     ) external;
 }

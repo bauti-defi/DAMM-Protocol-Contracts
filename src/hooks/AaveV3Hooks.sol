@@ -15,22 +15,26 @@ contract AaveV3Hooks is IBeforeTransaction {
         fund = _fund;
     }
 
-    function checkBeforeTransaction(
-        address,
-        bytes4 selector,
-        uint8,
-        uint256 value,
-        bytes memory data
-    ) external view override {
+    function checkBeforeTransaction(address, bytes4 selector, uint8, uint256, bytes calldata data)
+        external
+        view
+        override
+    {
         require(msg.sender == fund, "only fund");
 
         address asset;
         address onBehalfOf;
 
         if (selector == L1_SUPPLY_SELECTOR) {
-            (asset,, onBehalfOf,) = abi.decode(data, (address, uint256, address, uint16));
+            assembly {
+                asset := calldataload(data.offset)
+                onBehalfOf := calldataload(add(data.offset, 0x40))
+            }
         } else if (selector == L1_WITHDRAW_SELECTOR) {
-            (asset,, onBehalfOf) = abi.decode(data, (address, uint256, address));
+            assembly {
+                asset := calldataload(data.offset)
+                onBehalfOf := calldataload(add(data.offset, 0x40))
+            }
         } else {
             revert("unsupported selector");
         }
