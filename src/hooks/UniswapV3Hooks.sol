@@ -36,15 +36,18 @@ contract UniswapV3Hooks is IBeforeTransaction {
         }
     }
 
+    modifier onlyFund() {
+        if (msg.sender != fund) revert OnlyFund();
+        _;
+    }
+
     function checkBeforeTransaction(
         address target,
         bytes4 selector,
         uint8,
         uint256,
         bytes calldata data
-    ) external view override {
-        if (msg.sender != fund) revert OnlyFund();
-
+    ) external view override onlyFund {
         if (target == address(uniswapV3PositionManager)) {
             if (selector == INonfungiblePositionManager.mint.selector) {
                 address token0;
@@ -99,7 +102,7 @@ contract UniswapV3Hooks is IBeforeTransaction {
             } else {
                 revert("unsupported selector");
             }
-        } else if (target == address(uniswapV3Router)) {} else {
+        } else if (target == address(uniswapV3Router)) {
             if (
                 selector == IUniswapRouter.exactInputSingle.selector
                     || selector == IUniswapRouter.exactOutputSingle.selector
@@ -114,10 +117,11 @@ contract UniswapV3Hooks is IBeforeTransaction {
                     // address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 deadline,
                     // uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96,
                     // we calculate offsets accordingly.
-                    tokenIn := calldataload(data.offset) // Offset by 4 bytes for the function selector
-                    tokenOut := calldataload(add(data.offset, 32)) // Offset by 36 bytes (32 for the previous address and 4 for alignment)
-                    recipient := calldataload(add(data.offset, 64)) // Offset by 68 bytes (32 + 32 + 4 alignment, skipping uint24 fee)
+                    tokenIn := calldataload(data.offset)
+                    tokenOut := calldataload(add(data.offset, 0x20)) // Offset by 32 bytes (0x20)
+                    recipient := calldataload(add(data.offset, 0x60)) // Offset by 96 bytes (0x60)
                 }
+
                 if (!assetWhitelist[tokenIn] || !assetWhitelist[tokenOut]) {
                     revert OnlyWhitelistedTokens();
                 }
@@ -128,16 +132,16 @@ contract UniswapV3Hooks is IBeforeTransaction {
             } else {
                 revert("unsupported target");
             }
+        } else {
+            revert("unsupported target");
         }
     }
 
-    function enableAsset(address asset) external {
-        require(msg.sender == fund, "only fund");
+    function enableAsset(address asset) external onlyFund {
         assetWhitelist[asset] = true;
     }
 
-    function disableAsset(address asset) external {
-        require(msg.sender == fund, "only fund");
+    function disableAsset(address asset) external onlyFund {
         assetWhitelist[asset] = false;
     }
 }

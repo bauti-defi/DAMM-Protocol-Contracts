@@ -14,6 +14,10 @@ contract FundCallbackHandler is TokenCallbackHandler, HandlerContext {
     /// maybe pause state should go here?
     /// maybe only global state should go here?
 
+    /// should only be truly global variables. nothing module specific.
+    /// `pause` is a good place to start
+    /// hooks registry here would be a bad idea
+
     mapping(address asset => bool enabled) public managedAssets;
 
     constructor(address _fund) {

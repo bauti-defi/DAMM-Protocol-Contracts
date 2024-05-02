@@ -7,8 +7,8 @@ import {SafeL2} from "@safe-contracts/SafeL2.sol";
 import {Safe} from "@safe-contracts/Safe.sol";
 import {HookRegistry} from "@src/HookRegistry.sol";
 import {TradingModule} from "@src/TradingModule.sol";
-import {SafeUtils} from "@test/utils/SafeUtils.sol";
-import {AaveV3Hooks} from "@src/hooks/AaveV3Hooks.sol";
+import {SafeUtils, SafeTransaction} from "@test/utils/SafeUtils.sol";
+import {AaveV3Hooks, OnlyWhitelistedTokens, OnlyFund} from "@src/hooks/AaveV3Hooks.sol";
 import {HookConfig} from "@src/lib/Hooks.sol";
 import {BaseAaveV3} from "@test/forked/BaseAaveV3.sol";
 import {TokenMinter} from "@test/forked/TokenMinter.sol";
@@ -123,17 +123,26 @@ contract TestAaveV3 is TestBaseGnosis, TestBaseProtocol, BaseAaveV3, TokenMinter
                 targetSelector: aaveV3Pool.withdraw.selector
             })
         );
-        aaveV3Hooks.enableAsset(address(ARB_USDC));
         vm.stopPrank();
 
         mintUSDC(address(fund), BIG_NUMBER);
     }
 
-    function test_supply() public {
+    modifier withAllowance(IERC20 token) {
         vm.startPrank(address(fund));
-        USDC.approve(address(aaveV3Pool), type(uint256).max);
+        token.approve(address(aaveV3Pool), type(uint256).max);
         vm.stopPrank();
+        _;
+    }
 
+    modifier enableAsset(address asset) {
+        vm.startPrank(address(fund));
+        aaveV3Hooks.enableAsset(asset);
+        vm.stopPrank();
+        _;
+    }
+
+    function test_supply() public withAllowance(USDC) enableAsset(address(ARB_USDC)) {
         assertEq(aUSDC.balanceOf(address(fund)), 0);
 
         bytes memory supplyAaveCall = abi.encodeWithSelector(
@@ -155,11 +164,28 @@ contract TestAaveV3 is TestBaseGnosis, TestBaseProtocol, BaseAaveV3, TokenMinter
         assertEq(USDC.balanceOf(address(fund)), BIG_NUMBER - 1000);
     }
 
-    function test_withdraw() public {
-        vm.startPrank(address(fund));
-        USDC.approve(address(aaveV3Pool), type(uint256).max);
-        vm.stopPrank();
+    function test_cannot_supply_unauthorized_asset() public withAllowance(USDT) {
+        bytes memory supplyAaveCall = abi.encodeWithSelector(
+            aaveV3Pool.supply.selector, address(USDC), 1000, address(fund), uint16(0)
+        );
 
+        bytes memory payload = abi.encodePacked(
+            uint8(Enum.Operation.Call),
+            address(aaveV3Pool),
+            uint256(0),
+            supplyAaveCall.length,
+            supplyAaveCall
+        );
+
+        vm.prank(operator, operator);
+        vm.expectRevert(OnlyWhitelistedTokens.selector);
+        tradingModule.execute(payload);
+
+        assertEq(aUSDC.balanceOf(address(fund)), 0);
+        assertEq(USDC.balanceOf(address(fund)), BIG_NUMBER);
+    }
+
+    function test_withdraw() public withAllowance(USDC) enableAsset(address(ARB_USDC)) {
         assertEq(aUSDC.balanceOf(address(fund)), 0);
 
         bytes memory supplyAaveCall = abi.encodeWithSelector(
@@ -196,5 +222,66 @@ contract TestAaveV3 is TestBaseGnosis, TestBaseProtocol, BaseAaveV3, TokenMinter
 
         assertEq(aUSDC.balanceOf(address(fund)), 0);
         assertEq(USDC.balanceOf(address(fund)), BIG_NUMBER);
+    }
+
+    function test_cannot_withdraw_unauthorized_asset() public withAllowance(USDC) {
+        bytes memory withdrawAaveCall =
+            abi.encodeWithSelector(aaveV3Pool.withdraw.selector, address(USDC), 1000, address(fund));
+
+        bytes memory payload = abi.encodePacked(
+            uint8(Enum.Operation.Call),
+            address(aaveV3Pool),
+            uint256(0),
+            withdrawAaveCall.length,
+            withdrawAaveCall
+        );
+
+        vm.prank(operator, operator);
+        vm.expectRevert(OnlyWhitelistedTokens.selector);
+        tradingModule.execute(payload);
+
+        assertEq(aUSDC.balanceOf(address(fund)), 0);
+        assertEq(USDC.balanceOf(address(fund)), BIG_NUMBER);
+    }
+
+    function test_enable_disable_asset() public {
+        bytes memory transaction =
+            abi.encodeWithSelector(aaveV3Hooks.enableAsset.selector, address(ARB_USDC));
+
+        bool success = fund.executeTrx(
+            fundAdminPK,
+            SafeTransaction({
+                value: 0,
+                target: address(aaveV3Hooks),
+                operation: Enum.Operation.Call,
+                transaction: transaction
+            })
+        );
+
+        assertTrue(success, "Failed to enable asset");
+        assertTrue(aaveV3Hooks.assetWhitelist(address(ARB_USDC)), "Asset not whitelisted");
+
+        transaction = abi.encodeWithSelector(aaveV3Hooks.disableAsset.selector, address(ARB_USDC));
+
+        success = fund.executeTrx(
+            fundAdminPK,
+            SafeTransaction({
+                value: 0,
+                target: address(aaveV3Hooks),
+                operation: Enum.Operation.Call,
+                transaction: transaction
+            })
+        );
+
+        assertTrue(success, "Failed to disable asset");
+        assertTrue(!aaveV3Hooks.assetWhitelist(address(ARB_USDC)), "Asset still whitelisted");
+    }
+
+    function test_only_fund_can_enable_asset(address attacker) public {
+        vm.assume(attacker != address(fund));
+
+        vm.expectRevert(OnlyFund.selector);
+        vm.prank(attacker);
+        aaveV3Hooks.enableAsset(address(ARB_USDC));
     }
 }

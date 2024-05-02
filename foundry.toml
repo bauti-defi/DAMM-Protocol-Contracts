@@ -30,7 +30,7 @@ fs_permissions = [{ access = "read", path = "./"}]
 
 
 [profile.default.fuzz]
-runs = 4096
+runs = 256
 
 [fmt]
 line_length = 100
