@@ -5,11 +5,13 @@ import {Test, console2} from "@forge-std/Test.sol";
 import {TestBaseProtocol} from "@test/base/TestBaseProtocol.sol";
 import {TestBaseGnosis} from "@test/base/TestBaseGnosis.sol";
 import {SafeL2} from "@safe-contracts/SafeL2.sol";
-import {TradingModule, HookLib} from "@src/TradingModule.sol";
+import {TradingModule} from "@src/TradingModule.sol";
 import {ITradingModule} from "@src/interfaces/ITradingModule.sol";
 import {Enum} from "@safe-contracts/common/Enum.sol";
 import {SafeUtils, SafeTransaction} from "@test/utils/SafeUtils.sol";
 import {IBeforeTransaction, IAfterTransaction} from "@src/interfaces/ITransactionHooks.sol";
+import "@src/lib/Hooks.sol";
+import "@src/HookRegistry.sol";
 
 contract MockTarget {
     uint256 public value;
@@ -32,7 +34,7 @@ contract MockTarget {
 }
 
 contract VerifyValueHook is IBeforeTransaction {
-    function checkBeforeTransaction(address, address, bytes4, uint8, uint256 value, bytes memory)
+    function checkBeforeTransaction(address, bytes4, uint8, uint256 value, bytes memory)
         external
         override
     {
@@ -41,7 +43,7 @@ contract VerifyValueHook is IBeforeTransaction {
 }
 
 contract RevertBeforeHook is IBeforeTransaction {
-    function checkBeforeTransaction(address, address, bytes4, uint8, uint256, bytes memory)
+    function checkBeforeTransaction(address, bytes4, uint8, uint256, bytes memory)
         external
         override
     {
@@ -58,7 +60,6 @@ contract VerifyCallbackHook is IAfterTransaction {
 
     function checkAfterTransaction(
         address,
-        address,
         bytes4,
         uint8,
         uint256,
@@ -74,15 +75,10 @@ contract VerifyCallbackHook is IAfterTransaction {
 }
 
 contract RevertAfterHook is IAfterTransaction {
-    function checkAfterTransaction(
-        address,
-        address,
-        bytes4,
-        uint8,
-        uint256,
-        bytes memory,
-        bytes memory
-    ) external override {
+    function checkAfterTransaction(address, bytes4, uint8, uint256, bytes memory, bytes memory)
+        external
+        override
+    {
         revert("RevertAfterHook");
     }
 }
@@ -93,6 +89,7 @@ contract TestTradingModule is Test, TestBaseGnosis, TestBaseProtocol {
     address internal fundAdmin;
     uint256 internal fundAdminPK;
     SafeL2 internal fund;
+    HookRegistry internal hookRegistry;
     TradingModule internal tradingModule;
     MockTarget internal target;
     address internal revertBeforeHook;
@@ -118,6 +115,19 @@ contract TestTradingModule is Test, TestBaseGnosis, TestBaseProtocol {
 
         vm.deal(address(fund), 1000 ether);
 
+        hookRegistry = HookRegistry(
+            deployModule(
+                payable(address(fund)),
+                fundAdmin,
+                fundAdminPK,
+                bytes32("hookRegistry"),
+                0,
+                abi.encodePacked(type(HookRegistry).creationCode, abi.encode(address(fund)))
+            )
+        );
+
+        vm.label(address(hookRegistry), "HookRegistry");
+
         tradingModule = TradingModule(
             deployModule(
                 payable(address(fund)),
@@ -125,7 +135,10 @@ contract TestTradingModule is Test, TestBaseGnosis, TestBaseProtocol {
                 fundAdminPK,
                 bytes32("tradingModule"),
                 0,
-                abi.encodePacked(type(TradingModule).creationCode, abi.encode(address(fund)))
+                abi.encodePacked(
+                    type(TradingModule).creationCode,
+                    abi.encode(address(fund), address(hookRegistry))
+                )
             )
         );
         vm.label(address(tradingModule), "TradingModule");
@@ -140,16 +153,20 @@ contract TestTradingModule is Test, TestBaseGnosis, TestBaseProtocol {
 
         revertAfterHook = address(new RevertAfterHook());
         vm.label(revertAfterHook, "RevertAfterHook");
+
+        // have to set gasprice > 0 so that gas refund is calculated
+        vm.txGasPrice(100);
+        vm.fee(99);
     }
 
-    modifier withHook(ITradingModule.HookConfig memory config) {
+    modifier withHook(HookConfig memory config) {
         vm.prank(address(fund));
-        tradingModule.setHooks(config);
+        hookRegistry.setHooks(config);
         _;
     }
 
-    function mock_hook() private view returns (ITradingModule.HookConfig memory) {
-        return ITradingModule.HookConfig({
+    function mock_hook() private view returns (HookConfig memory) {
+        return HookConfig({
             operator: operator,
             target: address(target),
             beforeTrxHook: address(0),
@@ -159,34 +176,22 @@ contract TestTradingModule is Test, TestBaseGnosis, TestBaseProtocol {
         });
     }
 
-    function mock_trigger_revert_hook()
-        private
-        view
-        returns (ITradingModule.HookConfig memory config)
-    {
+    function mock_trigger_revert_hook() private view returns (HookConfig memory config) {
         config = mock_hook();
         config.targetSelector = bytes4(keccak256("triggerRevert()"));
     }
 
-    function mock_revert_before_hook()
-        private
-        view
-        returns (ITradingModule.HookConfig memory config)
-    {
+    function mock_revert_before_hook() private view returns (HookConfig memory config) {
         config = mock_hook();
         config.beforeTrxHook = revertBeforeHook;
     }
 
-    function mock_revert_after_hook()
-        private
-        view
-        returns (ITradingModule.HookConfig memory config)
-    {
+    function mock_revert_after_hook() private view returns (HookConfig memory config) {
         config = mock_hook();
         config.afterTrxHook = revertAfterHook;
     }
 
-    function mock_custom_hook() private returns (ITradingModule.HookConfig memory config) {
+    function mock_custom_hook() private returns (HookConfig memory config) {
         config = mock_hook();
         config.targetSelector = bytes4(keccak256("emitMessage(string)"));
 
@@ -195,76 +200,6 @@ contract TestTradingModule is Test, TestBaseGnosis, TestBaseProtocol {
 
         config.beforeTrxHook = beforeHook;
         config.afterTrxHook = afterHook;
-    }
-
-    function test_set_hook() public {
-        ITradingModule.HookConfig memory config = mock_hook();
-
-        //create safe transaction as admin. this transaction will call the setHook() on the tradingModule
-        bytes memory transaction = abi.encodeWithSelector(tradingModule.setHooks.selector, config);
-
-        bool success = fund.executeTrx(
-            fundAdminPK,
-            SafeTransaction({
-                value: 0,
-                target: address(tradingModule),
-                operation: Enum.Operation.Call,
-                transaction: transaction
-            })
-        );
-
-        assertTrue(success, "Failed to set hook");
-
-        ITradingModule.Hooks memory hooks = tradingModule.getHooks(
-            config.operator, config.target, config.operation, config.targetSelector
-        );
-
-        assertTrue(hooks.defined, "Hook not defined");
-    }
-
-    function test_only_fund_can_set_hook(address attacker) public {
-        vm.assume(attacker != address(fund));
-
-        vm.expectRevert("only fund");
-        vm.prank(attacker);
-        tradingModule.setHooks(mock_hook());
-    }
-
-    function test_unset_hook() public {
-        ITradingModule.HookConfig memory config = mock_hook();
-
-        vm.prank(address(fund));
-        tradingModule.setHooks(config);
-
-        //create safe transaction as admin. this transaction will call the removeHook() on the tradingModule
-        bytes memory transaction =
-            abi.encodeWithSelector(tradingModule.removeHooks.selector, config);
-
-        bool success = fund.executeTrx(
-            fundAdminPK,
-            SafeTransaction({
-                value: 0,
-                target: address(tradingModule),
-                operation: Enum.Operation.Call,
-                transaction: transaction
-            })
-        );
-
-        assertTrue(success, "Failed to remove hook");
-
-        ITradingModule.Hooks memory hooks = tradingModule.getHooks(
-            config.operator, config.target, config.operation, config.targetSelector
-        );
-
-        assertFalse(hooks.defined, "Hook not removed");
-    }
-
-    function test_only_fund_can_unset_hook(address attacker) public withHook(mock_hook()) {
-        vm.assume(attacker != address(fund));
-
-        vm.expectRevert("only fund");
-        vm.prank(attacker);
-        tradingModule.removeHooks(mock_hook());
     }
 
     function incrementCall(uint256 _value) private view returns (bytes memory) {
@@ -322,23 +257,30 @@ contract TestTradingModule is Test, TestBaseGnosis, TestBaseProtocol {
     }
 
     function test_execute() public withHook(mock_hook()) {
-        bytes[] memory calls = new bytes[](3);
+        bytes[] memory calls = new bytes[](4);
         calls[0] = incrementCall(10);
         calls[1] = incrementCall(20);
         calls[2] = incrementCall(0);
+        calls[3] = incrementCall(500);
+
+        uint256 adjustedFundBalance = address(fund).balance - 530;
 
         vm.prank(operator);
         tradingModule.execute(concatenate(calls));
 
-        assertEq(target.value(), 30, "Target value not incremented");
+        assertEq(target.value(), 530, "Target value not incremented");
+        assertTrue(adjustedFundBalance > address(fund).balance, "gas was not refunded");
+    }
+
+    function test_execute_reverts_if_gas_price_exceeds_limit() public withHook(mock_hook()) {
+        vm.txGasPrice(1000);
+        vm.expectRevert(ITradingModule.GasLimitExceeded.selector);
+        vm.prank(operator);
+        tradingModule.execute(incrementCall(10));
     }
 
     function test_execute_reverts() public withHook(mock_trigger_revert_hook()) {
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ITradingModule.TransactionExecutionFailed.selector, "MockTarget revert"
-            )
-        );
+        vm.expectRevert("MockTarget revert");
         vm.prank(operator);
         tradingModule.execute(triggerRevertCall());
     }

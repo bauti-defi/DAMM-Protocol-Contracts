@@ -1,74 +1,13 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.25;
 
-import {Enum} from "@safe-contracts/common/Enum.sol";
+import {IHookRegistry} from "@src/interfaces/IHookRegistry.sol";
+import {HookLib, HookConfig, Hooks} from "@src/lib/Hooks.sol";
 
-struct Hooks {
-    address beforeTrxHook;
-    address afterTrxHook;
-    bool defined;
-}
-
-struct HookConfig {
-    address operator;
-    address target;
-    address beforeTrxHook;
-    address afterTrxHook;
-    uint8 operation;
-    bytes4 targetSelector;
-}
-
-library HookLib {
-    function pointer(HookConfig memory config) internal pure returns (bytes32) {
-        return hookPointer(config.operator, config.target, config.operation, config.targetSelector);
-    }
-
-    function checkConfigIsValid(HookConfig memory config, address fund) internal view {
-        require(config.operator != address(0), "operator is zero address");
-        require(config.operator != fund, "operator is fund");
-        require(config.operator != address(this), "operator is self");
-
-        require(config.target != address(0), "target is zero address");
-        require(config.target != address(this), "target is self");
-
-        require(config.beforeTrxHook != address(this), "beforeTrxHook is self");
-        require(config.beforeTrxHook != config.operator, "beforeTrxHook is operator");
-
-        require(config.afterTrxHook != address(this), "afterTrxHook is self");
-        require(config.afterTrxHook != config.operator, "afterTrxHook is operator");
-
-        require(config.targetSelector != bytes4(0), "target selector is zero");
-        // only 0 or 1 allowed (0 = call, 1 = delegatecall)
-        require(
-            config.operation == uint8(Enum.Operation.Call)
-                || config.operation == uint8(Enum.Operation.DelegateCall),
-            "operation is invalid"
-        );
-    }
-
-    function hookPointer(address operator, address target, uint8 operation, bytes4 selector)
-        internal
-        pure
-        returns (bytes32)
-    {
-        return keccak256(abi.encode(operator, target, operation, selector));
-    }
-}
-
-event HookSet(bytes32 pointer);
-
-event HookRemoved(address operator, address target, uint8 operation, bytes4 selector);
-
-event Paused();
-
-event Unpaused();
-
-contract HookRegistry {
+contract HookRegistry is IHookRegistry {
     using HookLib for HookConfig;
 
-    address public immutable fund;
-
-    bool public paused;
+    address public immutable override fund;
 
     // keccak256(abi.encode(operator, target, operation, selector)) => hooks
     // bytes20 + bytes20 + bytes8 + bytes4 = 52 bytes
@@ -79,16 +18,11 @@ contract HookRegistry {
         _;
     }
 
-    modifier notPaused() {
-        require(paused == false, "paused");
-        _;
+    constructor(address _fund) {
+        fund = _fund;
     }
 
-    constructor(address owner) {
-        fund = owner;
-    }
-
-    function _setHooks(HookConfig calldata config) internal notPaused {
+    function _setHooks(HookConfig calldata config) internal {
         config.checkConfigIsValid(fund);
 
         bytes32 pointer = config.pointer();
@@ -96,7 +30,7 @@ contract HookRegistry {
         hooks[pointer] = Hooks({
             beforeTrxHook: config.beforeTrxHook,
             afterTrxHook: config.afterTrxHook,
-            defined: true
+            defined: true // TODO: change to status code, same cost but more descriptive
         });
 
         emit HookSet(pointer);

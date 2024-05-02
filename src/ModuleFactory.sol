@@ -10,11 +10,11 @@ contract ModuleFactory is IModuleFactory {
     error InsufficientBalance();
     error EmptyBytecode();
 
-    event ModuleDeployed(address module);
+    event ModuleDeployed(address safe, address module);
 
-    // deploys a module and adds module to safe.
-    // the safe must delegate call this function for the module to be added properly
-    // always be causious when using delegatecall...
+    /// deploys a module and adds module to safe.
+    ///  @dev the safe must delegate call this function for the module to be added properly
+    /// always be causious when using delegatecall!!
     function deployModule(bytes32 salt, uint256 value, bytes memory creationCode)
         external
         returns (address module)
@@ -33,10 +33,11 @@ contract ModuleFactory is IModuleFactory {
         ISafe(address(this)).enableModule(module);
         if (!ISafe(address(this)).isModuleEnabled(module)) revert ModuleSetupFailed();
 
-        emit ModuleDeployed(module);
+        emit ModuleDeployed(address(this), module);
     }
 
     /**
+     * @dev this code snippet is from OpenZeppelin's implementation, we thank them for this.
      * @dev Returns the address where a contract will be stored if deployed via {deploy} from a contract located at
      * `deployer`. If `deployer` is this contract's address, returns the same value as {computeAddress}.
      */

@@ -4,22 +4,33 @@ out = "out"
 libs = ["lib"]
 optimizer = true
 optimizer_runs = 1_000
+evm_version="cancun"
 
 remappings = [
     "@ds-test/=lib/forge-std/lib/ds-test/src/",
     "@forge-std/=lib/forge-std/src/",
-    "@safe-contracts/=lib/safe-contracts/contracts/",
-    "@openzeppelin-contracts/=lib/openzeppelin-contracts/contracts/",
     "@src/=src/",
     "@test/=test/",
     "@script/=script/",
+
+    # deps
+    "@aave-v3-core/=lib/aave-v3-core/contracts/",
+    "@safe-contracts/=lib/safe-contracts/contracts/",
+    "@openzeppelin-contracts/=lib/openzeppelin-contracts/contracts/",
+    "@uniswap-v3-periphery/=lib/v3-periphery/contracts/",
+
+    
+    ### @dev These imports are so we can compile the uniswapv3 periphery contracts inside tests
+    "@uniswap/v3-core/=lib/v3-periphery/node_modules/@uniswap/v3-core",
+    "@openzeppelin/contracts/=lib/v3-periphery/node_modules/@openzeppelin/contracts/",
+    #####
 ]
 
 fs_permissions = [{ access = "read", path = "./"}]
 
 
 [profile.default.fuzz]
-runs = 4096
+runs = 256
 
 [fmt]
 line_length = 100
