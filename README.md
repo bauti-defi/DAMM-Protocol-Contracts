@@ -1,3 +1,5 @@
+> Disclaimer!! This is an old version of the DAMM protocol. Use for educational purposes only.
+
 # DAMM Protocol
 
 Decentralized Autonomous Money Management **(DAMM)** is a protocol that facilitates the active management of DeFi positions by operators on behalf of investor(s). It is compatible with _any_ EVM based blockchain. **DAMM** is designed to be a non-custoial, permissionless, and trustless solution for money management in Ethereum DeFi ecosystem.
