@@ -90,6 +90,11 @@ contract AaveV3Hooks is IBeforeTransaction, IAfterTransaction {
     }
 
     function enableAsset(address asset) external onlyFund {
+        require(asset != address(0), "invalid asset address");
+        require(asset != address(fund), "cannot enable fund");
+        require(asset != address(this), "cannot enable self");
+        require(asset != address(aaveV3Pool), "cannot enable pool");
+
         assetWhitelist[asset] = true;
     }
 

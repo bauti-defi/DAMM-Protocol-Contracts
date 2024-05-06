@@ -8,7 +8,7 @@ import {Safe} from "@safe-contracts/Safe.sol";
 import {HookRegistry} from "@src/HookRegistry.sol";
 import {TradingModule} from "@src/TradingModule.sol";
 import {SafeUtils, SafeTransaction} from "@test/utils/SafeUtils.sol";
-import {AaveV3Hooks, OnlyWhitelistedTokens, OnlyFund} from "@src/hooks/AaveV3Hooks.sol";
+import "@src/hooks/AaveV3Hooks.sol";
 import {HookConfig} from "@src/lib/Hooks.sol";
 import {BaseAaveV3} from "@test/forked/BaseAaveV3.sol";
 import {TokenMinter} from "@test/forked/TokenMinter.sol";
@@ -180,7 +180,7 @@ contract TestAaveV3 is TestBaseGnosis, TestBaseProtocol, BaseAaveV3, TokenMinter
         );
 
         vm.prank(operator, operator);
-        vm.expectRevert(OnlyWhitelistedTokens.selector);
+        vm.expectRevert(AaveV3Hooks.OnlyWhitelistedTokens.selector);
         tradingModule.execute(payload);
 
         assertEq(aUSDC.balanceOf(address(fund)), 0);
@@ -239,7 +239,7 @@ contract TestAaveV3 is TestBaseGnosis, TestBaseProtocol, BaseAaveV3, TokenMinter
         );
 
         vm.prank(operator, operator);
-        vm.expectRevert(OnlyWhitelistedTokens.selector);
+        vm.expectRevert(AaveV3Hooks.OnlyWhitelistedTokens.selector);
         tradingModule.execute(payload);
 
         assertEq(aUSDC.balanceOf(address(fund)), 0);
@@ -282,7 +282,7 @@ contract TestAaveV3 is TestBaseGnosis, TestBaseProtocol, BaseAaveV3, TokenMinter
     function test_only_fund_can_enable_asset(address attacker) public {
         vm.assume(attacker != address(fund));
 
-        vm.expectRevert(OnlyFund.selector);
+        vm.expectRevert(AaveV3Hooks.OnlyFund.selector);
         vm.prank(attacker);
         aaveV3Hooks.enableAsset(address(ARB_USDC));
     }

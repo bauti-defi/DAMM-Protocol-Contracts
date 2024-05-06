@@ -147,6 +147,12 @@ contract UniswapV3Hooks is IBeforeTransaction, IAfterTransaction {
     ) external override onlyFund {}
 
     function enableAsset(address asset) external onlyFund {
+        require(asset != address(0), "Invalid asset address");
+        require(asset != address(this), "Cannot enable self");
+        require(asset != address(fund), "Cannot enable fund");
+        require(asset != address(uniswapV3PositionManager), "Cannot enable position manager");
+        require(asset != address(uniswapV3Router), "Cannot enable router");
+
         assetWhitelist[asset] = true;
     }
 
