@@ -38,7 +38,7 @@ contract TestHookRegistry is Test, TestBaseGnosis, TestBaseProtocol {
         vm.deal(address(fund), 1000 ether);
 
         hookRegistry = HookRegistry(
-            deployModule(
+            deployContract(
                 payable(address(fund)),
                 fundAdmin,
                 fundAdminPK,

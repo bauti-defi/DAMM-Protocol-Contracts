@@ -64,7 +64,7 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
         vm.deal(address(fund), 1000 ether);
 
         hookRegistry = HookRegistry(
-            deployModule(
+            deployContract(
                 payable(address(fund)),
                 fundAdmin,
                 fundAdminPK,
@@ -208,7 +208,7 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
         return uint176(uint256(vm.load(UNI_V3_POSITION_MANAGER_ADDRESS, bytes32(uint256(13)))));
     }
 
-    function _mint_call() private returns (bytes memory) {
+    function _mint_call() private view returns (bytes memory) {
         INonfungiblePositionManager.MintParams memory mintParams = INonfungiblePositionManager
             .MintParams({
             token0: ARB_USDC,
@@ -238,6 +238,7 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
 
     function _decrease_liquidity_call(uint176 positionId, uint128 liq)
         private
+        view
         returns (bytes memory)
     {
         INonfungiblePositionManager.DecreaseLiquidityParams memory params =
@@ -261,7 +262,7 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
         );
     }
 
-    function _increase_liquidity_call(uint176 positionId) private returns (bytes memory) {
+    function _increase_liquidity_call(uint176 positionId) private view returns (bytes memory) {
         INonfungiblePositionManager.IncreaseLiquidityParams memory params =
         INonfungiblePositionManager.IncreaseLiquidityParams({
             tokenId: positionId,
@@ -284,7 +285,7 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
         );
     }
 
-    function _collect_call(uint176 positionId) private returns (bytes memory) {
+    function _collect_call(uint176 positionId) private view returns (bytes memory) {
         INonfungiblePositionManager.CollectParams memory params = INonfungiblePositionManager
             .CollectParams({
             tokenId: positionId,
@@ -305,7 +306,7 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
         );
     }
 
-    function _decrease_liquidity_call(uint176 positionId) private returns (bytes memory) {
+    function _decrease_liquidity_call(uint176 positionId) private view returns (bytes memory) {
         INonfungiblePositionManager.DecreaseLiquidityParams memory params =
         INonfungiblePositionManager.DecreaseLiquidityParams({
             tokenId: positionId,

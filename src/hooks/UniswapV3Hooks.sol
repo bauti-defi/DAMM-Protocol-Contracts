@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.25;
 
-import {IBeforeTransaction} from "@src/interfaces/ITransactionHooks.sol";
+import {IBeforeTransaction, IAfterTransaction} from "@src/interfaces/ITransactionHooks.sol";
 import {INonfungiblePositionManager} from "@src/interfaces/external/INonfungiblePositionManager.sol";
 import {IUniswapRouter} from "@src/interfaces/external/IUniswapRouter.sol";
 import {IERC721} from "@openzeppelin-contracts/token/ERC721/IERC721.sol";
 
-error OnlyFund();
-error OnlyWhitelistedTokens();
-error InvalidPosition();
+contract UniswapV3Hooks is IBeforeTransaction, IAfterTransaction {
+    error OnlyFund();
+    error OnlyWhitelistedTokens();
+    error InvalidPosition();
 
-contract UniswapV3Hooks is IBeforeTransaction {
     address public immutable fund;
     INonfungiblePositionManager public immutable uniswapV3PositionManager;
     IUniswapRouter public immutable uniswapV3Router;
@@ -136,6 +136,15 @@ contract UniswapV3Hooks is IBeforeTransaction {
             revert("unsupported target");
         }
     }
+
+    function checkAfterTransaction(
+        address target,
+        bytes4 selector,
+        uint8,
+        uint256,
+        bytes calldata,
+        bytes calldata
+    ) external override onlyFund {}
 
     function enableAsset(address asset) external onlyFund {
         assetWhitelist[asset] = true;

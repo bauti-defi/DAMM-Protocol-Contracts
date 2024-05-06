@@ -15,6 +15,59 @@ abstract contract TestBaseProtocol is Test {
         vm.label(address(moduleFactory), "ModuleFactory");
     }
 
+    function deployContract(
+        address payable fund,
+        address admin,
+        uint256 adminPK,
+        bytes32 creationSalt,
+        uint256 valueToForward,
+        bytes memory contractCreationCode
+    ) internal returns (address deployed) {
+        bytes memory transaction = abi.encodeWithSelector(
+            ModuleFactory.deployContract.selector,
+            creationSalt,
+            valueToForward,
+            contractCreationCode
+        );
+
+        Safe safe = Safe(fund);
+
+        bytes memory transactionData = safe.encodeTransactionData(
+            address(moduleFactory),
+            valueToForward,
+            transaction,
+            Enum.Operation.DelegateCall,
+            0,
+            0,
+            0,
+            address(0),
+            payable(address(0)),
+            safe.nonce()
+        );
+
+        bytes memory transactionSignature =
+            SafeUtils.buildSafeSignatures(abi.encode(adminPK), keccak256(transactionData), 1);
+
+        vm.startPrank(admin, admin);
+        bool success = safe.execTransaction(
+            address(moduleFactory),
+            valueToForward,
+            transaction,
+            Enum.Operation.DelegateCall,
+            0,
+            0,
+            0,
+            address(0),
+            payable(address(0)),
+            transactionSignature
+        );
+        vm.stopPrank();
+
+        assertTrue(success, "Failed to deploy contract");
+
+        deployed = moduleFactory.computeAddress(creationSalt, keccak256(contractCreationCode), fund);
+    }
+
     function deployModule(
         address payable fund,
         address admin,

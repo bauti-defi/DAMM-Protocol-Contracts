@@ -60,7 +60,7 @@ contract TestAaveV3 is TestBaseGnosis, TestBaseProtocol, BaseAaveV3, TokenMinter
         vm.deal(address(fund), 1000 ether);
 
         hookRegistry = HookRegistry(
-            deployModule(
+            deployContract(
                 payable(address(fund)),
                 fundAdmin,
                 fundAdminPK,
@@ -96,7 +96,9 @@ contract TestAaveV3 is TestBaseGnosis, TestBaseProtocol, BaseAaveV3, TokenMinter
                 fundAdminPK,
                 bytes32("aaveV3Hooks"),
                 0,
-                abi.encodePacked(type(AaveV3Hooks).creationCode, abi.encode(address(fund)))
+                abi.encodePacked(
+                    type(AaveV3Hooks).creationCode, abi.encode(address(fund), address(aaveV3Pool))
+                )
             )
         );
 

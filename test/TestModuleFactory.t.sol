@@ -40,7 +40,95 @@ contract TestModuleFactory is Test, TestBaseProtocol, TestBaseGnosis {
         vm.deal(address(fund), 1000 ether);
     }
 
-    function test_launch_module() public {
+    function test_deploy_contract() public {
+        bytes memory creationCode =
+            abi.encodePacked(type(MockModule).creationCode, abi.encode(address(fund)));
+
+        bytes memory transaction = abi.encodeWithSelector(
+            IModuleFactory.deployContract.selector, bytes32("salt"), 0, creationCode
+        );
+
+        bytes memory transactionData = fund.encodeTransactionData(
+            address(moduleFactory),
+            0,
+            transaction,
+            Enum.Operation.DelegateCall,
+            0,
+            0,
+            0,
+            address(0),
+            payable(address(0)),
+            fund.nonce()
+        );
+
+        bytes memory transactionSignature =
+            SafeUtils.buildSafeSignatures(abi.encode(fundAdminPK), keccak256(transactionData), 1);
+
+        vm.startPrank(fundAdmin, fundAdmin);
+        bool success = fund.execTransaction(
+            address(moduleFactory),
+            0,
+            transaction,
+            Enum.Operation.DelegateCall,
+            0,
+            0,
+            0,
+            address(0),
+            payable(address(0)),
+            transactionSignature
+        );
+        vm.stopPrank();
+
+        assertTrue(success, "Failed to deploy contract");
+
+        address contractAddress =
+            moduleFactory.computeAddress(bytes32("salt"), keccak256(creationCode), address(fund));
+
+        assertTrue(contractAddress.code.length > 0, "Contract not deployed");
+    }
+
+    function test_deploy_contract_must_be_delegatecall() public {
+        bytes memory creationCode =
+            abi.encodePacked(type(MockModule).creationCode, abi.encode(address(fund)));
+
+        bytes memory transaction = abi.encodeWithSelector(
+            IModuleFactory.deployContract.selector, bytes32("salt"), 0, creationCode
+        );
+
+        bytes memory transactionData = fund.encodeTransactionData(
+            address(moduleFactory),
+            0,
+            transaction,
+            Enum.Operation.Call,
+            0,
+            0,
+            0,
+            address(0),
+            payable(address(0)),
+            fund.nonce()
+        );
+
+        bytes memory transactionSignature =
+            SafeUtils.buildSafeSignatures(abi.encode(fundAdminPK), keccak256(transactionData), 1);
+
+        vm.startPrank(fundAdmin, fundAdmin);
+        vm.expectRevert();
+        fund.execTransaction(
+            address(moduleFactory),
+            0,
+            transaction,
+            Enum.Operation.Call,
+            0,
+            0,
+            0,
+            address(0),
+            payable(address(0)),
+            transactionSignature
+        );
+        vm.stopPrank();
+    }
+
+    function test_deploy_module() public {
         bytes memory creationCode =
             abi.encodePacked(type(MockModule).creationCode, abi.encode(address(fund)));
 
@@ -89,5 +177,46 @@ contract TestModuleFactory is Test, TestBaseProtocol, TestBaseGnosis {
             ),
             "Module not enabled"
         );
+    }
+
+    function test_deploy_module_must_be_delegatecall() public {
+        bytes memory creationCode =
+            abi.encodePacked(type(MockModule).creationCode, abi.encode(address(fund)));
+
+        bytes memory transaction = abi.encodeWithSelector(
+            IModuleFactory.deployModule.selector, bytes32("salt"), 0, creationCode
+        );
+
+        bytes memory transactionData = fund.encodeTransactionData(
+            address(moduleFactory),
+            0,
+            transaction,
+            Enum.Operation.Call,
+            0,
+            0,
+            0,
+            address(0),
+            payable(address(0)),
+            fund.nonce()
+        );
+
+        bytes memory transactionSignature =
+            SafeUtils.buildSafeSignatures(abi.encode(fundAdminPK), keccak256(transactionData), 1);
+
+        vm.startPrank(fundAdmin, fundAdmin);
+        vm.expectRevert();
+        fund.execTransaction(
+            address(moduleFactory),
+            0,
+            transaction,
+            Enum.Operation.Call,
+            0,
+            0,
+            0,
+            address(0),
+            payable(address(0)),
+            transactionSignature
+        );
+        vm.stopPrank();
     }
 }

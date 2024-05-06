@@ -1,0 +1,16 @@
+{   
+    "arb": {
+        "gnosis": {
+            "proxyFactory": "0xa6B71E26C5e0845f74c812102Ca7114b6a896AB2",
+            "singleton": "0x3E5c63644E683549055b9Be8653de26E0B4CD36E",
+            "tokenCallbackHandler": "0xf48f2B2d2a534e402487b3ee7C18c33Aec0Fe5e4"
+        },
+        "uniswap": {
+            "router": "0xE592427A0AEce92De3Edee1F18E0157C05861564",
+            "positionManager": "0xC36442b4a4522E871399CD717aBDD847Ab11FE88"
+        },
+        "aave": {
+            "pool": "0x794a61358D6845594F94dc1DB02A252b5b4814aD"
+        }
+    }
+}

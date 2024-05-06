@@ -5,18 +5,47 @@ import {ISafe} from "@src/interfaces/ISafe.sol";
 import {IModuleFactory} from "@src/interfaces/IModuleFactory.sol";
 
 contract ModuleFactory is IModuleFactory {
-    error ModuleDeploymentFailed();
+    error DeploymentFailed();
     error ModuleSetupFailed();
     error InsufficientBalance();
     error EmptyBytecode();
+    error OnlyDelegateCall();
 
     event ModuleDeployed(address safe, address module);
+
+    address private immutable self;
+
+    constructor() {
+        self = address(this);
+    }
+
+    modifier isDelegateCall() {
+        if (address(this) == self) revert OnlyDelegateCall();
+        _;
+    }
+
+    function deployContract(bytes32 salt, uint256 value, bytes memory creationCode)
+        external
+        isDelegateCall
+        returns (address contractAddress)
+    {
+        if (address(this).balance < value) revert InsufficientBalance();
+
+        if (creationCode.length == 0) revert EmptyBytecode();
+
+        // solhint-disable-next-line no-inline-assembly
+        assembly {
+            contractAddress := create2(value, add(0x20, creationCode), mload(creationCode), salt)
+        }
+        if (contractAddress == address(0)) revert DeploymentFailed();
+    }
 
     /// deploys a module and adds module to safe.
     ///  @dev the safe must delegate call this function for the module to be added properly
     /// always be causious when using delegatecall!!
     function deployModule(bytes32 salt, uint256 value, bytes memory creationCode)
         external
+        isDelegateCall
         returns (address module)
     {
         if (address(this).balance < value) revert InsufficientBalance();
@@ -27,7 +56,7 @@ contract ModuleFactory is IModuleFactory {
         assembly {
             module := create2(value, add(0x20, creationCode), mload(creationCode), salt)
         }
-        if (module == address(0)) revert ModuleDeploymentFailed();
+        if (module == address(0)) revert DeploymentFailed();
 
         // callback: add module to the safe. msg.sender is this because of delegatecall
         ISafe(address(this)).enableModule(module);
