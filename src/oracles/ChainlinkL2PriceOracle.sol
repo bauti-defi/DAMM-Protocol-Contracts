@@ -4,13 +4,15 @@ pragma solidity ^0.8.25;
 import "@src/interfaces/IOracle.sol";
 import "@src/interfaces/external/AggregatorV2V3Interface.sol";
 
-contract ChainlinkL2PriceOracle is IOracle {
-    error InvalidRound();
-    error SequencerDown();
-    error StaleFeed();
-    error GracePeriod();
-    error InvalidPrice();
+import {
+    InvalidRound,
+    SequencerDown,
+    StaleFeed,
+    GracePeriod,
+    InvalidPrice
+} from "@src/oracles/OracleErrors.sol";
 
+contract ChainlinkL2PriceOracle is IOracle {
     address public immutable override asset;
     uint256 public immutable priceFeedGracePeriod;
     uint256 public immutable l2SequencerUptimeGracePeriod;
@@ -31,7 +33,7 @@ contract ChainlinkL2PriceOracle is IOracle {
         l2SequencerUptimeGracePeriod = l2SequencerUptimeGracePeriod_;
     }
 
-    function getValuationInUSD() external view override returns (uint256 valuation) {
+    function getValuationInUSD() external override returns (uint256 valuation, uint256 timestamp) {
         {
             (uint80 roundId, int256 answer, uint256 startedAt,,) =
                 l2SequencerUptimeFeed.latestRoundData();
@@ -47,12 +49,12 @@ contract ChainlinkL2PriceOracle is IOracle {
         {
             uint256 latestRound = chainlinkPriceFeed.latestRound();
             if (priceRoundId < latestRound) revert InvalidRound();
-            if (block.timestamp - priceUpdatedAt > priceFeedGracePeriod) revert StaleFeed();
             if (block.timestamp - priceStartedAt < priceFeedGracePeriod) revert GracePeriod();
             if (price < 0) revert InvalidPrice();
         }
 
         valuation = uint256(price);
+        timestamp = priceUpdatedAt;
     }
 
     function decimals() external view override returns (uint8) {
