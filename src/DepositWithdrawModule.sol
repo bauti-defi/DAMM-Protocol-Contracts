@@ -23,10 +23,9 @@ contract DepositWithdrawModule is ERC20 {
 
     IDAMMFund public immutable fund;
     IFundValuationOracle public immutable fundValuationOracle;
-    uint256 private minNominalDeposit = 10;
-    uint256 private minNominalWithdrawal = 10;
 
     mapping(address asset => AssetPolicy policy) public assetWhitelist;
+    mapping(address user => bool enabled) public minterWhitelist;
 
     constructor(
         address fund_,
@@ -40,6 +39,11 @@ contract DepositWithdrawModule is ERC20 {
 
     modifier onlyFund() {
         require(msg.sender == address(fund), "Only fund can call this function");
+        _;
+    }
+
+    modifier onlyMinter() {
+        require(minterWhitelist[msg.sender], "Only minters");
         _;
     }
 
@@ -69,10 +73,8 @@ contract DepositWithdrawModule is ERC20 {
         return shares.mulDiv(tvl + 1, totalSupply() + 10 ** _decimalsOffset(), rounding);
     }
 
-    /// TODO: add deposit whitelist
-    /// TODO: support initial deposit
     /// @dev asset valuation and fund valuation must be denomintated in the same currency (same decimals)
-    function deposit(address asset, uint256 amount) public {
+    function deposit(address asset, uint256 amount) public onlyMinter {
         require(amount > 0, "Amount must be greater than 0");
 
         AssetPolicy memory policy = assetWhitelist[asset];
@@ -115,7 +117,7 @@ contract DepositWithdrawModule is ERC20 {
         _mint(msg.sender, sharesOwed);
     }
 
-    function withdraw(address asset, uint256 amount) public {
+    function withdraw(address asset, uint256 amount) public onlyMinter {
         require(amount > 0, "Amount must be greater than 0");
 
         AssetPolicy memory policy = assetWhitelist[asset];
@@ -144,7 +146,7 @@ contract DepositWithdrawModule is ERC20 {
         );
 
         // round down in favor of the fund to avoid some rounding error attacks
-        uint256 sharesOwed = _convertToShares(withdrawalValuation, tvl, Math.Rounding.Floor);
+        uint256 sharesOwed = _convertToShares(withdrawalValuation, tvl, Math.Rounding.Ceil);
 
         // burn shares from user
         _burn(msg.sender, sharesOwed);
