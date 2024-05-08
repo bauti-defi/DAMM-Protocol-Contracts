@@ -4,8 +4,8 @@ pragma solidity ^0.8.25;
 import {ValuationHistoryEmpty} from "@src/oracles/OracleErrors.sol";
 
 struct Valuation {
-    uint256 timestamp;
     uint256 value;
+    uint256 timestamp;
 }
 
 struct ValuationHistory {
@@ -16,7 +16,7 @@ function getLatest(ValuationHistory storage history)
     view
     returns (uint256 valuation, uint256 timestamp)
 {
-    if (history.timeseries.length == 0) {
+    if (history.isEmpty()) {
         revert ValuationHistoryEmpty();
     }
 
@@ -30,7 +30,7 @@ function get(ValuationHistory storage history, uint256 index)
     view
     returns (uint256 valuation, uint256 timestamp)
 {
-    if (history.timeseries.length == 0) {
+    if (history.isEmpty()) {
         revert ValuationHistoryEmpty();
     }
 
@@ -44,8 +44,12 @@ function count(ValuationHistory storage history) view returns (uint256) {
     return history.timeseries.length;
 }
 
-function add(ValuationHistory storage history, uint256 timestamp, uint256 value) {
-    history.timeseries.push(Valuation(timestamp, value));
+function add(ValuationHistory storage history, uint256 value, uint256 timestamp) {
+    history.timeseries.push(Valuation(value, timestamp));
 }
 
-using {getLatest, get, count, add} for ValuationHistory global;
+function isEmpty(ValuationHistory storage history) view returns (bool) {
+    return history.timeseries.length == 0;
+}
+
+using {getLatest, get, count, add, isEmpty} for ValuationHistory global;

@@ -2,27 +2,27 @@
 pragma solidity ^0.8.25;
 
 import "@src/interfaces/IFund.sol";
-import "@src/interfaces/IOracle.sol";
-import "@openzeppelin-contracts/utils/structs/EnumerableSet.sol";
-import "@openzeppelin-contracts/token/ERC20/IERC20.sol";
+import "@src/interfaces/IFundValuationOracle.sol";
+import "@openzeppelin-contracts/utils/structs/EnumerableMap.sol";
+import "@openzeppelin-contracts/token/ERC20/ERC20.sol";
 
-// import {ValuationHistoryEmpty} from "@src/oracles/OracleErrors.sol";
 import "@src/oracles/OracleStructs.sol";
 
-contract FundValuationOracle is IOracle {
-    using EnumerableSet for EnumerableSet.AddressSet;
+contract FundValuationOracle is IFundValuationOracle {
+    using EnumerableMap for EnumerableMap.AddressToUintMap;
 
-    event ValuationUpdated(uint256 index, uint256 avgTimestamp, uint256 valuation);
-    event AssetEnabled(address oracle);
-    event AssetDisabled(address oracle);
+    event AssetEnabled(address asset, address oracle);
+    event AssetDisabled(address asset, address oracle);
 
     IFund public immutable fund;
+    uint8 public immutable override decimals;
 
-    EnumerableSet.AddressSet private oracles;
+    EnumerableMap.AddressToUintMap private assetToOracle;
     ValuationHistory private valuations;
 
-    constructor(address fund_) {
+    constructor(address fund_, uint8 decimals_) {
         fund = IFund(fund_);
+        decimals = decimals_;
     }
 
     modifier onlyFund() {
@@ -31,7 +31,8 @@ contract FundValuationOracle is IOracle {
     }
 
     /// @dev returned timestamp is average of all oracles. caller can check `block.timestamp` externally.
-    function getValuationInUSD() public returns (uint256 valuation, uint256 timestamp) {
+    /// @dev all sub oracle valuations must be denominated in the same currency
+    function getValuation() public returns (uint256 fundValuation, uint256 valuationTimestamp) {
         // check if fund has an open positions
         require(!fund.hasOpenPositions(), "Fund has open positions");
 
@@ -39,48 +40,49 @@ contract FundValuationOracle is IOracle {
 
         // get fund balance of each asset that is to be valuated
         // get USD price of each asset from oracle
-        uint256 length = oracles.length();
+        uint256 length = assetToOracle.length();
         for (uint256 i = 0; i < length;) {
-            IOracle oracle = IOracle(oracles.at(i));
+            (, uint256 _oracle) = assetToOracle.at(i);
+            IOracle oracle = IOracle(address(uint160(_oracle)));
+            ERC20 asset = ERC20(oracle.asset());
+
+            // weakly enforce oracle be denominated in same currency as fund oracle
+            // important!! this does not guarantee that the oracle is denominated in the same currency as the fund
+            require(oracle.decimals() == decimals, "Oracle decimal mismatch");
 
             // get balance of asset in fund
-            uint256 balance = IERC20(oracle.asset()).balanceOf(address(fund));
+            uint256 balance = asset.balanceOf(address(fund));
 
-            // get USD price of asset from oracle
-            (uint256 price, uint256 _timestamp) = oracle.getValuationInUSD();
+            // get asset price from oracle
+            (uint256 price, uint256 _timestamp) = oracle.getValuation();
+
+            // calculate the asset value. (nominals * price)
+            uint256 assetValuation = balance * price / (10 ** asset.decimals());
 
             // sum up the USD value of each asset
-            valuation += balance * price;
+            fundValuation += assetValuation;
 
             // we will also sum the timestamps of each oracle
-            timestamp += _timestamp;
+            valuationTimestamp += _timestamp;
 
+            // wont ever overflow
             unchecked {
                 ++i;
             }
         }
 
         // lets get the average timestamp
-        timestamp = timestamp / length;
+        valuationTimestamp /= length;
 
-        _insertValuation(timestamp, valuation);
-
-        // sum up the USD value of each asset
-        // and the average timestamp
-        return (valuation, timestamp);
+        _insertValuation(fundValuation, valuationTimestamp);
     }
 
     function asset() public view returns (address) {
         return address(fund);
     }
 
-    /// TODO: make sure this is same as USD oracles
-    function decimals() public view returns (uint8) {
-        return 8;
-    }
-
-    function _insertValuation(uint256 timestamp, uint256 value) private {
-        valuations.add(timestamp, value);
+    function _insertValuation(uint256 value, uint256 timestamp) private {
+        valuations.add(value, timestamp);
 
         emit ValuationUpdated(valuations.count() - 1, timestamp, value);
     }
@@ -101,19 +103,30 @@ contract FundValuationOracle is IOracle {
         return valuations.count();
     }
 
-    function enableAsset(address oracle) public onlyFund {
+    function getAssetOracle(address asset) public view returns (address) {
+        return address(uint160(assetToOracle.get(asset)));
+    }
+
+    function enableAsset(address asset, address oracle) public onlyFund {
         require(oracle != address(0), "Invalid oracle address");
         require(oracle != address(this), "Cannot enable self");
         require(oracle != address(fund), "Cannot enable fund");
+        require(oracle != asset, "Cannot enable asset as oracle");
+        require(asset != address(0), "Invalid oracle address");
+        require(asset != address(this), "Cannot enable self");
+        require(asset != address(fund), "Cannot enable fund");
+        require(IOracle(oracle).asset() == asset, "Oracle asset mismatch");
 
-        oracles.add(oracle);
+        require(assetToOracle.set(asset, uint256(uint160(oracle))), "asset enabled");
 
-        emit AssetEnabled(oracle);
+        emit AssetEnabled(asset, oracle);
     }
 
-    function disableAsset(address oracle) public onlyFund {
-        oracles.remove(oracle);
+    function disableAsset(address asset) public onlyFund {
+        address oracle = address(uint160(assetToOracle.get(asset)));
 
-        emit AssetDisabled(oracle);
+        require(assetToOracle.remove(asset), "Asset not enabled");
+
+        emit AssetDisabled(asset, oracle);
     }
 }
