@@ -34,7 +34,7 @@ contract FundValuationOracle is IFundValuationOracle {
     /// @dev all sub oracle valuations must be denominated in the same currency
     function getValuation() public returns (uint256 fundValuation, uint256 valuationTimestamp) {
         // check if fund has an open positions
-        require(!fund.hasOpenPositions(), "Fund has open positions");
+        // require(!fund.hasOpenPositions(), "Fund has open positions");
 
         /// TODO: make sure L2 sequencer is running!
 

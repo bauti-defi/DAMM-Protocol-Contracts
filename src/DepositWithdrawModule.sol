@@ -4,6 +4,8 @@ pragma solidity ^0.8.25;
 import "@openzeppelin-contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin-contracts/utils/math/Math.sol";
+import "@openzeppelin-contracts/utils/cryptography/MessageHashUtils.sol";
+import "@openzeppelin-contracts/utils/cryptography/SignatureChecker.sol";
 import "@src/interfaces/IFund.sol";
 import "@src/interfaces/IFundValuationOracle.sol";
 import "@src/interfaces/ISafe.sol";
@@ -17,15 +19,47 @@ struct AssetPolicy {
     bool canWithdraw;
 }
 
+struct DepositIntent {
+    address user;
+    address to;
+    address asset;
+    uint256 amount;
+    uint256 deadline;
+    uint256 minSharesOut;
+    uint256 relayerTip;
+}
+
+struct DepositOrder {
+    DepositIntent intent;
+    bytes signature;
+}
+
+struct WithdrawIntent {
+    address user;
+    address to;
+    address asset;
+    uint256 amount;
+    uint256 deadline;
+    uint256 maxSharesIn;
+    uint256 relayerTip;
+}
+
+struct WithdrawOrder {
+    WithdrawIntent intent;
+    bytes signature;
+}
+
+// TODO: events
 contract DepositWithdrawModule is ERC20 {
     using SafeERC20 for IERC20;
     using Math for uint256;
+    using MessageHashUtils for bytes;
 
     IDAMMFund public immutable fund;
     IFundValuationOracle public immutable fundValuationOracle;
 
     mapping(address asset => AssetPolicy policy) public assetWhitelist;
-    mapping(address user => bool enabled) public minterWhitelist;
+    mapping(address user => bool enabled) public userWhitelist;
 
     constructor(
         address fund_,
@@ -42,8 +76,8 @@ contract DepositWithdrawModule is ERC20 {
         _;
     }
 
-    modifier onlyMinter() {
-        require(minterWhitelist[msg.sender], "Only minters");
+    modifier onlyUser(address user) {
+        require(userWhitelist[user], "User not whitelisted");
         _;
     }
 
@@ -74,17 +108,26 @@ contract DepositWithdrawModule is ERC20 {
     }
 
     /// @dev asset valuation and fund valuation must be denomintated in the same currency (same decimals)
-    function deposit(address asset, uint256 amount) public onlyMinter {
-        require(amount > 0, "Amount must be greater than 0");
+    function deposit(DepositOrder calldata order) public onlyUser(order.intent.user) {
+        require(
+            SignatureChecker.isValidSignatureNow(
+                order.intent.user,
+                abi.encode(order.intent).toEthSignedMessageHash(),
+                order.signature
+            ),
+            "Invalid signature"
+        );
+        require(order.intent.deadline >= block.timestamp, "Deadline expired");
+        require(order.intent.amount > 0, "Amount must be greater than 0");
 
-        AssetPolicy memory policy = assetWhitelist[asset];
+        AssetPolicy memory policy = assetWhitelist[order.intent.asset];
 
         require(policy.canDeposit, "Deposits are not enabled for this asset");
 
         // valuate the fund, fetches new fresh valuation
         (uint256 tvl,) = fundValuationOracle.getValuation();
 
-        address assetOracle = fundValuationOracle.getAssetOracle(asset);
+        address assetOracle = fundValuationOracle.getAssetOracle(order.intent.asset);
         require(assetOracle != address(0), "Asset oracle not found");
 
         // get asset valuation, we grab latest to ensure we are using same valuation
@@ -92,20 +135,31 @@ contract DepositWithdrawModule is ERC20 {
         (uint256 assetValuation,) = IOracle(assetOracle).getLatestValuation();
 
         // get the fund's current asset balance
-        uint256 startBalance = ERC20(asset).balanceOf(address(fund));
+        uint256 startBalance = ERC20(order.intent.asset).balanceOf(address(fund));
 
         // transfer from user to fund
-        IERC20(asset).safeTransferFrom(msg.sender, address(fund), amount);
+        IERC20(order.intent.asset).safeTransferFrom(
+            order.intent.user, address(fund), order.intent.amount
+        );
+
+        // pay relay tip if any
+        if (order.intent.relayerTip > 0) {
+            IERC20(order.intent.asset).safeTransferFrom(
+                order.intent.user, msg.sender, order.intent.relayerTip
+            );
+        }
 
         // get the fund's new asset balance
-        uint256 endBalance = ERC20(asset).balanceOf(address(fund));
+        uint256 endBalance = ERC20(order.intent.asset).balanceOf(address(fund));
 
         // check the deposit was successful
-        require(endBalance == startBalance + amount, "Deposit failed");
+        require(endBalance == startBalance + order.intent.amount, "Deposit failed");
 
         // calculate the deposit valuation, denominated in the same currency as the fund
-        uint256 depositValuation = amount * assetValuation / (10 ** ERC20(asset).decimals());
+        uint256 depositValuation =
+            order.intent.amount * assetValuation / (10 ** ERC20(order.intent.asset).decimals());
 
+        // make sure the deposit is above the minimum
         require(
             depositValuation > policy.minNominalDeposit * (10 ** decimals()), "Deposit too small"
         );
@@ -113,21 +167,33 @@ contract DepositWithdrawModule is ERC20 {
         // round down in favor of the fund to avoid some rounding error attacks
         uint256 sharesOwed = _convertToShares(depositValuation, tvl, Math.Rounding.Floor);
 
-        // mint shares to user
-        _mint(msg.sender, sharesOwed);
+        // lets make sure slippage is acceptable
+        require(sharesOwed >= order.intent.minSharesOut, "slippage too high");
+
+        // mint shares
+        _mint(order.intent.to, sharesOwed);
     }
 
-    function withdraw(address asset, uint256 amount) public onlyMinter {
-        require(amount > 0, "Amount must be greater than 0");
+    function withdraw(WithdrawOrder calldata order) public onlyUser(order.intent.user) {
+        require(
+            SignatureChecker.isValidSignatureNow(
+                order.intent.user,
+                abi.encode(order.intent).toEthSignedMessageHash(),
+                order.signature
+            ),
+            "Invalid signature"
+        );
+        require(order.intent.deadline >= block.timestamp, "Deadline expired");
+        require(order.intent.amount > 0, "Amount must be greater than 0");
 
-        AssetPolicy memory policy = assetWhitelist[asset];
+        AssetPolicy memory policy = assetWhitelist[order.intent.asset];
 
         require(policy.canWithdraw, "Withdrawals are not enabled for this asset");
 
         // valuate the fund, fetches new fresh valuation
         (uint256 tvl,) = fundValuationOracle.getValuation();
 
-        address assetOracle = fundValuationOracle.getAssetOracle(asset);
+        address assetOracle = fundValuationOracle.getAssetOracle(order.intent.asset);
         require(assetOracle != address(0), "Asset oracle not found");
 
         // get asset valuation, we grab latest to ensure we are using same valuation
@@ -135,35 +201,63 @@ contract DepositWithdrawModule is ERC20 {
         (uint256 assetValuation,) = IOracle(assetOracle).getLatestValuation();
 
         // get the fund's current asset balance
-        uint256 startBalance = ERC20(asset).balanceOf(address(fund));
+        uint256 startBalance = ERC20(order.intent.asset).balanceOf(address(fund));
 
         // calculate the withdrawal valuation, denominated in the same currency as the fund
-        uint256 withdrawalValuation = amount * assetValuation / (10 ** ERC20(asset).decimals());
+        uint256 withdrawalValuation =
+            order.intent.amount * assetValuation / (10 ** ERC20(order.intent.asset).decimals());
 
         require(
             withdrawalValuation > policy.minNominalWithdrawal * (10 ** decimals()),
             "Withdrawal too small"
         );
 
-        // round down in favor of the fund to avoid some rounding error attacks
+        // round up in favor of the fund to avoid some rounding error attacks
         uint256 sharesOwed = _convertToShares(withdrawalValuation, tvl, Math.Rounding.Ceil);
 
-        // burn shares from user
-        _burn(msg.sender, sharesOwed);
+        // make sure the withdrawal is below the maximum
+        require(sharesOwed <= order.intent.maxSharesIn, "slippage too high");
 
-        // transfer froms fund to user
-        fund.execTransactionFromModule(
-            asset,
-            amount,
-            abi.encodeWithSignature("transfer(address,uint256)", msg.sender, amount),
-            Enum.Operation.Call
+        // burn shares from user
+        _burn(order.intent.user, sharesOwed);
+
+        // transfer from fund to user
+        require(
+            fund.execTransactionFromModule(
+                order.intent.asset,
+                0,
+                abi.encodeWithSignature(
+                    "transfer(address,uint256)",
+                    order.intent.to,
+                    order.intent.amount - order.intent.relayerTip
+                ),
+                Enum.Operation.Call
+            ),
+            "Withdrawal safe trx failed"
         );
 
+        // pay relay tip if any
+        if (order.intent.relayerTip > 0) {
+            require(
+                fund.execTransactionFromModule(
+                    order.intent.asset,
+                    0,
+                    abi.encodeWithSignature(
+                        "transfer(address,uint256)", msg.sender, order.intent.relayerTip
+                    ),
+                    Enum.Operation.Call
+                ),
+                "Withdrawal safe trx failed"
+            );
+        }
+
         // get the fund's new asset balance
-        uint256 endBalance = ERC20(asset).balanceOf(address(fund));
+        uint256 endBalance = ERC20(order.intent.asset).balanceOf(address(fund));
 
         // check the withdrawal was successful
-        require(startBalance == endBalance + amount, "Withdrawal failed");
+        require(
+            startBalance == endBalance + order.intent.amount, "Withdrawal failed: amount mismatch"
+        );
     }
 
     /// @notice cannot assume value is constant
@@ -177,6 +271,14 @@ contract DepositWithdrawModule is ERC20 {
 
     function disableAsset(address asset) public onlyFund {
         delete assetWhitelist[asset];
+    }
+
+    function enableUser(address user) public onlyFund {
+        userWhitelist[user] = true;
+    }
+
+    function disableUser(address user) public onlyFund {
+        delete userWhitelist[user];
     }
 
     /// @dev inspired by OpenZeppelin ERC-4626 implementation
