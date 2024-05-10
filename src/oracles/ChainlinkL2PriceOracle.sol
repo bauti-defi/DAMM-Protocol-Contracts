@@ -4,8 +4,6 @@ pragma solidity ^0.8.25;
 import "@src/interfaces/IOracle.sol";
 import "@src/interfaces/external/AggregatorV2V3Interface.sol";
 
-import "@src/oracles/OracleStructs.sol";
-
 import {
     InvalidRound,
     SequencerDown,
@@ -21,8 +19,6 @@ contract ChainlinkL2PriceOracle is IOracle {
     AggregatorV2V3Interface public immutable chainlinkPriceFeed;
     AggregatorV2V3Interface public immutable l2SequencerUptimeFeed;
 
-    ValuationHistory private valuations;
-
     constructor(
         address asset_,
         address chainlinkPriceFeed_,
@@ -37,7 +33,7 @@ contract ChainlinkL2PriceOracle is IOracle {
         l2SequencerUptimeGracePeriod = l2SequencerUptimeGracePeriod_;
     }
 
-    function getValuation() external override returns (uint256 valuation, uint256 timestamp) {
+    function getValuation() external view override returns (uint256 valuation, uint256 timestamp) {
         {
             (uint80 roundId, int256 answer, uint256 startedAt,,) =
                 l2SequencerUptimeFeed.latestRoundData();
@@ -59,30 +55,6 @@ contract ChainlinkL2PriceOracle is IOracle {
 
         valuation = uint256(price);
         timestamp = priceUpdatedAt;
-
-        _insertValuation(valuation, timestamp);
-    }
-
-    function _insertValuation(uint256 value, uint256 timestamp) private {
-        valuations.add(value, timestamp);
-
-        emit ValuationUpdated(valuations.count() - 1, timestamp, value);
-    }
-
-    function getLatestValuation() public view returns (uint256 valuation, uint256 timestamp) {
-        return valuations.getLatest();
-    }
-
-    function getValuation(uint256 index)
-        public
-        view
-        returns (uint256 valuation, uint256 timestamp)
-    {
-        return valuations.get(index);
-    }
-
-    function getValuationCount() public view returns (uint256) {
-        return valuations.count();
     }
 
     function decimals() external view override returns (uint8) {

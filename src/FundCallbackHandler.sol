@@ -5,7 +5,7 @@ import "@safe-contracts/handler/TokenCallbackHandler.sol";
 import "@safe-contracts/handler/HandlerContext.sol";
 import "@openzeppelin-contracts/utils/structs/EnumerableSet.sol";
 import {ISafe} from "@src/interfaces/ISafe.sol";
-import {IFund} from "@src/interfaces/IFund.sol";
+import {IPortfolio} from "@src/interfaces/IPortfolio.sol";
 
 event PositionOpened(address indexed by, bytes32 positionPointer);
 
@@ -14,7 +14,7 @@ event PositionClosed(address indexed by, bytes32 positionPointer);
 error NotModule();
 
 /// @dev concept under development!
-contract FundCallbackHandler is TokenCallbackHandler, HandlerContext, IFund {
+contract FundCallbackHandler is TokenCallbackHandler, HandlerContext, IPortfolio {
     using EnumerableSet for EnumerableSet.Bytes32Set;
 
     address public immutable fund;

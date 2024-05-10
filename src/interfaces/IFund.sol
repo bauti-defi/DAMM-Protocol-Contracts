@@ -1,12 +1,7 @@
-// SPDX-License-Identifier: LGPL-3.0-only
+// SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.0;
 
-interface IFund {
-    function onPositionOpened(bytes32 positionId) external returns (bool);
+import "./IPortfolio.sol";
+import "./ISafe.sol";
 
-    function onPositionClosed(bytes32 positionId) external returns (bool);
-
-    function hasOpenPositions() external view returns (bool);
-
-    function holdsPosition(bytes32 positionPointer) external view returns (bool);
-}
+interface IFund is IPortfolio, ISafe {}

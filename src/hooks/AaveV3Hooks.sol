@@ -2,7 +2,7 @@
 pragma solidity ^0.8.25;
 
 import {IBeforeTransaction, IAfterTransaction} from "@src/interfaces/ITransactionHooks.sol";
-import {IFund} from "@src/interfaces/IFund.sol";
+import {IPortfolio} from "@src/interfaces/IPortfolio.sol";
 import {IPool} from "@aave-v3-core/interfaces/IPool.sol";
 
 contract AaveV3Hooks is IBeforeTransaction, IAfterTransaction {
@@ -14,13 +14,13 @@ contract AaveV3Hooks is IBeforeTransaction, IAfterTransaction {
     bytes4 constant L1_WITHDRAW_SELECTOR = 0x69328dec;
     bytes4 constant L1_SUPPLY_SELECTOR = 0x617ba037;
 
-    IFund public immutable fund;
+    IPortfolio public immutable fund;
     IPool public immutable aaveV3Pool;
 
     mapping(address asset => bool whitelisted) public assetWhitelist;
 
     constructor(address _fund, address _aaveV3Pool) {
-        fund = IFund(_fund);
+        fund = IPortfolio(_fund);
         aaveV3Pool = IPool(_aaveV3Pool);
     }
 

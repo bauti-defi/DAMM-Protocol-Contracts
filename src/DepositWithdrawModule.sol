@@ -6,11 +6,8 @@ import "@openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin-contracts/utils/math/Math.sol";
 import "@openzeppelin-contracts/utils/cryptography/MessageHashUtils.sol";
 import "@openzeppelin-contracts/utils/cryptography/SignatureChecker.sol";
-import "@src/interfaces/IFund.sol";
 import "@src/interfaces/IFundValuationOracle.sol";
-import "@src/interfaces/ISafe.sol";
-
-interface IDAMMFund is IFund, ISafe {}
+import "@src/interfaces/IFund.sol";
 
 struct AssetPolicy {
     uint256 minNominalDeposit;
@@ -55,7 +52,7 @@ contract DepositWithdrawModule is ERC20 {
     using Math for uint256;
     using MessageHashUtils for bytes;
 
-    IDAMMFund public immutable fund;
+    IFund public immutable fund;
     IFundValuationOracle public immutable fundValuationOracle;
 
     mapping(address asset => AssetPolicy policy) public assetWhitelist;
@@ -67,7 +64,7 @@ contract DepositWithdrawModule is ERC20 {
         string memory name_,
         string memory symbol_
     ) ERC20(name_, symbol_) {
-        fund = IDAMMFund(fund_);
+        fund = IFund(fund_);
         fundValuationOracle = IFundValuationOracle(fundValuationOracle_);
     }
 
@@ -132,7 +129,7 @@ contract DepositWithdrawModule is ERC20 {
 
         // get asset valuation, we grab latest to ensure we are using same valuation
         // as the fund's valuation
-        (uint256 assetValuation,) = IOracle(assetOracle).getLatestValuation();
+        (uint256 assetValuation,) = IOracle(assetOracle).getValuation();
 
         // get the fund's current asset balance
         uint256 startBalance = ERC20(order.intent.asset).balanceOf(address(fund));
@@ -198,7 +195,7 @@ contract DepositWithdrawModule is ERC20 {
 
         // get asset valuation, we grab latest to ensure we are using same valuation
         // as the fund's valuation
-        (uint256 assetValuation,) = IOracle(assetOracle).getLatestValuation();
+        (uint256 assetValuation,) = IOracle(assetOracle).getValuation();
 
         // get the fund's current asset balance
         uint256 startBalance = ERC20(order.intent.asset).balanceOf(address(fund));
