@@ -9,63 +9,35 @@ import "@openzeppelin-contracts/utils/cryptography/SignatureChecker.sol";
 import "@src/interfaces/IFundValuationOracle.sol";
 import "@src/interfaces/IFund.sol";
 
-struct AssetPolicy {
-    uint256 minNominalDeposit;
-    uint256 minNominalWithdrawal;
-    bool canDeposit;
-    bool canWithdraw;
-}
+import "./DepositWithdrawStructs.sol";
+import "@src/interfaces/IDepositWithdrawModule.sol";
 
-struct DepositIntent {
-    address user;
-    address to;
-    address asset;
-    uint256 amount;
-    uint256 deadline;
-    uint256 minSharesOut;
-    uint256 relayerTip;
-}
-
-struct DepositOrder {
-    DepositIntent intent;
-    bytes signature;
-}
-
-struct WithdrawIntent {
-    address user;
-    address to;
-    address asset;
-    uint256 amount;
-    uint256 deadline;
-    uint256 maxSharesIn;
-    uint256 relayerTip;
-}
-
-struct WithdrawOrder {
-    WithdrawIntent intent;
-    bytes signature;
-}
-
-// TODO: events
-contract DepositWithdrawModule is ERC20 {
+contract DepositWithdrawModule is ERC20, IDepositWithdrawModule {
     using SafeERC20 for IERC20;
     using Math for uint256;
     using MessageHashUtils for bytes;
 
+    uint256 public constant BASIS_POINTS_GRANULARITY = 10000;
+
     IFund public immutable fund;
     IFundValuationOracle public immutable fundValuationOracle;
 
-    mapping(address asset => AssetPolicy policy) public assetWhitelist;
-    mapping(address user => bool enabled) public userWhitelist;
+    mapping(address asset => AssetPolicy policy) private assetPolicy;
+    mapping(address user => Role role) private userWhitelist;
+    mapping(address user => uint256) public override nonces;
+    uint256 public basisPointsPerformanceFee;
+    address public feeRecipient;
 
     constructor(
         address fund_,
         address fundValuationOracle_,
+        address feeRecipient_,
         string memory name_,
         string memory symbol_
     ) ERC20(name_, symbol_) {
         fund = IFund(fund_);
         fundValuationOracle = IFundValuationOracle(fundValuationOracle_);
+        feeRecipient = feeRecipient_;
     }
 
     modifier onlyFund() {
@@ -74,38 +46,12 @@ contract DepositWithdrawModule is ERC20 {
     }
 
     modifier onlyUser(address user) {
-        require(userWhitelist[user], "User not whitelisted");
+        require(userWhitelist[user] != Role.NONE, "User not whitelisted");
         _;
     }
 
-    /**
-     * @dev Internal conversion function (from assets to shares) with support for rounding direction.
-     * @dev This function is inspired by OpenZeppelin's ERC-4626 implementation.
-     */
-    function _convertToShares(uint256 assets, uint256 tvl, Math.Rounding rounding)
-        internal
-        view
-        virtual
-        returns (uint256)
-    {
-        return assets.mulDiv(totalSupply() + 10 ** _decimalsOffset(), tvl + 1, rounding);
-    }
-
-    /**
-     * @dev Internal conversion function (from shares to assets) with support for rounding direction.
-     * @dev This function is inspired by OpenZeppelin's ERC-4626 implementation.
-     */
-    function _convertToAssets(uint256 shares, uint256 tvl, Math.Rounding rounding)
-        internal
-        view
-        virtual
-        returns (uint256)
-    {
-        return shares.mulDiv(tvl + 1, totalSupply() + 10 ** _decimalsOffset(), rounding);
-    }
-
     /// @dev asset valuation and fund valuation must be denomintated in the same currency (same decimals)
-    function deposit(DepositOrder calldata order) public onlyUser(order.intent.user) {
+    function deposit(DepositOrder calldata order) external override onlyUser(order.intent.user) {
         require(
             SignatureChecker.isValidSignatureNow(
                 order.intent.user,
@@ -114,12 +60,17 @@ contract DepositWithdrawModule is ERC20 {
             ),
             "Invalid signature"
         );
+        require(order.intent.nonce == nonces[order.intent.user]++, "Invalid nonce");
         require(order.intent.deadline >= block.timestamp, "Deadline expired");
         require(order.intent.amount > 0, "Amount must be greater than 0");
 
-        AssetPolicy memory policy = assetWhitelist[order.intent.asset];
+        AssetPolicy memory policy = assetPolicy[order.intent.asset];
 
-        require(policy.canDeposit, "Deposits are not enabled for this asset");
+        require(policy.canDeposit && policy.enabled, "Deposits are not enabled for this asset");
+
+        if (policy.permissioned) {
+            require(userWhitelist[order.intent.to] == Role.SUPER_USER, "Only super user");
+        }
 
         // valuate the fund, fetches new fresh valuation
         (uint256 tvl,) = fundValuationOracle.getValuation();
@@ -169,9 +120,19 @@ contract DepositWithdrawModule is ERC20 {
 
         // mint shares
         _mint(order.intent.to, sharesOwed);
+
+        emit Deposit(
+            order.intent.user,
+            order.intent.to,
+            order.intent.asset,
+            order.intent.amount,
+            depositValuation,
+            tvl,
+            msg.sender
+        );
     }
 
-    function withdraw(WithdrawOrder calldata order) public onlyUser(order.intent.user) {
+    function withdraw(WithdrawOrder calldata order) external override onlyUser(order.intent.user) {
         require(
             SignatureChecker.isValidSignatureNow(
                 order.intent.user,
@@ -180,12 +141,17 @@ contract DepositWithdrawModule is ERC20 {
             ),
             "Invalid signature"
         );
+        require(order.intent.nonce == nonces[order.intent.user]++, "Invalid nonce");
         require(order.intent.deadline >= block.timestamp, "Deadline expired");
         require(order.intent.amount > 0, "Amount must be greater than 0");
 
-        AssetPolicy memory policy = assetWhitelist[order.intent.asset];
+        AssetPolicy memory policy = assetPolicy[order.intent.asset];
 
-        require(policy.canWithdraw, "Withdrawals are not enabled for this asset");
+        require(policy.canWithdraw && policy.enabled, "Withdrawals are not enabled for this asset");
+
+        if (policy.permissioned) {
+            require(userWhitelist[order.intent.to] == Role.SUPER_USER, "Only super user");
+        }
 
         // valuate the fund, fetches new fresh valuation
         (uint256 tvl,) = fundValuationOracle.getValuation();
@@ -255,6 +221,16 @@ contract DepositWithdrawModule is ERC20 {
         require(
             startBalance == endBalance + order.intent.amount, "Withdrawal failed: amount mismatch"
         );
+
+        emit Withdraw(
+            order.intent.user,
+            order.intent.to,
+            order.intent.asset,
+            order.intent.amount,
+            withdrawalValuation,
+            tvl,
+            msg.sender
+        );
     }
 
     /// @notice cannot assume value is constant
@@ -262,24 +238,82 @@ contract DepositWithdrawModule is ERC20 {
         return fundValuationOracle.decimals() + _decimalsOffset();
     }
 
-    function enableAsset(address asset, AssetPolicy memory policy) public onlyFund {
-        assetWhitelist[asset] = policy;
+    function enableAsset(address asset, AssetPolicy memory policy) public override onlyFund {
+        assetPolicy[asset] = policy;
+
+        emit AssetEnabled(asset);
     }
 
-    function disableAsset(address asset) public onlyFund {
-        delete assetWhitelist[asset];
+    function disableAsset(address asset) public override onlyFund {
+        assetPolicy[asset].enabled = false;
+
+        emit AssetDisabled(asset);
     }
 
-    function enableUser(address user) public onlyFund {
-        userWhitelist[user] = true;
+    function getAssetPolicy(address asset) public view override returns (AssetPolicy memory) {
+        return assetPolicy[asset];
     }
 
-    function disableUser(address user) public onlyFund {
-        delete userWhitelist[user];
+    function getUserRole(address user) public view override returns (Role) {
+        return userWhitelist[user];
+    }
+
+    function enableUser(address user, Role role) public override onlyFund {
+        userWhitelist[user] = role;
+
+        emit UserEnabled(user, role);
+    }
+
+    /**
+     * @dev See {IERC4626-convertToShares}.
+     */
+    function convertToShares(uint256 assets) public view virtual returns (uint256) {
+        (uint256 tvl,) = fundValuationOracle.getValuation();
+        return _convertToShares(assets, tvl, Math.Rounding.Ceil);
+    }
+
+    /**
+     * @dev See {IERC4626-convertToAssets}.
+     */
+    function convertToAssets(uint256 shares) public view virtual returns (uint256) {
+        (uint256 tvl,) = fundValuationOracle.getValuation();
+        return _convertToAssets(shares, tvl, Math.Rounding.Floor);
+    }
+
+    function disableUser(address user) public override onlyFund {
+        userWhitelist[user] = Role.NONE;
+
+        emit UserDisabled(user);
     }
 
     /// @dev inspired by OpenZeppelin ERC-4626 implementation
     function _decimalsOffset() internal view virtual returns (uint8) {
         return 1;
+    }
+
+    /**
+     * @dev Internal conversion function (from assets to shares) with support for rounding direction.
+     * @dev This function is inspired by OpenZeppelin's ERC-4626 implementation.
+     */
+    function _convertToShares(uint256 assets, uint256 tvl, Math.Rounding rounding)
+        internal
+        view
+        virtual
+        returns (uint256)
+    {
+        return assets.mulDiv(totalSupply() + 10 ** _decimalsOffset(), tvl + 1, rounding);
+    }
+
+    /**
+     * @dev Internal conversion function (from shares to assets) with support for rounding direction.
+     * @dev This function is inspired by OpenZeppelin's ERC-4626 implementation.
+     */
+    function _convertToAssets(uint256 shares, uint256 tvl, Math.Rounding rounding)
+        internal
+        view
+        virtual
+        returns (uint256)
+    {
+        return shares.mulDiv(tvl + 1, totalSupply() + 10 ** _decimalsOffset(), rounding);
     }
 }

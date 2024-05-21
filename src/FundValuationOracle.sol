@@ -36,7 +36,7 @@ contract FundValuationOracle is IFundValuationOracle {
         returns (uint256 fundValuation, uint256 valuationTimestamp)
     {
         // check if fund has an open positions
-        require(!fund.hasOpenPositions(), "Fund has open positions");
+        require(!fund.hasOpenPositions(), "Fund valuable not allowed: open positions");
 
         /// TODO: make sure L2 sequencer is running!
 
