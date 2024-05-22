@@ -27,11 +27,7 @@ interface IDepositWithdrawModule {
         address relayer
     );
 
-    function nonces(address user) external view returns (uint256);
-
     function getAssetPolicy(address asset) external view returns (AssetPolicy memory);
-
-    function getUserRole(address user) external view returns (Role);
 
     function deposit(DepositOrder calldata order) external;
 
@@ -40,8 +36,4 @@ interface IDepositWithdrawModule {
     function enableAsset(address asset, AssetPolicy calldata policy) external;
 
     function disableAsset(address asset) external;
-
-    function enableUser(address user, Role role) external;
-
-    function disableUser(address user) external;
 }

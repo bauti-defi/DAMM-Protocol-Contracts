@@ -47,3 +47,24 @@ enum Role {
     USER,
     SUPER_USER
 }
+
+enum AccountStatus {
+    NULL,
+    ACTIVE,
+    PAUSED
+}
+
+struct Epoch {
+    uint256 id;
+    uint256 tvl;
+    uint256 sharesOutstanding;
+    uint256 endTimestamp;
+}
+
+struct UserAccountInfo {
+    uint256 currentEpoch;
+    uint256 depositValue;
+    uint256 nonce;
+    Role role;
+    AccountStatus status;
+}

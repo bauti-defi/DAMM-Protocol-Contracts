@@ -23,10 +23,11 @@ contract DepositWithdrawModule is ERC20, IDepositWithdrawModule {
     IFundValuationOracle public immutable fundValuationOracle;
 
     mapping(address asset => AssetPolicy policy) private assetPolicy;
-    mapping(address user => Role role) private userWhitelist;
-    mapping(address user => uint256) public override nonces;
     uint256 public basisPointsPerformanceFee;
     address public feeRecipient;
+
+    Epoch[] public epochs;
+    mapping(address user => UserAccountInfo) public userAccountInfo;
 
     constructor(
         address fund_,
@@ -45,13 +46,110 @@ contract DepositWithdrawModule is ERC20, IDepositWithdrawModule {
         _;
     }
 
-    modifier onlyUser(address user) {
-        require(userWhitelist[user] != Role.NONE, "User not whitelisted");
+    modifier onlyActiveUser(address user) {
+        require(userAccountInfo[user].role != Role.NONE, "User not whitelisted");
+        require(userAccountInfo[user].status == AccountStatus.ACTIVE, "Account not active");
         _;
     }
 
+    modifier onlyFeeRecipient() {
+        require(msg.sender == feeRecipient, "Only fee recipient can call this function");
+        _;
+    }
+
+    modifier activeEpoch() {
+        require(epochs.length > 0, "No epochs");
+        require(epochs[epochs.length - 1].endTimestamp > block.timestamp, "Epoch ended");
+        _;
+    }
+
+    function startEpoch(uint256 epochDuration) external onlyFund {
+        require(
+            epochs.length == 0 || epochs[epochs.length - 1].endTimestamp < block.timestamp,
+            "Epoch not ended"
+        );
+
+        epochs.push(
+            Epoch({
+                id: epochs.length,
+                tvl: 0,
+                sharesOutstanding: 0,
+                endTimestamp: block.timestamp + epochDuration
+            })
+        );
+    }
+
+    /// TODO: batching
+    function collectFee(address account) external onlyFeeRecipient {
+        require(basisPointsPerformanceFee > 0, "Fee is 0");
+        require(epochs.length > 0, "No epochs");
+        require(epochs[epochs.length - 1].endTimestamp < block.timestamp, "Epoch still active");
+
+        UserAccountInfo memory info = userAccountInfo[account];
+
+        require(info.status != AccountStatus.NULL, "Account null");
+        require(info.currentEpoch <= epochs.length - 1, "User not in past epochs");
+        require(balanceOf(account) > 0, "No balance");
+
+        /// @notice this will revert if fund is not completely liquid
+        /// valuate the fund, fetches new fresh valuation
+        (uint256 fundTvl,) = fundValuationOracle.getValuation();
+        uint256 circulatingSupply = totalSupply();
+
+        (uint256 feeValue, uint256 sharesOwed) = _calculateFee(
+            info.depositValue, balanceOf(account), info.depositValue, fundTvl, circulatingSupply
+        );
+
+        // deduct fee from account deposit
+        userAccountInfo[account].depositValue -= feeValue;
+
+        // set epoch to next one
+        userAccountInfo[account].currentEpoch = epochs.length;
+
+        _burn(account, sharesOwed);
+        _mint(feeRecipient, sharesOwed);
+
+        require(totalSupply() == circulatingSupply, "Supply changed");
+
+        /// TODO: emit
+    }
+
+    function _calculateFee(
+        uint256 capitalToTax,
+        uint256 userBalance,
+        uint256 userDeposit,
+        uint256 fundTvl,
+        uint256 circulatingSupply
+    ) private returns (uint256 feeValue, uint256 sharesOwed) {
+        if (basisPointsPerformanceFee == 0) return (0, 0);
+
+        require(
+            fundTvl * circulatingSupply * userDeposit * capitalToTax * userBalance > 0,
+            "invariant: no zeros"
+        );
+
+        /// @dev (a/b) / (c/d) = a * d / b / c
+        /// fundTvl / circulatingSupply = share price now
+        /// deposit / userBalance = user share price
+        uint256 accruedInterest = fundTvl * userBalance / circulatingSupply / userDeposit;
+
+        // negative performance => no fees
+        if (accruedInterest <= 1 * (10 ** decimals())) return (0, 0);
+
+        feeValue = (accruedInterest - 1 * (10 ** decimals())).mulDiv(
+            capitalToTax * basisPointsPerformanceFee, BASIS_POINTS_GRANULARITY, Math.Rounding.Ceil
+        );
+
+        sharesOwed = _convertToShares(feeValue, fundTvl, Math.Rounding.Ceil);
+    }
+
     /// @dev asset valuation and fund valuation must be denomintated in the same currency (same decimals)
-    function deposit(DepositOrder calldata order) external override onlyUser(order.intent.user) {
+    function deposit(DepositOrder calldata order)
+        external
+        override
+        onlyActiveUser(order.intent.user)
+        activeEpoch
+    {
         require(
             SignatureChecker.isValidSignatureNow(
                 order.intent.user,
@@ -60,7 +158,7 @@ contract DepositWithdrawModule is ERC20, IDepositWithdrawModule {
             ),
             "Invalid signature"
         );
-        require(order.intent.nonce == nonces[order.intent.user]++, "Invalid nonce");
+        require(order.intent.nonce == userAccountInfo[order.intent.user].nonce++, "Invalid nonce");
         require(order.intent.deadline >= block.timestamp, "Deadline expired");
         require(order.intent.amount > 0, "Amount must be greater than 0");
 
@@ -69,7 +167,7 @@ contract DepositWithdrawModule is ERC20, IDepositWithdrawModule {
         require(policy.canDeposit && policy.enabled, "Deposits are not enabled for this asset");
 
         if (policy.permissioned) {
-            require(userWhitelist[order.intent.to] == Role.SUPER_USER, "Only super user");
+            require(userAccountInfo[order.intent.to].role == Role.SUPER_USER, "Only super user");
         }
 
         // valuate the fund, fetches new fresh valuation
@@ -112,6 +210,9 @@ contract DepositWithdrawModule is ERC20, IDepositWithdrawModule {
             depositValuation > policy.minNominalDeposit * (10 ** decimals()), "Deposit too small"
         );
 
+        // increment users deposit value
+        userAccountInfo[order.intent.user].depositValue += depositValuation;
+
         // round down in favor of the fund to avoid some rounding error attacks
         uint256 sharesOwed = _convertToShares(depositValuation, tvl, Math.Rounding.Floor);
 
@@ -132,7 +233,12 @@ contract DepositWithdrawModule is ERC20, IDepositWithdrawModule {
         );
     }
 
-    function withdraw(WithdrawOrder calldata order) external override onlyUser(order.intent.user) {
+    function withdraw(WithdrawOrder calldata order)
+        external
+        override
+        onlyActiveUser(order.intent.user)
+        activeEpoch
+    {
         require(
             SignatureChecker.isValidSignatureNow(
                 order.intent.user,
@@ -141,7 +247,7 @@ contract DepositWithdrawModule is ERC20, IDepositWithdrawModule {
             ),
             "Invalid signature"
         );
-        require(order.intent.nonce == nonces[order.intent.user]++, "Invalid nonce");
+        require(order.intent.nonce == userAccountInfo[order.intent.user].nonce++, "Invalid nonce");
         require(order.intent.deadline >= block.timestamp, "Deadline expired");
         require(order.intent.amount > 0, "Amount must be greater than 0");
 
@@ -150,7 +256,7 @@ contract DepositWithdrawModule is ERC20, IDepositWithdrawModule {
         require(policy.canWithdraw && policy.enabled, "Withdrawals are not enabled for this asset");
 
         if (policy.permissioned) {
-            require(userWhitelist[order.intent.to] == Role.SUPER_USER, "Only super user");
+            require(userAccountInfo[order.intent.to].role == Role.SUPER_USER, "Only super user");
         }
 
         // valuate the fund, fetches new fresh valuation
@@ -233,6 +339,16 @@ contract DepositWithdrawModule is ERC20, IDepositWithdrawModule {
         );
     }
 
+    /// @notice shares cannot be transferred between users
+    function transfer(address, uint256) public pure override returns (bool) {
+        return false;
+    }
+
+    /// @notice shares cannot be transferred between users
+    function transferFrom(address, address, uint256) public pure override returns (bool) {
+        return false;
+    }
+
     /// @notice cannot assume value is constant
     function decimals() public view override returns (uint8) {
         return fundValuationOracle.decimals() + _decimalsOffset();
@@ -254,14 +370,34 @@ contract DepositWithdrawModule is ERC20, IDepositWithdrawModule {
         return assetPolicy[asset];
     }
 
-    function getUserRole(address user) public view override returns (Role) {
-        return userWhitelist[user];
+    function pauseAccount(address user) public onlyFund {
+        require(userAccountInfo[user].status == AccountStatus.ACTIVE, "Account not active");
+
+        userAccountInfo[user].status = AccountStatus.PAUSED;
     }
 
-    function enableUser(address user, Role role) public override onlyFund {
-        userWhitelist[user] = role;
+    function unpauseAccount(address user) public onlyFund {
+        require(userAccountInfo[user].status == AccountStatus.PAUSED, "Account not paused");
 
-        emit UserEnabled(user, role);
+        userAccountInfo[user].status = AccountStatus.ACTIVE;
+    }
+
+    function updateAccountRole(address user, Role role) public onlyFund {
+        require(userAccountInfo[user].status != AccountStatus.NULL, "Account is null");
+
+        userAccountInfo[user].role = role;
+    }
+
+    function openAccount(address user, Role role) public onlyFund activeEpoch {
+        require(userAccountInfo[user].status == AccountStatus.NULL, "Account already exists");
+
+        userAccountInfo[user] = UserAccountInfo({
+            currentEpoch: epochs.length - 1,
+            depositValue: 0,
+            nonce: 0,
+            role: role,
+            status: AccountStatus.ACTIVE
+        });
     }
 
     /**
@@ -278,12 +414,6 @@ contract DepositWithdrawModule is ERC20, IDepositWithdrawModule {
     function convertToAssets(uint256 shares) public view virtual returns (uint256) {
         (uint256 tvl,) = fundValuationOracle.getValuation();
         return _convertToAssets(shares, tvl, Math.Rounding.Floor);
-    }
-
-    function disableUser(address user) public override onlyFund {
-        userWhitelist[user] = Role.NONE;
-
-        emit UserDisabled(user);
     }
 
     /// @dev inspired by OpenZeppelin ERC-4626 implementation
