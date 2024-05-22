@@ -269,12 +269,10 @@ contract DepositWithdrawModule is ERC20, IDepositWithdrawModule {
         // as the fund's valuation
         (uint256 assetValuation,) = IOracle(assetOracle).getValuation();
 
-        // get the fund's current asset balance
-        uint256 startBalance = ERC20(order.intent.asset).balanceOf(address(fund));
-
         // calculate the withdrawal valuation, denominated in the same currency as the fund
-        uint256 withdrawalValuation =
-            order.intent.amount * assetValuation / (10 ** ERC20(order.intent.asset).decimals());
+        uint256 withdrawalValuation = order.intent.amount.mulDiv(
+            assetValuation, (10 ** ERC20(order.intent.asset).decimals()), Math.Rounding.Ceil
+        );
 
         require(
             withdrawalValuation > policy.minNominalWithdrawal * (10 ** decimals()),
@@ -287,8 +285,23 @@ contract DepositWithdrawModule is ERC20, IDepositWithdrawModule {
         // make sure the withdrawal is below the maximum
         require(sharesOwed <= order.intent.maxSharesIn, "slippage too high");
 
+        // calculate the fee
+        (uint256 performanceFee, uint256 feeAsShares) = _calculateFee(
+            withdrawalValuation,
+            balanceOf(order.intent.user),
+            userAccountInfo[order.intent.user].depositValue,
+            tvl,
+            totalSupply()
+        );
+
+        // decrement users deposit value
+        userAccountInfo[order.intent.user].depositValue -= (withdrawalValuation + performanceFee);
+
         // burn shares from user
-        _burn(order.intent.user, sharesOwed);
+        _burn(order.intent.user, sharesOwed + feeAsShares);
+
+        // mint shares to fee recipient
+        _mint(feeRecipient, feeAsShares);
 
         // transfer from fund to user
         require(
@@ -319,14 +332,6 @@ contract DepositWithdrawModule is ERC20, IDepositWithdrawModule {
                 "Withdrawal safe trx failed"
             );
         }
-
-        // get the fund's new asset balance
-        uint256 endBalance = ERC20(order.intent.asset).balanceOf(address(fund));
-
-        // check the withdrawal was successful
-        require(
-            startBalance == endBalance + order.intent.amount, "Withdrawal failed: amount mismatch"
-        );
 
         emit Withdraw(
             order.intent.user,
