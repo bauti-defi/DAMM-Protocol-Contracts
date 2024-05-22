@@ -301,7 +301,7 @@ contract DepositWithdrawModule is ERC20, IDepositWithdrawModule {
         _burn(order.intent.user, sharesOwed + feeAsShares);
 
         // mint shares to fee recipient
-        _mint(feeRecipient, feeAsShares);
+        if(feeAsShares > 0) _mint(feeRecipient, feeAsShares);
 
         // transfer from fund to user
         require(
