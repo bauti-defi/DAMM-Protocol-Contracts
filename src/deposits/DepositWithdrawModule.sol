@@ -2,6 +2,7 @@
 pragma solidity ^0.8.25;
 
 import "@openzeppelin-contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin-contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin-contracts/utils/math/Math.sol";
 import "@openzeppelin-contracts/utils/cryptography/MessageHashUtils.sol";
@@ -69,49 +70,7 @@ contract DepositWithdrawModule is ERC20, IDepositWithdrawModule {
             "Epoch not ended"
         );
 
-        epochs.push(
-            Epoch({
-                id: epochs.length,
-                tvl: 0,
-                sharesOutstanding: 0,
-                endTimestamp: block.timestamp + epochDuration
-            })
-        );
-    }
-
-    /// TODO: batching
-    function collectFee(address account) external onlyFeeRecipient {
-        require(basisPointsPerformanceFee > 0, "Fee is 0");
-        require(epochs.length > 0, "No epochs");
-        require(epochs[epochs.length - 1].endTimestamp < block.timestamp, "Epoch still active");
-
-        UserAccountInfo memory info = userAccountInfo[account];
-
-        require(info.status != AccountStatus.NULL, "Account null");
-        require(info.currentEpoch <= epochs.length - 1, "User not in past epochs");
-        require(balanceOf(account) > 0, "No balance");
-
-        /// @notice this will revert if fund is not completely liquid
-        /// valuate the fund, fetches new fresh valuation
-        (uint256 fundTvl,) = fundValuationOracle.getValuation();
-        uint256 circulatingSupply = totalSupply();
-
-        (uint256 feeValue, uint256 sharesOwed) = _calculateFee(
-            info.depositValue, balanceOf(account), info.depositValue, fundTvl, circulatingSupply
-        );
-
-        // deduct fee from account deposit
-        userAccountInfo[account].depositValue -= feeValue;
-
-        // set epoch to next one
-        userAccountInfo[account].currentEpoch = epochs.length;
-
-        _burn(account, sharesOwed);
-        _mint(feeRecipient, sharesOwed);
-
-        require(totalSupply() == circulatingSupply, "Supply changed");
-
-        /// TODO: emit
+        epochs.push(Epoch({id: epochs.length, endTimestamp: block.timestamp + epochDuration}));
     }
 
     function _calculateFee(
@@ -120,7 +79,7 @@ contract DepositWithdrawModule is ERC20, IDepositWithdrawModule {
         uint256 userDeposit,
         uint256 fundTvl,
         uint256 circulatingSupply
-    ) private returns (uint256 feeValue, uint256 sharesOwed) {
+    ) private view returns (uint256 feeValue, uint256 sharesOwed) {
         if (basisPointsPerformanceFee == 0) return (0, 0);
 
         require(
@@ -143,6 +102,156 @@ contract DepositWithdrawModule is ERC20, IDepositWithdrawModule {
         sharesOwed = _convertToShares(feeValue, fundTvl, Math.Rounding.Ceil);
     }
 
+    function collectEpochPerformanceFees(address[] calldata from) external onlyFeeRecipient {
+        require(basisPointsPerformanceFee > 0, "Fee is 0");
+        require(epochs.length > 0, "No epochs");
+        require(epochs[epochs.length - 1].endTimestamp < block.timestamp, "Epoch still active");
+
+        /// @notice this will revert if fund is not completely liquid
+        /// valuate the fund, fetches new fresh valuation
+        (uint256 fundTvl,) = fundValuationOracle.getValuation();
+
+        // get starting supply
+        uint256 circulatingSupply = totalSupply();
+
+        uint256 sharesOwed = 0;
+
+        uint256 userCount = from.length;
+        for (uint256 i = 0; i < userCount;) {
+            UserAccountInfo memory info = userAccountInfo[from[i]];
+
+            require(info.status != AccountStatus.NULL, "Account null");
+            require(info.currentEpoch <= epochs.length - 1, "User not in past epochs");
+            require(balanceOf(from[i]) > 0, "No balance");
+
+            (uint256 feeValue, uint256 feeAsShares) = _calculateFee(
+                info.depositValue, balanceOf(from[i]), info.depositValue, fundTvl, totalSupply()
+            );
+
+            // deduct fee from account deposit
+            userAccountInfo[from[i]].depositValue -= feeValue;
+
+            // set epoch to next one
+            userAccountInfo[from[i]].currentEpoch = epochs.length;
+
+            // burn user shares
+            _burn(from[i], feeAsShares);
+
+            // accumulate shares to bulk mint fee recipient later
+            sharesOwed += feeAsShares;
+
+            emit EpochFeeCollected(from[i], feeValue, feeAsShares, feeRecipient);
+
+            unchecked {
+                i++;
+            }
+        }
+
+        // mint shares to fee recipient
+        _mint(feeRecipient, sharesOwed);
+
+        // invariant check
+        require(totalSupply() == circulatingSupply, "Supply changed");
+    }
+
+    function withdrawFee(address asset, uint256 amount, uint256 maxSharesIn)
+        external
+        onlyFeeRecipient
+        activeEpoch
+    {
+        require(assetPolicy[asset].enabled, "Asset not enabled");
+
+        // valuate the fund, fetches new fresh valuation
+        (uint256 fundTvl,) = fundValuationOracle.getValuation();
+
+        address assetOracle = fundValuationOracle.getAssetOracle(asset);
+        require(assetOracle != address(0), "Asset oracle not found");
+
+        (uint256 assetValuation,) = IOracle(assetOracle).getValuation();
+
+        uint256 withdrawalValuation =
+            amount.mulDiv(assetValuation, (10 ** ERC20(asset).decimals()), Math.Rounding.Ceil);
+
+        require(withdrawalValuation > 0, "Withdrawal too small");
+
+        uint256 sharesOwed = _convertToShares(withdrawalValuation, fundTvl, Math.Rounding.Ceil);
+
+        require(sharesOwed <= maxSharesIn, "slippage too high");
+
+        _burn(feeRecipient, sharesOwed);
+
+        // transfer from fund to fee recipient
+        require(
+            fund.execTransactionFromModule(
+                asset,
+                0,
+                abi.encodeWithSignature("transfer(address,uint256)", feeRecipient, amount),
+                Enum.Operation.Call
+            ),
+            "Withdrawal safe trx failed"
+        );
+
+        emit FeeWithdraw(feeRecipient, asset, amount, sharesOwed);
+    }
+
+    function _deposit(address asset, address user, uint256 amount, uint256 relayerTip)
+        private
+        returns (uint256 sharesOwed)
+    {
+        AssetPolicy memory policy = assetPolicy[asset];
+
+        require(policy.canDeposit && policy.enabled, "Deposits are not enabled for this asset");
+
+        if (policy.permissioned) {
+            require(userAccountInfo[user].role == Role.SUPER_USER, "Only super user");
+        }
+
+        // valuate the fund, fetches new fresh valuation
+        (uint256 fundTvl,) = fundValuationOracle.getValuation();
+
+        address assetOracle = fundValuationOracle.getAssetOracle(asset);
+        require(assetOracle != address(0), "Asset oracle not found");
+
+        // get asset valuation, we grab latest to ensure we are using same valuation
+        // as the fund's valuation
+        (uint256 assetValuation,) = IOracle(assetOracle).getValuation();
+
+        ERC20 assetToken = ERC20(asset);
+
+        // get the fund's current asset balance
+        uint256 startBalance = assetToken.balanceOf(address(fund));
+
+        // transfer from user to fund
+        IERC20(assetToken).safeTransferFrom(user, address(fund), amount);
+
+        // pay relay tip if any
+        if (relayerTip > 0) {
+            IERC20(assetToken).safeTransferFrom(user, msg.sender, relayerTip);
+        }
+
+        // get the fund's new asset balance
+        uint256 endBalance = assetToken.balanceOf(address(fund));
+
+        // check the deposit was successful
+        require(endBalance == startBalance + amount, "Deposit failed");
+
+        // calculate the deposit valuation, denominated in the same currency as the fund
+        uint256 depositValuation = amount * assetValuation / (10 ** assetToken.decimals());
+
+        // make sure the deposit is above the minimum
+        require(
+            depositValuation > policy.minNominalDeposit * (10 ** decimals()), "Deposit too small"
+        );
+
+        // increment users deposit value
+        userAccountInfo[user].depositValue += depositValuation;
+
+        // round down in favor of the fund to avoid some rounding error attacks
+        sharesOwed = _convertToShares(depositValuation, fundTvl, Math.Rounding.Floor);
+
+        emit Deposit(user, asset, amount, sharesOwed, msg.sender);
+    }
+
     /// @dev asset valuation and fund valuation must be denomintated in the same currency (same decimals)
     function deposit(DepositOrder calldata order)
         external
@@ -162,73 +271,77 @@ contract DepositWithdrawModule is ERC20, IDepositWithdrawModule {
         require(order.intent.deadline >= block.timestamp, "Deadline expired");
         require(order.intent.amount > 0, "Amount must be greater than 0");
 
-        AssetPolicy memory policy = assetPolicy[order.intent.asset];
-
-        require(policy.canDeposit && policy.enabled, "Deposits are not enabled for this asset");
-
-        if (policy.permissioned) {
-            require(userAccountInfo[order.intent.to].role == Role.SUPER_USER, "Only super user");
-        }
-
-        // valuate the fund, fetches new fresh valuation
-        (uint256 tvl,) = fundValuationOracle.getValuation();
-
-        address assetOracle = fundValuationOracle.getAssetOracle(order.intent.asset);
-        require(assetOracle != address(0), "Asset oracle not found");
-
-        // get asset valuation, we grab latest to ensure we are using same valuation
-        // as the fund's valuation
-        (uint256 assetValuation,) = IOracle(assetOracle).getValuation();
-
-        // get the fund's current asset balance
-        uint256 startBalance = ERC20(order.intent.asset).balanceOf(address(fund));
-
-        // transfer from user to fund
-        IERC20(order.intent.asset).safeTransferFrom(
-            order.intent.user, address(fund), order.intent.amount
+        uint256 sharesOwed = _deposit(
+            order.intent.asset, order.intent.user, order.intent.amount, order.intent.relayerTip
         );
-
-        // pay relay tip if any
-        if (order.intent.relayerTip > 0) {
-            IERC20(order.intent.asset).safeTransferFrom(
-                order.intent.user, msg.sender, order.intent.relayerTip
-            );
-        }
-
-        // get the fund's new asset balance
-        uint256 endBalance = ERC20(order.intent.asset).balanceOf(address(fund));
-
-        // check the deposit was successful
-        require(endBalance == startBalance + order.intent.amount, "Deposit failed");
-
-        // calculate the deposit valuation, denominated in the same currency as the fund
-        uint256 depositValuation =
-            order.intent.amount * assetValuation / (10 ** ERC20(order.intent.asset).decimals());
-
-        // make sure the deposit is above the minimum
-        require(
-            depositValuation > policy.minNominalDeposit * (10 ** decimals()), "Deposit too small"
-        );
-
-        // increment users deposit value
-        userAccountInfo[order.intent.user].depositValue += depositValuation;
-
-        // round down in favor of the fund to avoid some rounding error attacks
-        uint256 sharesOwed = _convertToShares(depositValuation, tvl, Math.Rounding.Floor);
 
         // lets make sure slippage is acceptable
         require(sharesOwed >= order.intent.minSharesOut, "slippage too high");
 
         // mint shares
         _mint(order.intent.to, sharesOwed);
+    }
 
-        emit Deposit(
-            order.intent.user,
-            order.intent.to,
-            order.intent.asset,
-            order.intent.amount,
-            depositValuation,
-            tvl,
+    function _withdraw(InternalWithdraw memory withdrawInfo) private {
+        AssetPolicy memory policy = assetPolicy[withdrawInfo.asset];
+
+        require(policy.canWithdraw && policy.enabled, "Withdrawals are not enabled for this asset");
+
+        if (policy.permissioned) {
+            require(userAccountInfo[withdrawInfo.user].role == Role.SUPER_USER, "Only super user");
+        }
+
+        // valuate the fund, fetches new fresh valuation
+        (uint256 fundTvl,) = fundValuationOracle.getValuation();
+
+        address assetOracle = fundValuationOracle.getAssetOracle(withdrawInfo.asset);
+        require(assetOracle != address(0), "Asset oracle not found");
+
+        // get asset valuation, we grab latest to ensure we are using same valuation
+        // as the fund's valuation
+        (uint256 assetValuation,) = IOracle(assetOracle).getValuation();
+
+        // calculate the withdrawal valuation, denominated in the same currency as the fund
+        uint256 withdrawalValuation = withdrawInfo.amount.mulDiv(
+            assetValuation, (10 ** ERC20(withdrawInfo.asset).decimals()), Math.Rounding.Ceil
+        );
+
+        require(
+            withdrawalValuation > policy.minNominalWithdrawal * (10 ** decimals()),
+            "Withdrawal too small"
+        );
+
+        // round up in favor of the fund to avoid some rounding error attacks
+        uint256 sharesOwed = _convertToShares(withdrawalValuation, fundTvl, Math.Rounding.Ceil);
+
+        // make sure the withdrawal is below the maximum
+        require(sharesOwed <= withdrawInfo.maxSharesIn, "slippage too high");
+
+        // calculate the fee
+        (uint256 performanceFee, uint256 feeAsShares) = _calculateFee(
+            withdrawalValuation,
+            balanceOf(withdrawInfo.user),
+            userAccountInfo[withdrawInfo.user].depositValue,
+            fundTvl,
+            totalSupply()
+        );
+
+        // burn shares from user
+        _burn(withdrawInfo.user, sharesOwed + feeAsShares);
+
+        // decrement users deposit value
+        userAccountInfo[withdrawInfo.user].depositValue -= (withdrawalValuation + performanceFee);
+
+        // mint shares to fee recipient
+        if (feeAsShares > 0) _mint(feeRecipient, feeAsShares);
+
+        emit Withdraw(
+            withdrawInfo.user,
+            withdrawInfo.to,
+            withdrawInfo.asset,
+            withdrawInfo.amount,
+            withdrawalValuation,
+            sharesOwed + feeAsShares,
             msg.sender
         );
     }
@@ -251,57 +364,15 @@ contract DepositWithdrawModule is ERC20, IDepositWithdrawModule {
         require(order.intent.deadline >= block.timestamp, "Deadline expired");
         require(order.intent.amount > 0, "Amount must be greater than 0");
 
-        AssetPolicy memory policy = assetPolicy[order.intent.asset];
-
-        require(policy.canWithdraw && policy.enabled, "Withdrawals are not enabled for this asset");
-
-        if (policy.permissioned) {
-            require(userAccountInfo[order.intent.to].role == Role.SUPER_USER, "Only super user");
-        }
-
-        // valuate the fund, fetches new fresh valuation
-        (uint256 tvl,) = fundValuationOracle.getValuation();
-
-        address assetOracle = fundValuationOracle.getAssetOracle(order.intent.asset);
-        require(assetOracle != address(0), "Asset oracle not found");
-
-        // get asset valuation, we grab latest to ensure we are using same valuation
-        // as the fund's valuation
-        (uint256 assetValuation,) = IOracle(assetOracle).getValuation();
-
-        // calculate the withdrawal valuation, denominated in the same currency as the fund
-        uint256 withdrawalValuation = order.intent.amount.mulDiv(
-            assetValuation, (10 ** ERC20(order.intent.asset).decimals()), Math.Rounding.Ceil
+        _withdraw(
+            InternalWithdraw({
+                user: order.intent.user,
+                to: order.intent.to,
+                asset: order.intent.asset,
+                amount: order.intent.amount,
+                maxSharesIn: order.intent.maxSharesIn
+            })
         );
-
-        require(
-            withdrawalValuation > policy.minNominalWithdrawal * (10 ** decimals()),
-            "Withdrawal too small"
-        );
-
-        // round up in favor of the fund to avoid some rounding error attacks
-        uint256 sharesOwed = _convertToShares(withdrawalValuation, tvl, Math.Rounding.Ceil);
-
-        // make sure the withdrawal is below the maximum
-        require(sharesOwed <= order.intent.maxSharesIn, "slippage too high");
-
-        // calculate the fee
-        (uint256 performanceFee, uint256 feeAsShares) = _calculateFee(
-            withdrawalValuation,
-            balanceOf(order.intent.user),
-            userAccountInfo[order.intent.user].depositValue,
-            tvl,
-            totalSupply()
-        );
-
-        // decrement users deposit value
-        userAccountInfo[order.intent.user].depositValue -= (withdrawalValuation + performanceFee);
-
-        // burn shares from user
-        _burn(order.intent.user, sharesOwed + feeAsShares);
-
-        // mint shares to fee recipient
-        if(feeAsShares > 0) _mint(feeRecipient, feeAsShares);
 
         // transfer from fund to user
         require(
@@ -332,16 +403,6 @@ contract DepositWithdrawModule is ERC20, IDepositWithdrawModule {
                 "Withdrawal safe trx failed"
             );
         }
-
-        emit Withdraw(
-            order.intent.user,
-            order.intent.to,
-            order.intent.asset,
-            order.intent.amount,
-            withdrawalValuation,
-            tvl,
-            msg.sender
-        );
     }
 
     /// @notice shares cannot be transferred between users

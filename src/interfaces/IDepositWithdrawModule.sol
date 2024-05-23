@@ -9,23 +9,21 @@ interface IDepositWithdrawModule {
     event UserEnabled(address user, Role role);
     event UserDisabled(address user);
     event Deposit(
-        address indexed user,
-        address to,
-        address asset,
-        uint256 amount,
-        uint256 valuation,
-        uint256 tvl,
-        address relayer
+        address indexed user, address asset, uint256 amount, uint256 shares, address relayer
     );
     event Withdraw(
         address indexed user,
         address to,
         address asset,
         uint256 amount,
-        uint256 valuation,
-        uint256 tvl,
+        uint256 withdrawValuation,
+        uint256 sharesBurnt,
         address relayer
     );
+
+    event FeeWithdraw(address recipient, address asset, uint256 amount, uint256 shares);
+
+    event EpochFeeCollected(address indexed user, uint256 fee, uint256 shares, address receiver);
 
     function getAssetPolicy(address asset) external view returns (AssetPolicy memory);
 
