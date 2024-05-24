@@ -12,6 +12,7 @@ import "@src/interfaces/IFund.sol";
 
 import "./DepositWithdrawStructs.sol";
 import "@src/interfaces/IDepositWithdrawModule.sol";
+import "./DepositWithdrawErrors.sol";
 
 contract DepositWithdrawModule is ERC20, IDepositWithdrawModule {
     using SafeERC20 for IERC20;
@@ -43,38 +44,38 @@ contract DepositWithdrawModule is ERC20, IDepositWithdrawModule {
     }
 
     modifier onlyFund() {
-        require(msg.sender == address(fund), "Only fund can call this function");
+        require(msg.sender == address(fund), OnlyFund_Error);
         _;
     }
 
     modifier onlyActiveUser(address user) {
-        require(userAccountInfo[user].role != Role.NONE, "User not whitelisted");
-        require(userAccountInfo[user].status == AccountStatus.ACTIVE, "Account not active");
+        require(userAccountInfo[user].role != Role.NONE, OnlyUser_Error);
+        require(userAccountInfo[user].status == AccountStatus.ACTIVE, AccountNotActive_Error);
         _;
     }
 
     modifier onlyFeeRecipient() {
-        require(msg.sender == feeRecipient, "Only fee recipient can call this function");
+        require(msg.sender == feeRecipient, OnlyFeeRecipient_Error);
         _;
     }
 
     modifier activeEpoch() {
-        require(epochs.length > 0, "No epochs");
-        require(epochs[epochs.length - 1].endTimestamp > block.timestamp, "Epoch ended");
+        require(epochs.length > 0, EpochsEmpty_Error);
+        require(epochs[epochs.length - 1].endTimestamp > block.timestamp, EpochEnded_Error);
         _;
     }
 
     function startEpoch(uint256 epochDuration) external onlyFund {
         require(
             epochs.length == 0 || epochs[epochs.length - 1].endTimestamp < block.timestamp,
-            "Epoch not ended"
+            ActiveEpoch_Error
         );
 
         epochs.push(Epoch({id: epochs.length, endTimestamp: block.timestamp + epochDuration}));
     }
 
     function _calculateFee(
-        uint256 capitalToTax,
+        uint256 principal,
         uint256 userBalance,
         uint256 userDeposit,
         uint256 fundTvl,
@@ -83,29 +84,32 @@ contract DepositWithdrawModule is ERC20, IDepositWithdrawModule {
         if (basisPointsPerformanceFee == 0) return (0, 0);
 
         require(
-            fundTvl * circulatingSupply * userDeposit * capitalToTax * userBalance > 0,
-            "invariant: no zeros"
+            fundTvl * circulatingSupply * userDeposit * principal * userBalance > 0,
+            NonZeroValueExpected_Error
         );
 
         /// @dev (a/b) / (c/d) = a * d / b / c
         /// fundTvl / circulatingSupply = share price now
         /// deposit / userBalance = user share price
-        uint256 accruedInterest = fundTvl * userBalance / circulatingSupply / userDeposit;
+        /// C1/C0 = (1 + r)
+        /// @notice this value is scaled by this contract's decimals for calculation precision
+        uint256 accruedInterest =
+            1 * (10 ** decimals()) * fundTvl * userBalance / circulatingSupply / userDeposit;
 
         // negative performance => no fees
         if (accruedInterest <= 1 * (10 ** decimals())) return (0, 0);
 
         feeValue = (accruedInterest - 1 * (10 ** decimals())).mulDiv(
-            capitalToTax * basisPointsPerformanceFee, BASIS_POINTS_GRANULARITY, Math.Rounding.Ceil
+            principal * basisPointsPerformanceFee, BASIS_POINTS_GRANULARITY, Math.Rounding.Ceil
         );
 
         sharesOwed = _convertToShares(feeValue, fundTvl, Math.Rounding.Ceil);
     }
 
     function collectEpochPerformanceFees(address[] calldata from) external onlyFeeRecipient {
-        require(basisPointsPerformanceFee > 0, "Fee is 0");
-        require(epochs.length > 0, "No epochs");
-        require(epochs[epochs.length - 1].endTimestamp < block.timestamp, "Epoch still active");
+        require(basisPointsPerformanceFee > 0, PerfomanceFeeIsZero_Error);
+        require(epochs.length > 0, EpochsEmpty_Error);
+        require(epochs[epochs.length - 1].endTimestamp < block.timestamp, ActiveEpoch_Error);
 
         /// @notice this will revert if fund is not completely liquid
         /// valuate the fund, fetches new fresh valuation
@@ -120,9 +124,8 @@ contract DepositWithdrawModule is ERC20, IDepositWithdrawModule {
         for (uint256 i = 0; i < userCount;) {
             UserAccountInfo memory info = userAccountInfo[from[i]];
 
-            require(info.status != AccountStatus.NULL, "Account null");
-            require(info.currentEpoch <= epochs.length - 1, "User not in past epochs");
-            require(balanceOf(from[i]) > 0, "No balance");
+            require(info.status != AccountStatus.NULL, AccountNull_Error);
+            require(info.currentEpoch <= epochs.length - 1, AccountEpochUpToDate_Error);
 
             (uint256 feeValue, uint256 feeAsShares) = _calculateFee(
                 info.depositValue, balanceOf(from[i]), info.depositValue, fundTvl, totalSupply()
@@ -151,7 +154,7 @@ contract DepositWithdrawModule is ERC20, IDepositWithdrawModule {
         _mint(feeRecipient, sharesOwed);
 
         // invariant check
-        require(totalSupply() == circulatingSupply, "Supply changed");
+        require(totalSupply() == circulatingSupply, UnExpectedSupplyIncrease_Error);
     }
 
     function withdrawFee(address asset, uint256 amount, uint256 maxSharesIn)
@@ -159,24 +162,24 @@ contract DepositWithdrawModule is ERC20, IDepositWithdrawModule {
         onlyFeeRecipient
         activeEpoch
     {
-        require(assetPolicy[asset].enabled, "Asset not enabled");
+        require(assetPolicy[asset].enabled, AssetUnavailable_Error);
 
         // valuate the fund, fetches new fresh valuation
         (uint256 fundTvl,) = fundValuationOracle.getValuation();
 
         address assetOracle = fundValuationOracle.getAssetOracle(asset);
-        require(assetOracle != address(0), "Asset oracle not found");
+        require(assetOracle != address(0), InvalidOracle_Error);
 
         (uint256 assetValuation,) = IOracle(assetOracle).getValuation();
 
         uint256 withdrawalValuation =
             amount.mulDiv(assetValuation, (10 ** ERC20(asset).decimals()), Math.Rounding.Ceil);
 
-        require(withdrawalValuation > 0, "Withdrawal too small");
+        require(withdrawalValuation > 0, InsufficientWithdraw_Error);
 
         uint256 sharesOwed = _convertToShares(withdrawalValuation, fundTvl, Math.Rounding.Ceil);
 
-        require(sharesOwed <= maxSharesIn, "slippage too high");
+        require(sharesOwed <= maxSharesIn, SlippageLimit_Error);
 
         _burn(feeRecipient, sharesOwed);
 
@@ -188,7 +191,7 @@ contract DepositWithdrawModule is ERC20, IDepositWithdrawModule {
                 abi.encodeWithSignature("transfer(address,uint256)", feeRecipient, amount),
                 Enum.Operation.Call
             ),
-            "Withdrawal safe trx failed"
+            AssetTransfer_Error
         );
 
         emit FeeWithdraw(feeRecipient, asset, amount, sharesOwed);
@@ -200,17 +203,23 @@ contract DepositWithdrawModule is ERC20, IDepositWithdrawModule {
     {
         AssetPolicy memory policy = assetPolicy[asset];
 
-        require(policy.canDeposit && policy.enabled, "Deposits are not enabled for this asset");
+        require(policy.canDeposit && policy.enabled, AssetUnavailable_Error);
 
         if (policy.permissioned) {
-            require(userAccountInfo[user].role == Role.SUPER_USER, "Only super user");
+            require(userAccountInfo[user].role == Role.SUPER_USER, OnlySuperUser_Error);
         }
 
         // valuate the fund, fetches new fresh valuation
         (uint256 fundTvl,) = fundValuationOracle.getValuation();
+        uint256 valuationDecimals = fundValuationOracle.decimals();
 
         address assetOracle = fundValuationOracle.getAssetOracle(asset);
-        require(assetOracle != address(0), "Asset oracle not found");
+
+        // asset oracle must be set and have same decimals (currency) as fund valuation
+        require(
+            assetOracle != address(0) && IOracle(assetOracle).decimals() == valuationDecimals,
+            InvalidOracle_Error
+        );
 
         // get asset valuation, we grab latest to ensure we are using same valuation
         // as the fund's valuation
@@ -233,14 +242,16 @@ contract DepositWithdrawModule is ERC20, IDepositWithdrawModule {
         uint256 endBalance = assetToken.balanceOf(address(fund));
 
         // check the deposit was successful
-        require(endBalance == startBalance + amount, "Deposit failed");
+        require(endBalance == startBalance + amount, AssetTransfer_Error);
 
         // calculate the deposit valuation, denominated in the same currency as the fund
-        uint256 depositValuation = amount * assetValuation / (10 ** assetToken.decimals());
+        uint256 depositValuation =
+            amount.mulDiv(assetValuation, 10 ** assetToken.decimals(), Math.Rounding.Floor);
 
         // make sure the deposit is above the minimum
         require(
-            depositValuation > policy.minNominalDeposit * (10 ** decimals()), "Deposit too small"
+            depositValuation > policy.minNominalDeposit * (10 ** valuationDecimals),
+            InsufficientDeposit_Error
         );
 
         // increment users deposit value
@@ -265,37 +276,45 @@ contract DepositWithdrawModule is ERC20, IDepositWithdrawModule {
                 abi.encode(order.intent).toEthSignedMessageHash(),
                 order.signature
             ),
-            "Invalid signature"
+            InvalidSignature_Error
         );
-        require(order.intent.nonce == userAccountInfo[order.intent.user].nonce++, "Invalid nonce");
-        require(order.intent.deadline >= block.timestamp, "Deadline expired");
-        require(order.intent.amount > 0, "Amount must be greater than 0");
+        require(
+            order.intent.nonce == userAccountInfo[order.intent.user].nonce++, InvalidNonce_Error
+        );
+        require(order.intent.deadline >= block.timestamp, IntentExpired_Error);
+        require(order.intent.amount > 0, InsufficientAmount_Error);
 
         uint256 sharesOwed = _deposit(
             order.intent.asset, order.intent.user, order.intent.amount, order.intent.relayerTip
         );
 
         // lets make sure slippage is acceptable
-        require(sharesOwed >= order.intent.minSharesOut, "slippage too high");
+        require(sharesOwed >= order.intent.minSharesOut, SlippageLimit_Error);
 
         // mint shares
-        _mint(order.intent.to, sharesOwed);
+        _mint(order.intent.user, sharesOwed);
     }
 
     function _withdraw(InternalWithdraw memory withdrawInfo) private {
         AssetPolicy memory policy = assetPolicy[withdrawInfo.asset];
 
-        require(policy.canWithdraw && policy.enabled, "Withdrawals are not enabled for this asset");
+        require(policy.canWithdraw && policy.enabled, AssetUnavailable_Error);
 
         if (policy.permissioned) {
-            require(userAccountInfo[withdrawInfo.user].role == Role.SUPER_USER, "Only super user");
+            require(userAccountInfo[withdrawInfo.user].role == Role.SUPER_USER, OnlySuperUser_Error);
         }
 
         // valuate the fund, fetches new fresh valuation
         (uint256 fundTvl,) = fundValuationOracle.getValuation();
+        uint256 valuationDecimals = fundValuationOracle.decimals();
 
         address assetOracle = fundValuationOracle.getAssetOracle(withdrawInfo.asset);
-        require(assetOracle != address(0), "Asset oracle not found");
+
+        // asset oracle must be set and have same decimals (currency) as fund valuation
+        require(
+            assetOracle != address(0) && valuationDecimals == IOracle(assetOracle).decimals(),
+            InvalidOracle_Error
+        );
 
         // get asset valuation, we grab latest to ensure we are using same valuation
         // as the fund's valuation
@@ -306,16 +325,17 @@ contract DepositWithdrawModule is ERC20, IDepositWithdrawModule {
             assetValuation, (10 ** ERC20(withdrawInfo.asset).decimals()), Math.Rounding.Ceil
         );
 
+        // make sure the withdrawal is above the minimum
         require(
-            withdrawalValuation > policy.minNominalWithdrawal * (10 ** decimals()),
-            "Withdrawal too small"
+            withdrawalValuation > policy.minNominalWithdrawal * (10 ** valuationDecimals),
+            InsufficientWithdraw_Error
         );
 
         // round up in favor of the fund to avoid some rounding error attacks
         uint256 sharesOwed = _convertToShares(withdrawalValuation, fundTvl, Math.Rounding.Ceil);
 
         // make sure the withdrawal is below the maximum
-        require(sharesOwed <= withdrawInfo.maxSharesIn, "slippage too high");
+        require(sharesOwed <= withdrawInfo.maxSharesIn, SlippageLimit_Error);
 
         // calculate the fee
         (uint256 performanceFee, uint256 feeAsShares) = _calculateFee(
@@ -358,11 +378,13 @@ contract DepositWithdrawModule is ERC20, IDepositWithdrawModule {
                 abi.encode(order.intent).toEthSignedMessageHash(),
                 order.signature
             ),
-            "Invalid signature"
+            InvalidSignature_Error
         );
-        require(order.intent.nonce == userAccountInfo[order.intent.user].nonce++, "Invalid nonce");
-        require(order.intent.deadline >= block.timestamp, "Deadline expired");
-        require(order.intent.amount > 0, "Amount must be greater than 0");
+        require(
+            order.intent.nonce == userAccountInfo[order.intent.user].nonce++, InvalidNonce_Error
+        );
+        require(order.intent.deadline >= block.timestamp, IntentExpired_Error);
+        require(order.intent.amount > 0, InsufficientAmount_Error);
 
         _withdraw(
             InternalWithdraw({
@@ -386,7 +408,7 @@ contract DepositWithdrawModule is ERC20, IDepositWithdrawModule {
                 ),
                 Enum.Operation.Call
             ),
-            "Withdrawal safe trx failed"
+            AssetTransfer_Error
         );
 
         // pay relay tip if any
@@ -400,9 +422,13 @@ contract DepositWithdrawModule is ERC20, IDepositWithdrawModule {
                     ),
                     Enum.Operation.Call
                 ),
-                "Withdrawal safe trx failed"
+                AssetTransfer_Error
             );
         }
+    }
+
+    function increaseNonce(uint256 increment) external onlyActiveUser(msg.sender) {
+        userAccountInfo[msg.sender].nonce += increment > 0 ? increment : 1;
     }
 
     /// @notice shares cannot be transferred between users
@@ -437,25 +463,25 @@ contract DepositWithdrawModule is ERC20, IDepositWithdrawModule {
     }
 
     function pauseAccount(address user) public onlyFund {
-        require(userAccountInfo[user].status == AccountStatus.ACTIVE, "Account not active");
+        require(userAccountInfo[user].status == AccountStatus.ACTIVE, AccountNotActive_Error);
 
         userAccountInfo[user].status = AccountStatus.PAUSED;
     }
 
     function unpauseAccount(address user) public onlyFund {
-        require(userAccountInfo[user].status == AccountStatus.PAUSED, "Account not paused");
+        require(userAccountInfo[user].status == AccountStatus.PAUSED, AccountNotPaused_Error);
 
         userAccountInfo[user].status = AccountStatus.ACTIVE;
     }
 
     function updateAccountRole(address user, Role role) public onlyFund {
-        require(userAccountInfo[user].status != AccountStatus.NULL, "Account is null");
+        require(userAccountInfo[user].status != AccountStatus.NULL, AccountNull_Error);
 
         userAccountInfo[user].role = role;
     }
 
     function openAccount(address user, Role role) public onlyFund activeEpoch {
-        require(userAccountInfo[user].status == AccountStatus.NULL, "Account already exists");
+        require(userAccountInfo[user].status == AccountStatus.NULL, AccountExists_Error);
 
         userAccountInfo[user] = UserAccountInfo({
             currentEpoch: epochs.length - 1,

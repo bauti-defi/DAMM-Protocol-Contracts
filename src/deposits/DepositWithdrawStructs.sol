@@ -12,7 +12,6 @@ struct AssetPolicy {
 
 struct DepositIntent {
     address user;
-    address to;
     address asset;
     uint256 amount;
     uint256 deadline;
