@@ -74,6 +74,27 @@ contract DepositWithdrawModule is ERC20, IDepositWithdrawModule {
         epochs.push(Epoch({id: epochs.length, endTimestamp: block.timestamp + epochDuration}));
     }
 
+    function _fetchValuations(address asset)
+        private
+        view
+        returns (uint256 fundTvl, uint256 assetValuation)
+    {
+        (fundTvl,) = fundValuationOracle.getValuation();
+        uint256 valuationDecimals = fundValuationOracle.decimals();
+
+        address assetOracle = fundValuationOracle.getAssetOracle(asset);
+
+        // asset oracle must be set and have same decimals (currency) as fund valuation
+        require(
+            assetOracle != address(0) && IOracle(assetOracle).decimals() == valuationDecimals,
+            InvalidOracle_Error
+        );
+
+        // get asset valuation, we grab latest to ensure we are using same valuation
+        // as the fund's valuation
+        (assetValuation,) = IOracle(assetOracle).getValuation();
+    }
+
     function _calculateFee(
         uint256 principal,
         uint256 userBalance,
@@ -99,6 +120,8 @@ contract DepositWithdrawModule is ERC20, IDepositWithdrawModule {
         // negative performance => no fees
         if (accruedInterest <= 1 * (10 ** decimals())) return (0, 0);
 
+        /// @dev C * (r - 1) * (f/10000)
+        // take a cut of the interest accrued
         feeValue = (accruedInterest - 1 * (10 ** decimals())).mulDiv(
             principal * basisPointsPerformanceFee, BASIS_POINTS_GRANULARITY, Math.Rounding.Ceil
         );
@@ -125,17 +148,19 @@ contract DepositWithdrawModule is ERC20, IDepositWithdrawModule {
             UserAccountInfo memory info = userAccountInfo[from[i]];
 
             require(info.status != AccountStatus.NULL, AccountNull_Error);
+            require(info.role == Role.USER, OnlyUser_Error); // only normal users can generate fees
             require(info.currentEpoch <= epochs.length - 1, AccountEpochUpToDate_Error);
 
+            // set epoch to next one
+            userAccountInfo[from[i]].currentEpoch = epochs.length;
+
+            // calculate fee owed by account
             (uint256 feeValue, uint256 feeAsShares) = _calculateFee(
                 info.depositValue, balanceOf(from[i]), info.depositValue, fundTvl, totalSupply()
             );
 
             // deduct fee from account deposit
             userAccountInfo[from[i]].depositValue -= feeValue;
-
-            // set epoch to next one
-            userAccountInfo[from[i]].currentEpoch = epochs.length;
 
             // burn user shares
             _burn(from[i], feeAsShares);
@@ -164,13 +189,8 @@ contract DepositWithdrawModule is ERC20, IDepositWithdrawModule {
     {
         require(assetPolicy[asset].enabled, AssetUnavailable_Error);
 
-        // valuate the fund, fetches new fresh valuation
-        (uint256 fundTvl,) = fundValuationOracle.getValuation();
-
-        address assetOracle = fundValuationOracle.getAssetOracle(asset);
-        require(assetOracle != address(0), InvalidOracle_Error);
-
-        (uint256 assetValuation,) = IOracle(assetOracle).getValuation();
+        // fetch fresh valuations
+        (uint256 fundTvl, uint256 assetValuation) = _fetchValuations(asset);
 
         uint256 withdrawalValuation =
             amount.mulDiv(assetValuation, (10 ** ERC20(asset).decimals()), Math.Rounding.Ceil);
@@ -209,21 +229,9 @@ contract DepositWithdrawModule is ERC20, IDepositWithdrawModule {
             require(userAccountInfo[user].role == Role.SUPER_USER, OnlySuperUser_Error);
         }
 
-        // valuate the fund, fetches new fresh valuation
-        (uint256 fundTvl,) = fundValuationOracle.getValuation();
+        // fetch fresh valuations
+        (uint256 fundTvl, uint256 assetValuation) = _fetchValuations(asset);
         uint256 valuationDecimals = fundValuationOracle.decimals();
-
-        address assetOracle = fundValuationOracle.getAssetOracle(asset);
-
-        // asset oracle must be set and have same decimals (currency) as fund valuation
-        require(
-            assetOracle != address(0) && IOracle(assetOracle).decimals() == valuationDecimals,
-            InvalidOracle_Error
-        );
-
-        // get asset valuation, we grab latest to ensure we are using same valuation
-        // as the fund's valuation
-        (uint256 assetValuation,) = IOracle(assetOracle).getValuation();
 
         ERC20 assetToken = ERC20(asset);
 
@@ -304,21 +312,9 @@ contract DepositWithdrawModule is ERC20, IDepositWithdrawModule {
             require(userAccountInfo[withdrawInfo.user].role == Role.SUPER_USER, OnlySuperUser_Error);
         }
 
-        // valuate the fund, fetches new fresh valuation
-        (uint256 fundTvl,) = fundValuationOracle.getValuation();
+        // fetch fresh valuations
+        (uint256 fundTvl, uint256 assetValuation) = _fetchValuations(withdrawInfo.asset);
         uint256 valuationDecimals = fundValuationOracle.decimals();
-
-        address assetOracle = fundValuationOracle.getAssetOracle(withdrawInfo.asset);
-
-        // asset oracle must be set and have same decimals (currency) as fund valuation
-        require(
-            assetOracle != address(0) && valuationDecimals == IOracle(assetOracle).decimals(),
-            InvalidOracle_Error
-        );
-
-        // get asset valuation, we grab latest to ensure we are using same valuation
-        // as the fund's valuation
-        (uint256 assetValuation,) = IOracle(assetOracle).getValuation();
 
         // calculate the withdrawal valuation, denominated in the same currency as the fund
         uint256 withdrawalValuation = withdrawInfo.amount.mulDiv(
@@ -466,18 +462,24 @@ contract DepositWithdrawModule is ERC20, IDepositWithdrawModule {
         require(userAccountInfo[user].status == AccountStatus.ACTIVE, AccountNotActive_Error);
 
         userAccountInfo[user].status = AccountStatus.PAUSED;
+
+        emit AccountPaused(user);
     }
 
     function unpauseAccount(address user) public onlyFund {
         require(userAccountInfo[user].status == AccountStatus.PAUSED, AccountNotPaused_Error);
 
         userAccountInfo[user].status = AccountStatus.ACTIVE;
+
+        emit AccountUnpaused(user);
     }
 
     function updateAccountRole(address user, Role role) public onlyFund {
         require(userAccountInfo[user].status != AccountStatus.NULL, AccountNull_Error);
 
         userAccountInfo[user].role = role;
+
+        emit AccountRoleChanged(user, role);
     }
 
     function openAccount(address user, Role role) public onlyFund activeEpoch {
@@ -490,6 +492,8 @@ contract DepositWithdrawModule is ERC20, IDepositWithdrawModule {
             role: role,
             status: AccountStatus.ACTIVE
         });
+
+        emit AccountOpened(user, epochs.length - 1, role);
     }
 
     /**

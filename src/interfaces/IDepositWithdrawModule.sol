@@ -6,8 +6,10 @@ import "@src/deposits/DepositWithdrawStructs.sol";
 interface IDepositWithdrawModule {
     event AssetEnabled(address asset);
     event AssetDisabled(address asset);
-    event UserEnabled(address user, Role role);
-    event UserDisabled(address user);
+    event AccountOpened(address indexed user, uint256 epoch, Role role);
+    event AccountRoleChanged(address indexed user, Role role);
+    event AccountPaused(address indexed user);
+    event AccountUnpaused(address indexed user);
     event Deposit(
         address indexed user, address asset, uint256 amount, uint256 shares, address relayer
     );
