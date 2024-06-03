@@ -15,8 +15,8 @@ abstract contract DeployConfigLoader is Script {
 
     /// @dev forge needs you to order fields in alphabetical order!!
     struct Uniswap {
-        address uniswapPositionManager;
-        address uniswapRouter;
+        address positionManager;
+        address router;
     }
 
     /// @dev forge needs you to order fields in alphabetical order!!
@@ -51,8 +51,8 @@ abstract contract DeployConfigLoader is Script {
         console2.log("gnosis.safeProxyFactory: ", chainConfig.gnosis.safeProxyFactory);
         console2.log("gnosis.safeSingleton: ", chainConfig.gnosis.safeSingleton);
         console2.log("gnosis.tokenCallbackHandler: ", chainConfig.gnosis.tokenCallbackHandler);
-        console2.log("uniswap.uniswapRouter: ", chainConfig.uniswap.uniswapRouter);
-        console2.log("uniswap.uniswapPositionManager: ", chainConfig.uniswap.uniswapPositionManager);
+        console2.log("uniswap.router: ", chainConfig.uniswap.router);
+        console2.log("uniswap.positionManager: ", chainConfig.uniswap.positionManager);
         console2.log("aave.pool: ", chainConfig.aave.pool);
     }
 }

@@ -10,6 +10,8 @@ contract UniswapV3Hooks is IBeforeTransaction, IAfterTransaction {
     error OnlyFund();
     error OnlyWhitelistedTokens();
     error InvalidPosition();
+    error UnsupportedTarget();
+    error UnsupportedSelector();
 
     address public immutable fund;
     INonfungiblePositionManager public immutable uniswapV3PositionManager;
@@ -100,7 +102,7 @@ contract UniswapV3Hooks is IBeforeTransaction, IAfterTransaction {
 
                 _checkPosition(tokenId);
             } else {
-                revert("unsupported selector");
+                revert UnsupportedSelector();
             }
         } else if (target == address(uniswapV3Router)) {
             if (
@@ -130,10 +132,10 @@ contract UniswapV3Hooks is IBeforeTransaction, IAfterTransaction {
                     revert OnlyFund();
                 }
             } else {
-                revert("unsupported target");
+                revert UnsupportedSelector();
             }
         } else {
-            revert("unsupported target");
+            revert UnsupportedTarget();
         }
     }
 
