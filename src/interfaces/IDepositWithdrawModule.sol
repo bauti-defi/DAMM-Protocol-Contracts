@@ -23,6 +23,8 @@ interface IDepositWithdrawModule {
         address relayer
     );
 
+    event EpochStarted(uint256 indexed epoch);
+
     event FeeWithdraw(address recipient, address asset, uint256 amount, uint256 shares);
 
     event EpochFeeCollected(address indexed user, uint256 fee, uint256 shares, address receiver);

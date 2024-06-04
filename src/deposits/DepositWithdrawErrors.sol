@@ -5,6 +5,7 @@ string constant InvalidSignature_Error = "Signature is invalid";
 string constant InvalidNonce_Error = "Nonce is invalid";
 string constant IntentExpired_Error = "Intent has expired";
 string constant InsufficientAmount_Error = "Amount is insufficient";
+string constant InsufficientLiquidty_Error = "Liquidity is insufficient";
 string constant InsufficientDeposit_Error = "Deposit amount is insufficient";
 string constant InsufficientWithdraw_Error = "Withdraw amount is insufficient";
 string constant SlippageLimit_Error = "Slippage limit exceeded";
@@ -30,5 +31,6 @@ string constant EpochEnded_Error = "Epoch has ended";
 string constant ActiveEpoch_Error = "Epoch is active";
 
 string constant PerfomanceFeeIsZero_Error = "Performance fee is zero";
+string constant InvalidPerformanceFee_Error = "Invalid performance fee";
 
 string constant NonZeroValueExpected_Error = "Non-zero value expected";

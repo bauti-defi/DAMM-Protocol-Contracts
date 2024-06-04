@@ -18,6 +18,7 @@ remappings = [
     "@safe-contracts/=lib/safe-contracts/contracts/",
     "@openzeppelin-contracts/=lib/openzeppelin-contracts/contracts/",
     "@uniswap-v3-periphery/=lib/v3-periphery/contracts/",
+    "@solmate/=lib/solmate/src/",
 
     
     ### @dev These imports are so we can compile the uniswapv3 periphery contracts inside tests

@@ -502,7 +502,6 @@ contract ArbStableFundConfig is DeployConfigLoader {
             transactionSignature
         );
 
-
         require(success, "Failed to approve");
     }
 
@@ -520,11 +519,10 @@ contract ArbStableFundConfig is DeployConfigLoader {
         _approveToken(ARB_USDT, chainConfig.uniswap.router, type(uint256).max);
         _approveToken(ARB_USDC, chainConfig.uniswap.router, type(uint256).max);
         _approveToken(ARB_DAI, chainConfig.uniswap.router, type(uint256).max);
-        
+
         _approveToken(ARB_USDCe, chainConfig.uniswap.positionManager, type(uint256).max);
         _approveToken(ARB_USDT, chainConfig.uniswap.positionManager, type(uint256).max);
         _approveToken(ARB_USDC, chainConfig.uniswap.positionManager, type(uint256).max);
         _approveToken(ARB_DAI, chainConfig.uniswap.positionManager, type(uint256).max);
     }
-
 }
