@@ -16,31 +16,12 @@ import {
     WithdrawOrder,
     DepositOrder,
     Role,
-    AccountStatus
+    AccountStatus,
+    AssetPolicy,
+    UserAccountInfo,
+    FundTVL
 } from "./DepositWithdrawStructs.sol";
 import {FundShareVault} from "./FundShareVault.sol";
-
-struct FundTVL {
-    uint256 timestamp;
-    uint256 totalAssets;
-    uint256 totalLiquidity;
-}
-
-struct AssetPolicy {
-    uint256 minimumDeposit;
-    uint256 minimumWithdrawal;
-    bool canDeposit;
-    bool canWithdraw;
-    bool permissioned;
-    bool enabled;
-}
-
-struct UserAccountInfo {
-    uint256 nonce;
-    uint256 despositedLiquidity;
-    Role role;
-    AccountStatus status;
-}
 
 interface IPeripheryCallbacks {
     function totalAssets() external view returns (uint256);

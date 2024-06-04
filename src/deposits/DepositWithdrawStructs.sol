@@ -1,15 +1,6 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.25;
 
-struct AssetPolicy {
-    uint256 minNominalDeposit;
-    uint256 minNominalWithdrawal;
-    bool canDeposit;
-    bool canWithdraw;
-    bool permissioned;
-    bool enabled;
-}
-
 struct DepositIntent {
     address user;
     address asset;
@@ -58,10 +49,24 @@ struct Epoch {
     uint256 endTimestamp;
 }
 
+struct FundTVL {
+    uint256 timestamp;
+    uint256 totalAssets;
+    uint256 totalLiquidity;
+}
+
+struct AssetPolicy {
+    uint256 minimumDeposit;
+    uint256 minimumWithdrawal;
+    bool canDeposit;
+    bool canWithdraw;
+    bool permissioned;
+    bool enabled;
+}
+
 struct UserAccountInfo {
-    uint256 currentEpoch;
-    uint256 depositValue;
     uint256 nonce;
+    uint256 despositedLiquidity;
     Role role;
     AccountStatus status;
 }
