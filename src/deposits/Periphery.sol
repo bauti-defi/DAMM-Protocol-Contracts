@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.25;
+pragma solidity ^0.8.0;
 
 import "@solmate/tokens/ERC20.sol";
-import "@src/interfaces/IFundValuationOracle.sol";
-import "@src/interfaces/IOracle.sol";
 import "@openzeppelin-contracts/utils/math/Math.sol";
 import "@openzeppelin-contracts/utils/cryptography/MessageHashUtils.sol";
 import "@openzeppelin-contracts/utils/cryptography/SignatureChecker.sol";
@@ -18,10 +16,10 @@ import {
     Role,
     AccountStatus,
     AssetPolicy,
-    UserAccountInfo,
-    FundTVL
+    UserAccountInfo
 } from "./DepositWithdrawStructs.sol";
 import {FundShareVault} from "./FundShareVault.sol";
+import "@euler-price-oracle/interfaces/IPriceOracle.sol";
 
 interface IPeripheryCallbacks {
     function totalAssets() external view returns (uint256);
@@ -51,35 +49,34 @@ contract Periphery is ERC20, IPeripheryCallbacks {
     using Math for uint256;
 
     IFund immutable fund;
-    IFundValuationOracle immutable fundValuationOracle;
-    FundShareVault immutable vault;
 
-    FundTVL[] public fundTvls;
+    /// @dev should be a Euler Oracle Router
+    IPriceOracle immutable oracleRouter;
+
+    FundShareVault immutable vault;
 
     mapping(address asset => AssetPolicy policy) private assetPolicy;
     mapping(address user => UserAccountInfo) private userAccountInfo;
 
     uint256 public feeBps = 1500;
-    uint256 public immutable UNIT;
     address public feeRecipient;
 
     constructor(
-        string memory _name,
-        string memory _symbol,
+        string memory _vaultName,
+        string memory _vaultSymbol,
         uint8 _decimals,
         address fund_,
-        address fundValuationOracle_,
+        address oracleRouter_,
         address feeRecipient_
-    ) ERC20("Liquidity", "LiQ", _decimals) {
-        UNIT = 10 ** _decimals;
+    ) ERC20("Liquidity", "USD", _decimals) {
         fund = IFund(fund_);
-        fundValuationOracle = IFundValuationOracle(fundValuationOracle_);
+        oracleRouter = IPriceOracle(oracleRouter_);
         feeRecipient = feeRecipient_;
-        vault = new FundShareVault(address(this), _name, _symbol);
+        vault = new FundShareVault(address(this), _vaultName, _vaultSymbol);
     }
 
     modifier onlyWhenFundIsFullyDivested() {
-        require(!fund.hasOpenPositions(), "FUND_NOT_FULLY_DIVESTED");
+        require(!fund.hasOpenPositions(), FundNotFullyDivested_Error);
         _;
     }
 
@@ -94,33 +91,31 @@ contract Periphery is ERC20, IPeripheryCallbacks {
         _;
     }
 
-    /// TODO: use transient storage?
-    modifier updateTvl() {
-        (uint256 fundTvl,) = fundValuationOracle.getValuation();
-        fundTvls.push(FundTVL(block.timestamp, fundTvl, totalSupply));
-        _;
-    }
+    function totalAssets()
+        external
+        view
+        override
+        onlyWhenFundIsFullyDivested
+        returns (uint256 total)
+    {
+        address[] memory assets = fund.getAssetsOfInterest();
+        uint256 assetLength = assets.length;
 
-    function totalAssets() external view override returns (uint256) {
-        return fundTvls.length > 0 ? fundTvls[fundTvls.length - 1].totalAssets : 0;
-    }
+        for (uint256 i = 0; i < assetLength;) {
+            total += oracleRouter.getQuote(
+                ERC20(assets[i]).balanceOf(address(fund)), assets[i], address(this)
+            );
 
-    function _fetchValuation(address asset) private view returns (uint256 assetValuation) {
-        address assetOracle = fundValuationOracle.getAssetOracle(asset);
-
-        // asset oracle must be set and have same decimals (currency) as fund valuation
-        require(assetOracle != address(0), InvalidOracle_Error);
-
-        // get asset valuation, we grab latest to ensure we are using same valuation
-        // as the fund's valuation
-        (assetValuation,) = IOracle(assetOracle).getValuation();
+            unchecked {
+                ++i;
+            }
+        }
     }
 
     function deposit(DepositOrder calldata order)
         public
         onlyWhenFundIsFullyDivested
         onlyActiveUser(order.intent.user)
-        updateTvl
         returns (uint256 shares)
     {
         require(
@@ -154,11 +149,9 @@ contract Periphery is ERC20, IPeripheryCallbacks {
             assetToken.safeTransferFrom(order.intent.user, msg.sender, order.intent.relayerTip);
         }
 
-        uint256 assetValuation = _fetchValuation(order.intent.asset);
-
-        uint256 liquidity = assetValuation.mulDiv(
-            order.intent.amount, (1 ** assetToken.decimals()), Math.Rounding.Floor
-        );
+        // calculate how much liquidity for this amount of deposited asset
+        uint256 liquidity =
+            oracleRouter.getQuote(order.intent.amount, order.intent.asset, address(this));
 
         // make sure the deposit is above the minimum
         require(liquidity > policy.minimumDeposit, InsufficientDeposit_Error);
@@ -180,7 +173,6 @@ contract Periphery is ERC20, IPeripheryCallbacks {
         public
         onlyWhenFundIsFullyDivested
         onlyActiveUser(order.intent.user)
-        updateTvl
         returns (uint256 vaultShares)
     {
         require(
@@ -205,41 +197,13 @@ contract Periphery is ERC20, IPeripheryCallbacks {
             require(userAccountInfo[order.intent.user].role == Role.SUPER_USER, OnlySuperUser_Error);
         }
 
-        uint256 assetValuation = _fetchValuation(order.intent.asset);
+        uint256 cumAmount = order.intent.amount + order.intent.relayerTip;
 
-        uint256 liquidity = assetValuation.mulDiv(
-            (order.intent.amount + order.intent.relayerTip),
-            (1 ** ERC20(order.intent.asset).decimals()),
-            Math.Rounding.Ceil
-        );
+        // calculate how much liquidity for this amount of withdrawed asset
+        uint256 liquidity = oracleRouter.getQuote(cumAmount, order.intent.asset, address(this));
 
         // make sure the withdrawal is above the minimum
         require(liquidity > policy.minimumWithdrawal, InsufficientWithdraw_Error);
-
-        // we calculate the yield given formula Cn = C0 * (1 + r) => Cn / C0 = 1 + r
-        // C is denoted in terms of liquidity token
-        /// @notice append `1 unit` to avoid rounding down the zero in case of negative yield
-        uint256 accruedInterest = UNIT
-            + vault.maxWithdraw(order.intent.user)
-                / userAccountInfo[order.intent.user].despositedLiquidity;
-
-        // there is positive yield, we need to calculate the fee
-        /// @notice the fee is also applied to the relayer tip. Otherwise a user could avoid performance fees by withdrawing with
-        /// a high relayer tip and low amount
-        uint256 fee;
-        if (accruedInterest > UNIT) {
-            /// @notice fee = r * amount * (f / 10_000)
-            /// given r = accruedInterest - 1 unit
-            fee = (accruedInterest - UNIT).mulDiv(
-                (order.intent.amount + order.intent.relayerTip) * feeBps,
-                BP_DIVISOR,
-                Math.Rounding.Ceil
-            );
-        }
-
-        // reduce depositedLiquidity proportionally to the withdrawal
-        userAccountInfo[order.intent.user].despositedLiquidity -=
-            UNIT.mulDiv(liquidity, vault.maxWithdraw(order.intent.user), Math.Rounding.Ceil);
 
         /// withdraw liquidity from vault to periphery
         vaultShares = vault.withdraw(liquidity, address(this), order.intent.user);
@@ -256,25 +220,12 @@ contract Periphery is ERC20, IPeripheryCallbacks {
                 order.intent.asset,
                 0,
                 abi.encodeWithSignature(
-                    "transfer(address,uint256)", order.intent.to, order.intent.amount - fee
+                    "transfer(address,uint256)", order.intent.to, order.intent.amount
                 ),
                 Enum.Operation.Call
             ),
             AssetTransfer_Error
         );
-
-        // pay protocol fee
-        if (fee > 0) {
-            require(
-                fund.execTransactionFromModule(
-                    order.intent.asset,
-                    0,
-                    abi.encodeWithSignature("transfer(address,uint256)", feeRecipient, fee),
-                    Enum.Operation.Call
-                ),
-                AssetTransfer_Error
-            );
-        }
 
         if (order.intent.relayerTip > 0) {
             require(
@@ -306,6 +257,9 @@ contract Periphery is ERC20, IPeripheryCallbacks {
     }
 
     function enableAsset(address asset, AssetPolicy memory policy) external onlyFund {
+        require(fund.isAssetOfInterest(asset), AssetNotSupported_Error);
+        require(policy.enabled, InvalidAssetPolicy_Error);
+
         assetPolicy[asset] = policy;
 
         emit AssetEnabled(asset);

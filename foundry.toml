@@ -19,11 +19,12 @@ remappings = [
     "@openzeppelin-contracts/=lib/openzeppelin-contracts/contracts/",
     "@uniswap-v3-periphery/=lib/v3-periphery/contracts/",
     "@solmate/=lib/solmate/src/",
+    "@euler-price-oracle/=lib/euler-price-oracle/src/",
 
     
     ### @dev These imports are so we can compile the uniswapv3 periphery contracts inside tests
     "@uniswap/v3-core/=lib/v3-periphery/node_modules/@uniswap/v3-core",
-    "@openzeppelin/contracts/=lib/v3-periphery/node_modules/@openzeppelin/contracts/",
+    "@openzeppelin/contracts/=lib/v3-periphery/node_modules/@openzeppelin/contracts/"
     #####
 ]
 

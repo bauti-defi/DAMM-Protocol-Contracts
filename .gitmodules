@@ -16,3 +16,6 @@
 [submodule "lib/solmate"]
 	path = lib/solmate
 	url = https://github.com/transmissions11/solmate
+[submodule "lib/euler-price-oracle"]
+	path = lib/euler-price-oracle
+	url = https://github.com/euler-xyz/euler-price-oracle

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.25;
+pragma solidity ^0.8.0;
 
 import "@safe-contracts/handler/TokenCallbackHandler.sol";
 import "@safe-contracts/handler/HandlerContext.sol";
@@ -13,9 +13,12 @@ event PositionClosed(address indexed by, bytes32 positionPointer);
 
 error NotModule();
 
+error OnlyFund();
+
 /// @dev concept under development!
 contract FundCallbackHandler is TokenCallbackHandler, HandlerContext, IPortfolio {
     using EnumerableSet for EnumerableSet.Bytes32Set;
+    using EnumerableSet for EnumerableSet.AddressSet;
 
     address public immutable fund;
 
@@ -30,13 +33,20 @@ contract FundCallbackHandler is TokenCallbackHandler, HandlerContext, IPortfolio
     /// hooks registry here would be a bad idea
 
     EnumerableSet.Bytes32Set private openPositions;
+    EnumerableSet.AddressSet private assetsOfInterest;
 
     constructor(address _fund) {
         fund = _fund;
     }
 
+    /// TODO: Allow scoping of module
     modifier onlyModule() {
         if (!ISafe(fund).isModuleEnabled(msg.sender)) revert NotModule();
+        _;
+    }
+
+    modifier onlyFund() {
+        if (_msgSender() != fund) revert OnlyFund();
         _;
     }
 
@@ -58,5 +68,41 @@ contract FundCallbackHandler is TokenCallbackHandler, HandlerContext, IPortfolio
 
     function hasOpenPositions() external view returns (bool) {
         return openPositions.length() > 0;
+    }
+
+    function setAssetsOfInterest(address[] calldata _assets)
+        external
+        onlyFund
+        returns (bool result)
+    {
+        for (uint256 i = 0; i < _assets.length; i++) {
+            result = assetsOfInterest.add(_assets[i]);
+        }
+    }
+
+    function addAssetOfInterest(address _asset) external onlyFund returns (bool result) {
+        result = assetsOfInterest.add(_asset);
+    }
+
+    function removeAssetsOfInterest(address[] calldata _assets)
+        external
+        onlyFund
+        returns (bool result)
+    {
+        for (uint256 i = 0; i < _assets.length; i++) {
+            result = assetsOfInterest.remove(_assets[i]);
+        }
+    }
+
+    function removeAssetOfInterest(address _asset) external onlyFund returns (bool result) {
+        result = assetsOfInterest.remove(_asset);
+    }
+
+    function isAssetOfInterest(address asset) external view returns (bool) {
+        return assetsOfInterest.contains(asset);
+    }
+
+    function getAssetsOfInterest() external view returns (address[] memory) {
+        return assetsOfInterest.values();
     }
 }

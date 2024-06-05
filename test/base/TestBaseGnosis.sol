@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-pragma solidity >=0.8.25;
+pragma solidity ^0.8.0;
 
 import {Test} from "@forge-std/Test.sol";
 import {SafeL2} from "@safe-contracts/SafeL2.sol";
@@ -35,7 +35,10 @@ abstract contract TestBaseGnosis is Test {
         vm.label(address(createCall), "CreateCall");
     }
 
-    function deploySafe(address[] memory admins, uint256 threshold) internal returns (SafeL2) {
+    function deploySafe(address[] memory admins, uint256 threshold, address fallbackHandler)
+        internal
+        returns (SafeL2)
+    {
         // create gnosis safe initializer payload
         bytes memory initializerPayload = abi.encodeCall(
             Safe.setup,
@@ -44,7 +47,7 @@ abstract contract TestBaseGnosis is Test {
                 threshold, // multisig signer threshold
                 address(0), // to
                 "", // data
-                address(tokenCallbackHandler), // fallback manager
+                address(fallbackHandler), // fallback manager
                 address(0), // payment token
                 0, // payment amount
                 payable(address(0)) // payment receiver
@@ -58,5 +61,9 @@ abstract contract TestBaseGnosis is Test {
         );
 
         return SafeL2(safe);
+    }
+
+    function deploySafe(address[] memory admins, uint256 threshold) internal returns (SafeL2) {
+        return deploySafe(admins, threshold, address(tokenCallbackHandler));
     }
 }

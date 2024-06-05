@@ -9,4 +9,16 @@ interface IPortfolio {
     function hasOpenPositions() external view returns (bool);
 
     function holdsPosition(bytes32 positionPointer) external view returns (bool);
+
+    function setAssetsOfInterest(address[] calldata _assets) external returns (bool);
+
+    function addAssetOfInterest(address _asset) external returns (bool);
+
+    function removeAssetsOfInterest(address[] calldata _assets) external returns (bool);
+
+    function removeAssetOfInterest(address _asset) external returns (bool);
+
+    function isAssetOfInterest(address asset) external view returns (bool);
+
+    function getAssetsOfInterest() external view returns (address[] memory);
 }

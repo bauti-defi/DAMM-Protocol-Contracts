@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.25;
+pragma solidity ^0.8.0;
 
 struct DepositIntent {
     address user;
@@ -47,12 +47,6 @@ enum AccountStatus {
 struct Epoch {
     uint256 id;
     uint256 endTimestamp;
-}
-
-struct FundTVL {
-    uint256 timestamp;
-    uint256 totalAssets;
-    uint256 totalLiquidity;
 }
 
 struct AssetPolicy {

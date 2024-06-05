@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.25;
+pragma solidity ^0.8.0;
 
 import {TestBaseGnosis} from "@test/base/TestBaseGnosis.sol";
 import {TestBaseProtocol} from "@test/base/TestBaseProtocol.sol";

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.25;
+pragma solidity ^0.8.0;
 
 import {IBeforeTransaction, IAfterTransaction} from "@src/interfaces/ITransactionHooks.sol";
 import {IPortfolio} from "@src/interfaces/IPortfolio.sol";
