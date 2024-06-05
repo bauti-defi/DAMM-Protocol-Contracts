@@ -102,9 +102,16 @@ contract Periphery is ERC20, IPeripheryCallbacks {
         uint256 assetLength = assets.length;
 
         for (uint256 i = 0; i < assetLength;) {
-            total += oracleRouter.getQuote(
-                ERC20(assets[i]).balanceOf(address(fund)), assets[i], address(this)
-            );
+            uint256 balance;
+
+            // native asset
+            if (assets[i] == address(0)) {
+                balance = address(fund).balance;
+            } else {
+                balance = ERC20(assets[i]).balanceOf(address(fund));
+            }
+
+            total += balance > 0 ? oracleRouter.getQuote(balance, assets[i], address(this)) : 0;
 
             unchecked {
                 ++i;

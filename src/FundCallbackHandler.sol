@@ -15,22 +15,12 @@ error NotModule();
 
 error OnlyFund();
 
-/// @dev concept under development!
+/// @dev should only be truly global variables. nothing module specific.
 contract FundCallbackHandler is TokenCallbackHandler, HandlerContext, IPortfolio {
     using EnumerableSet for EnumerableSet.Bytes32Set;
     using EnumerableSet for EnumerableSet.AddressSet;
 
     address public immutable fund;
-
-    /// could be used to hold fund specific state
-    /// for example, registry of open positions, allowed tokens
-    /// maybe hook registry needs to go here?
-    /// maybe pause state should go here?
-    /// maybe only global state should go here?
-
-    /// should only be truly global variables. nothing module specific.
-    /// `pause` is a good place to start
-    /// hooks registry here would be a bad idea
 
     EnumerableSet.Bytes32Set private openPositions;
     EnumerableSet.AddressSet private assetsOfInterest;
@@ -80,6 +70,7 @@ contract FundCallbackHandler is TokenCallbackHandler, HandlerContext, IPortfolio
         }
     }
 
+    /// @notice native asset = address(0)
     function addAssetOfInterest(address _asset) external onlyFund returns (bool result) {
         result = assetsOfInterest.add(_asset);
     }

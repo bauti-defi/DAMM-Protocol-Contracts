@@ -56,10 +56,18 @@ abstract contract TokenMinter is Test {
     }
 
     function mintUSDC(address to, uint256 amount) public {
+        bytes4 increaseSelector = bytes4(keccak256(bytes("configureMinter(address,uint256)")));
+
+        address MASTER_MINTER = 0x8aFf09e2259cacbF4Fc4e3E53F3bf799EfEEab36;
+
+        vm.prank(MASTER_MINTER);
+        (bool success,) =
+            address(USDC).call(abi.encodeWithSelector(increaseSelector, USDC_MINTER, amount));
+
         bytes4 selector = bytes4(keccak256(bytes("mint(address,uint256)")));
 
         vm.prank(USDC_MINTER);
-        (bool success,) = address(USDC).call(abi.encodeWithSelector(selector, to, amount));
+        (success,) = address(USDC).call(abi.encodeWithSelector(selector, to, amount));
 
         assertEq(USDC.balanceOf(to), amount);
         assertEq(success, true);

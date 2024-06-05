@@ -10,7 +10,12 @@ import {MockERC20} from "@test/mocks/MockERC20.sol";
 import {TokenMinter} from "@test/forked/TokenMinter.sol";
 import {EulerRouter} from "@euler-price-oracle/EulerRouter.sol";
 import {ChainlinkOracle} from "@euler-price-oracle/adapter/chainlink/ChainlinkOracle.sol";
-import {ARB_USDC_USD_FEED, ARB_USDT_USD_FEED} from "@test/forked/ChainlinkOracleFeeds.sol";
+import {
+    ARB_USDC_USD_FEED,
+    ARB_USDT_USD_FEED,
+    ARB_DAI_USD_FEED,
+    ARB_ETH_USD_FEED
+} from "@test/forked/ChainlinkOracleFeeds.sol";
 import {Periphery} from "@src/deposits/Periphery.sol";
 import {AssetPolicy} from "@src/deposits/DepositWithdrawStructs.sol";
 import {IFund} from "@src/interfaces/IFund.sol";
@@ -35,7 +40,7 @@ contract TestFundValuation is Test, TestBaseProtocol, TestBaseGnosis, TokenMinte
         vm.selectFork(arbitrumFork);
         assertEq(vm.activeFork(), arbitrumFork);
 
-        vm.rollFork(218784958);
+        vm.rollFork(218796378);
 
         TestBaseProtocol.setUp();
         TestBaseGnosis.setUp();
@@ -89,36 +94,15 @@ contract TestFundValuation is Test, TestBaseProtocol, TestBaseGnosis, TokenMinte
             )
         );
 
-        // lets enable USDC and USDT on the fund
+        // lets enable assets on the fund
         vm.startPrank(address(fund));
         IFund(address(fund)).addAssetOfInterest(ARB_USDC);
         IFund(address(fund)).addAssetOfInterest(ARB_USDT);
-        vm.stopPrank();
+        IFund(address(fund)).addAssetOfInterest(ARB_DAI);
+        IFund(address(fund)).addAssetOfInterest(ARB_USDCe);
 
-        // now we enable an asset policy for both USDC and USDT
-        vm.startPrank(address(fund));
-        periphery.enableAsset(
-            ARB_USDC,
-            AssetPolicy({
-                minimumDeposit: 1000 ether,
-                minimumWithdrawal: 1000 ether,
-                canDeposit: true,
-                canWithdraw: true,
-                permissioned: false,
-                enabled: true
-            })
-        );
-        periphery.enableAsset(
-            ARB_USDT,
-            AssetPolicy({
-                minimumDeposit: 1000 ether,
-                minimumWithdrawal: 1000 ether,
-                canDeposit: true,
-                canWithdraw: true,
-                permissioned: false,
-                enabled: true
-            })
-        );
+        // native eth
+        IFund(address(fund)).addAssetOfInterest(address(0));
         vm.stopPrank();
 
         // setup USDC/USD oracle
@@ -134,15 +118,53 @@ contract TestFundValuation is Test, TestBaseProtocol, TestBaseGnosis, TokenMinte
         vm.label(address(chainlinkOracle), "ChainlinkOracle-USDT");
         vm.prank(address(fund));
         oracleRouter.govSetConfig(ARB_USDT, address(periphery), address(chainlinkOracle));
+
+        // setup DAI/USD oracle
+        chainlinkOracle =
+            new ChainlinkOracle(ARB_DAI, address(periphery), ARB_DAI_USD_FEED, 24 hours);
+        vm.label(address(chainlinkOracle), "ChainlinkOracle-DAI");
+        vm.prank(address(fund));
+        oracleRouter.govSetConfig(ARB_DAI, address(periphery), address(chainlinkOracle));
+
+        // setup USDCe/USD oracle
+        chainlinkOracle =
+            new ChainlinkOracle(ARB_USDCe, address(periphery), ARB_USDC_USD_FEED, 24 hours);
+        vm.label(address(chainlinkOracle), "ChainlinkOracle-USDCe");
+        vm.prank(address(fund));
+        oracleRouter.govSetConfig(ARB_USDCe, address(periphery), address(chainlinkOracle));
+
+        // setup ETH/USD oracle
+        chainlinkOracle =
+            new ChainlinkOracle(address(0), address(periphery), ARB_ETH_USD_FEED, 24 hours);
+        vm.label(address(chainlinkOracle), "ChainlinkOracle-ETH");
+        vm.prank(address(fund));
+        oracleRouter.govSetConfig(address(0), address(periphery), address(chainlinkOracle));
     }
 
-    function test_this() public {
+    function test_valuate_fund_in_USD(uint256 a, uint256 b, uint256 c, uint256 d, uint256 e)
+        public
+    {
+        vm.assume(a < 1e20 && a > 0);
+        vm.assume(b < 1e20 && b > 0);
+        vm.assume(c < 1e20 && c > 0);
+        vm.assume(d < 1e20 && d > 0);
+        vm.assume(e < 1e30 && e > 0);
         assertEq(periphery.totalAssets(), 0, "Total assets should be 0");
 
-        // mint some USDC and USDT
-        mintUSDC(address(fund), 1 * (10 ** 6));
-        mintUSDT(address(fund), 1 * (10 ** 6));
+        uint256 eth_usd_price = 384782218166;
 
-        assertEq(periphery.totalAssets(), 2, "Total assets should be 2");
+        // mint some USDC and USDT
+        mintUSDC(address(fund), a * (10 ** 6));
+        mintUSDT(address(fund), b * (10 ** 6));
+        mintDAI(address(fund), c * (10 ** 18));
+        mintUSDCe(address(fund), d * (10 ** 6));
+        deal(address(fund), e);
+
+        assertApproxEqRel(
+            periphery.totalAssets(),
+            (a + b + c + d) * (10 ** 8) + e * eth_usd_price / 1 ether,
+            0.1e18,
+            "Total assets should be about same in USD"
+        );
     }
 }
