@@ -20,6 +20,7 @@ remappings = [
     "@uniswap-v3-periphery/=lib/v3-periphery/contracts/",
     "@solmate/=lib/solmate/src/",
     "@euler-price-oracle/=lib/euler-price-oracle/src/",
+    "@solady/=lib/solady/src/",
 
     
     ### @dev These imports are so we can compile the uniswapv3 periphery contracts inside tests

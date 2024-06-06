@@ -17,17 +17,21 @@ import {
     ARB_ETH_USD_FEED
 } from "@test/forked/ChainlinkOracleFeeds.sol";
 import {Periphery} from "@src/deposits/Periphery.sol";
-import {AssetPolicy} from "@src/deposits/DepositWithdrawStructs.sol";
+import {AssetPolicy} from "@src/deposits/Structs.sol";
 import {IFund} from "@src/interfaces/IFund.sol";
+import {FundNotFullyDivested_Error} from "@src/deposits/Errors.sol";
+import {POSITION_OPENER, POSITION_CLOSER, NULL} from "@src/FundCallbackHandler.sol";
 
 // keccak256("fallback_manager.handler.address")
 bytes32 constant FALLBACK_HANDLER_STORAGE_SLOT =
     0x6c9a6c4a39284e37ed1cf53d337577d14212a4870fb976a4366c693b939918d5;
 
+uint256 constant USD_DECIMALS = 8;
+
 contract TestFundValuation is Test, TestBaseProtocol, TestBaseGnosis, TokenMinter {
     address internal fundAdmin;
     uint256 internal fundAdminPK;
-    SafeL2 internal fund;
+    IFund internal fund;
     FundCallbackHandler internal callbackHandler;
     EulerRouter internal oracleRouter;
     Periphery internal periphery;
@@ -52,7 +56,7 @@ contract TestFundValuation is Test, TestBaseProtocol, TestBaseGnosis, TokenMinte
         address[] memory admins = new address[](1);
         admins[0] = fundAdmin;
 
-        fund = deploySafe(admins, 1);
+        fund = IFund(address(deploySafe(admins, 1)));
 
         callbackHandler = new FundCallbackHandler(address(fund));
 
@@ -74,7 +78,7 @@ contract TestFundValuation is Test, TestBaseProtocol, TestBaseGnosis, TokenMinte
 
         // deploy periphery using module factory
         periphery = Periphery(
-            deployContract(
+            deployModule(
                 payable(address(fund)),
                 fundAdmin,
                 fundAdminPK,
@@ -85,7 +89,7 @@ contract TestFundValuation is Test, TestBaseProtocol, TestBaseGnosis, TokenMinte
                     abi.encode(
                         "TestVault",
                         "TV",
-                        8, // must be same as underlying chainlink oracles. USD = 8
+                        USD_DECIMALS, // must be same as underlying chainlink oracles. USD = 8
                         payable(address(fund)),
                         address(oracleRouter),
                         address(0)
@@ -93,6 +97,8 @@ contract TestFundValuation is Test, TestBaseProtocol, TestBaseGnosis, TokenMinte
                 )
             )
         );
+
+        assertTrue(fund.isModuleEnabled(address(periphery)), "Periphery not module");
 
         // lets enable assets on the fund
         vm.startPrank(address(fund));
@@ -141,6 +147,32 @@ contract TestFundValuation is Test, TestBaseProtocol, TestBaseGnosis, TokenMinte
         oracleRouter.govSetConfig(address(0), address(periphery), address(chainlinkOracle));
     }
 
+    function test_cannot_valuate_fund_with_open_positions() public {
+        assertEq(periphery.totalAssets(), 0, "Total assets should be 0");
+        assertEq(fund.hasOpenPositions(), false, "No open positions");
+
+        // the caller must be an active module
+        vm.prank(address(periphery));
+        fund.onPositionOpened(bytes32(uint256(1)));
+
+        mintUSDC(address(fund), 1000 * (10 ** 6));
+        mintUSDT(address(fund), 1000 * (10 ** 6));
+        mintDAI(address(fund), 1000 * (10 ** 18));
+        mintUSDCe(address(fund), 1000 * (10 ** 6));
+
+        vm.expectRevert();
+        periphery.totalAssets();
+
+        assertEq(fund.hasOpenPositions(), true, "No open positions");
+
+        // close the position
+        vm.prank(address(periphery));
+        fund.onPositionClosed(bytes32(uint256(1)));
+
+        assertEq(fund.hasOpenPositions(), false, "No open positions");
+        assertTrue(periphery.totalAssets() > 0, "Total assets should not be 0");
+    }
+
     function test_valuate_fund_in_USD(uint256 a, uint256 b, uint256 c, uint256 d, uint256 e)
         public
     {
@@ -151,6 +183,7 @@ contract TestFundValuation is Test, TestBaseProtocol, TestBaseGnosis, TokenMinte
         vm.assume(e < 1e30 && e > 0);
         assertEq(periphery.totalAssets(), 0, "Total assets should be 0");
 
+        // price at current block: 218796378
         uint256 eth_usd_price = 384782218166;
 
         // mint some USDC and USDT
@@ -160,9 +193,10 @@ contract TestFundValuation is Test, TestBaseProtocol, TestBaseGnosis, TokenMinte
         mintUSDCe(address(fund), d * (10 ** 6));
         deal(address(fund), e);
 
+        // total assets in USD
         assertApproxEqRel(
             periphery.totalAssets(),
-            (a + b + c + d) * (10 ** 8) + e * eth_usd_price / 1 ether,
+            (a + b + c + d) * (10 ** USD_DECIMALS) + e * eth_usd_price / 1 ether,
             0.1e18,
             "Total assets should be about same in USD"
         );

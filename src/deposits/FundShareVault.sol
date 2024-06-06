@@ -2,10 +2,7 @@
 pragma solidity ^0.8.0;
 
 import "@openzeppelin-contracts/token/ERC20/extensions/ERC4626.sol";
-
-interface IPeriphery {
-    function totalAssets() external view returns (uint256);
-}
+import {IPeriphery} from "@src/interfaces/IPeriphery.sol";
 
 contract FundShareVault is ERC4626 {
     IPeriphery internal immutable periphery;

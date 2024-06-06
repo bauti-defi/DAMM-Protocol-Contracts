@@ -85,4 +85,6 @@ interface ISafe {
 
     /// @return Number of signers required for the the Safe
     function getThreshold() external view returns (uint256);
+
+    function setFallbackHandler(address handler) external;
 }

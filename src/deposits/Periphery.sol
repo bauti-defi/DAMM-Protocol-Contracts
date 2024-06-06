@@ -5,7 +5,7 @@ import "@solmate/tokens/ERC20.sol";
 import "@openzeppelin-contracts/utils/math/Math.sol";
 import "@openzeppelin-contracts/utils/cryptography/MessageHashUtils.sol";
 import "@openzeppelin-contracts/utils/cryptography/SignatureChecker.sol";
-import "./DepositWithdrawErrors.sol";
+import "./Errors.sol";
 import "@src/interfaces/IFund.sol";
 import "@solmate/utils/SafeTransferLib.sol";
 import {
@@ -17,33 +17,15 @@ import {
     AccountStatus,
     AssetPolicy,
     UserAccountInfo
-} from "./DepositWithdrawStructs.sol";
+} from "./Structs.sol";
 import {FundShareVault} from "./FundShareVault.sol";
 import "@euler-price-oracle/interfaces/IPriceOracle.sol";
-
-interface IPeripheryCallbacks {
-    function totalAssets() external view returns (uint256);
-}
-
-event AssetEnabled(address asset);
-
-event AssetDisabled(address asset);
-
-event AccountOpened(address indexed user, Role role);
-
-event AccountRoleChanged(address indexed user, Role role);
-
-event AccountPaused(address indexed user);
-
-event AccountUnpaused(address indexed user);
-
-event FeeRecipientUpdated(address recipient);
-
-event PerformanceFeeUpdated(uint256 oldFee, uint256 newFee);
+import {IPeriphery} from "@src/interfaces/IPeriphery.sol";
+import "./Events.sol";
 
 uint256 constant BP_DIVISOR = 10000;
 
-contract Periphery is ERC20, IPeripheryCallbacks {
+contract Periphery is ERC20, IPeriphery {
     using SafeTransferLib for ERC20;
     using MessageHashUtils for bytes;
     using Math for uint256;
@@ -111,6 +93,7 @@ contract Periphery is ERC20, IPeripheryCallbacks {
                 balance = ERC20(assets[i]).balanceOf(address(fund));
             }
 
+            // calculate how much liquidity for this amount of asset
             total += balance > 0 ? oracleRouter.getQuote(balance, assets[i], address(this)) : 0;
 
             unchecked {

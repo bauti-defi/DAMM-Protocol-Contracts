@@ -3,6 +3,7 @@ pragma solidity ^0.8.0;
 
 import {ISafe} from "@src/interfaces/ISafe.sol";
 import {IModuleFactory} from "@src/interfaces/IModuleFactory.sol";
+import {IOwnable} from "@src/interfaces/IOwnable.sol";
 
 contract ModuleFactory is IModuleFactory {
     error DeploymentFailed();
@@ -43,9 +44,8 @@ contract ModuleFactory is IModuleFactory {
     /// deploys a module and adds module to safe.
     ///  @dev the safe must delegate call this function for the module to be added properly
     /// always be causious when using delegatecall!!
-    function deployModule(bytes32 salt, uint256 value, bytes memory creationCode)
-        external
-        isDelegateCall
+    function _deployModule(bytes32 salt, uint256 value, bytes memory creationCode)
+        internal
         returns (address module)
     {
         if (address(this).balance < value) revert InsufficientBalance();
@@ -58,11 +58,31 @@ contract ModuleFactory is IModuleFactory {
         }
         if (module == address(0)) revert DeploymentFailed();
 
-        // callback: add module to the safe. msg.sender is this because of delegatecall
+        // callback: add module to the safe. msg.sender == this because of delegatecall
         ISafe(address(this)).enableModule(module);
         if (!ISafe(address(this)).isModuleEnabled(module)) revert ModuleSetupFailed();
 
         emit ModuleDeployed(address(this), module);
+    }
+
+    function deployModule(bytes32 salt, uint256 value, bytes memory creationCode)
+        external
+        isDelegateCall
+        returns (address module)
+    {
+        module = _deployModule(salt, value, creationCode);
+    }
+
+    function deployModuleWithRoles(
+        bytes32 salt,
+        uint256 value,
+        bytes memory creationCode,
+        uint256 roles
+    ) external isDelegateCall returns (address module) {
+        module = _deployModule(salt, value, creationCode);
+
+        // callback: set roles for the module. msg.sender == this because of delegatecall
+        IOwnable(address(this)).grantRoles(module, roles);
     }
 
     /**

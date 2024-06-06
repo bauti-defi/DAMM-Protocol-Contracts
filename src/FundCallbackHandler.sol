@@ -6,6 +6,7 @@ import "@safe-contracts/handler/HandlerContext.sol";
 import "@openzeppelin-contracts/utils/structs/EnumerableSet.sol";
 import {ISafe} from "@src/interfaces/ISafe.sol";
 import {IPortfolio} from "@src/interfaces/IPortfolio.sol";
+import {OwnableRoles} from "@solady/auth/OwnableRoles.sol";
 
 event PositionOpened(address indexed by, bytes32 positionPointer);
 
@@ -13,10 +14,17 @@ event PositionClosed(address indexed by, bytes32 positionPointer);
 
 error NotModule();
 
+error NotAuthorized();
+
 error OnlyFund();
 
+uint256 constant NULL = 1 << 0;
+uint256 constant FUND = 1 << 1;
+uint256 constant POSITION_OPENER = 1 << 2;
+uint256 constant POSITION_CLOSER = 1 << 3;
+
 /// @dev should only be truly global variables. nothing module specific.
-contract FundCallbackHandler is TokenCallbackHandler, HandlerContext, IPortfolio {
+contract FundCallbackHandler is OwnableRoles, TokenCallbackHandler, HandlerContext, IPortfolio {
     using EnumerableSet for EnumerableSet.Bytes32Set;
     using EnumerableSet for EnumerableSet.AddressSet;
 
@@ -25,13 +33,23 @@ contract FundCallbackHandler is TokenCallbackHandler, HandlerContext, IPortfolio
     EnumerableSet.Bytes32Set private openPositions;
     EnumerableSet.AddressSet private assetsOfInterest;
 
+    mapping(address module => uint256 role) private moduleRoles;
+
     constructor(address _fund) {
+        // fallback needs to be owner because OwnableRoles is not aware of the msg.sender passed along by _msgSender()
+        _initializeOwner(address(this));
         fund = _fund;
+
+        _grantRoles(_fund, FUND);
     }
 
-    /// TODO: Allow scoping of module
     modifier onlyModule() {
-        if (!ISafe(fund).isModuleEnabled(msg.sender)) revert NotModule();
+        if (!ISafe(fund).isModuleEnabled(_msgSender())) revert NotModule();
+        _;
+    }
+
+    modifier withRole(uint256 role) {
+        if (rolesOf(_msgSender()) & role != role) revert NotAuthorized();
         _;
     }
 
@@ -40,13 +58,31 @@ contract FundCallbackHandler is TokenCallbackHandler, HandlerContext, IPortfolio
         _;
     }
 
-    function onPositionOpened(bytes32 positionPointer) external onlyModule returns (bool result) {
+    function grantRoles(address account, uint256 roles) public payable override onlyFund {
+        _grantRoles(account, roles);
+    }
+
+    function onPositionOpened(bytes32 positionPointer)
+        external
+        onlyModule
+        returns (
+            // withRole(POSITION_OPENER)
+            bool result
+        )
+    {
         result = openPositions.add(positionPointer);
 
         emit PositionOpened(msg.sender, positionPointer);
     }
 
-    function onPositionClosed(bytes32 positionPointer) external onlyModule returns (bool result) {
+    function onPositionClosed(bytes32 positionPointer)
+        external
+        onlyModule
+        returns (
+            // withRole(POSITION_CLOSER)
+            bool result
+        )
+    {
         result = openPositions.remove(positionPointer);
 
         emit PositionClosed(msg.sender, positionPointer);
