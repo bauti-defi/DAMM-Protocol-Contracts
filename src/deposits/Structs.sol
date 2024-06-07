@@ -16,6 +16,7 @@ struct DepositOrder {
     bytes signature;
 }
 
+// TODO: add chainId
 struct WithdrawIntent {
     address user;
     address to;

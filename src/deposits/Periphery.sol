@@ -87,6 +87,7 @@ contract Periphery is ERC20, IPeriphery {
             uint256 balance;
 
             // native asset
+            /// TODO: change this to not zero
             if (assets[i] == address(0)) {
                 balance = address(fund).balance;
             } else {
@@ -159,6 +160,7 @@ contract Periphery is ERC20, IPeriphery {
         userAccountInfo[order.intent.user].despositedLiquidity += liquidity;
     }
 
+    // TODO: permit2 ?
     function withdraw(WithdrawOrder calldata order)
         public
         onlyWhenFundIsFullyDivested
@@ -206,9 +208,12 @@ contract Periphery is ERC20, IPeriphery {
 
         /// transfer asset from fund to receiver
         require(
+            // TODO: transfer returns a bool, check it
+            // TODO: look at using SecuredTokenTransfer.sol in safe contracts
             fund.execTransactionFromModule(
                 order.intent.asset,
                 0,
+                // TODO: abi.encodeCall
                 abi.encodeWithSignature(
                     "transfer(address,uint256)", order.intent.to, order.intent.amount
                 ),
@@ -218,10 +223,12 @@ contract Periphery is ERC20, IPeriphery {
         );
 
         if (order.intent.relayerTip > 0) {
+            // TODO: transfer returns a bool, check it
             require(
                 fund.execTransactionFromModule(
                     order.intent.asset,
                     0,
+                    // TODO: abi.encodeCall
                     abi.encodeWithSignature(
                         "transfer(address,uint256)", msg.sender, order.intent.relayerTip
                     ),

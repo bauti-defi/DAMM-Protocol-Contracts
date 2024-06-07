@@ -37,6 +37,7 @@ contract FundCallbackHandler is OwnableRoles, TokenCallbackHandler, HandlerConte
 
     constructor(address _fund) {
         // fallback needs to be owner because OwnableRoles is not aware of the msg.sender passed along by _msgSender()
+        /// TODO: intializable ?
         _initializeOwner(address(this));
         fund = _fund;
 
