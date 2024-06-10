@@ -8,15 +8,15 @@ import "@test/base/TestBaseGnosis.sol";
 import "@test/base/TestBaseProtocol.sol";
 import "@safe-contracts/SafeL2.sol";
 import "@safe-contracts/Safe.sol";
-import "@src/HookRegistry.sol";
-import "@src/trading/TradingModule.sol";
+import "@src/modules/trading/HookRegistry.sol";
+import "@src/modules/trading/TradingModule.sol";
 import "@test/utils/SafeUtils.sol";
 import "@test/forked/TokenMinter.sol";
 import "@src/hooks/UniswapV3Hooks.sol";
 import {HookConfig} from "@src/lib/Hooks.sol";
 import {Enum} from "@safe-contracts/common/Enum.sol";
 import {IERC721} from "@openzeppelin-contracts/token/ERC721/IERC721.sol";
-import "@src/trading/Structs.sol";
+import "@src/modules/trading/Structs.sol";
 
 contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, TokenMinter {
     using SafeUtils for SafeL2;

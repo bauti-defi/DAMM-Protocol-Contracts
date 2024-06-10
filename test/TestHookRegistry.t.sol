@@ -8,7 +8,7 @@ import {SafeL2} from "@safe-contracts/SafeL2.sol";
 import {Enum} from "@safe-contracts/common/Enum.sol";
 import {SafeUtils, SafeTransaction} from "@test/utils/SafeUtils.sol";
 import "@src/lib/Hooks.sol";
-import "@src/HookRegistry.sol";
+import "@src/modules/trading/HookRegistry.sol";
 
 contract TestHookRegistry is Test, TestBaseGnosis, TestBaseProtocol {
     using SafeUtils for SafeL2;

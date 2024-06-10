@@ -5,8 +5,8 @@ import {TestBaseGnosis} from "@test/base/TestBaseGnosis.sol";
 import {TestBaseProtocol} from "@test/base/TestBaseProtocol.sol";
 import {SafeL2} from "@safe-contracts/SafeL2.sol";
 import {Safe} from "@safe-contracts/Safe.sol";
-import {HookRegistry} from "@src/HookRegistry.sol";
-import {TradingModule} from "@src/trading/TradingModule.sol";
+import {HookRegistry} from "@src/modules/trading/HookRegistry.sol";
+import {TradingModule} from "@src/modules/trading/TradingModule.sol";
 import {SafeUtils, SafeTransaction} from "@test/utils/SafeUtils.sol";
 import "@src/hooks/AaveV3Hooks.sol";
 import {HookConfig} from "@src/lib/Hooks.sol";
@@ -15,7 +15,7 @@ import {TokenMinter} from "@test/forked/TokenMinter.sol";
 import {IERC20} from "@openzeppelin-contracts/token/ERC20/IERC20.sol";
 import {Enum} from "@safe-contracts/common/Enum.sol";
 import {console2} from "@forge-std/Test.sol";
-import "@src/trading/Structs.sol";
+import "@src/modules/trading/Structs.sol";
 
 contract TestAaveV3 is TestBaseGnosis, TestBaseProtocol, BaseAaveV3, TokenMinter {
     using SafeUtils for SafeL2;

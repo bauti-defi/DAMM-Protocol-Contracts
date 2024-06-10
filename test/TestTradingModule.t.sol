@@ -5,15 +5,15 @@ import {Test, console2} from "@forge-std/Test.sol";
 import {TestBaseProtocol} from "@test/base/TestBaseProtocol.sol";
 import {TestBaseGnosis} from "@test/base/TestBaseGnosis.sol";
 import {SafeL2} from "@safe-contracts/SafeL2.sol";
-import {TradingModule} from "@src/trading/TradingModule.sol";
+import {TradingModule} from "@src/modules/trading/TradingModule.sol";
 import {ITradingModule} from "@src/interfaces/ITradingModule.sol";
 import {Enum} from "@safe-contracts/common/Enum.sol";
 import {SafeUtils, SafeTransaction} from "@test/utils/SafeUtils.sol";
 import {IBeforeTransaction, IAfterTransaction} from "@src/interfaces/ITransactionHooks.sol";
 import "@src/lib/Hooks.sol";
-import "@src/HookRegistry.sol";
-import "@src/trading/Errors.sol";
-import "@src/trading/Structs.sol";
+import "@src/modules/trading/HookRegistry.sol";
+import "@src/modules/trading/Errors.sol";
+import "@src/modules/trading/Structs.sol";
 
 contract MockTarget {
     uint256 public value;
