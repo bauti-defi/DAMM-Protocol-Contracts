@@ -11,6 +11,26 @@ import "@safe-contracts/Safe.sol";
 import "@src/hooks/uniswapV3/UniswapV3Hooks.sol";
 import "@src/hooks/aaveV3/AaveV3Hooks.sol";
 
+interface IHookGetters {
+    function assetWhitelist(address) external view returns (bool);
+}
+
+interface IMultiSend {
+    /**
+     * @dev Sends multiple transactions and reverts all if one fails.
+     * @param transactions Encoded transactions. Each transaction is encoded as a packed bytes of
+     *                     operation as a uint8 with 0 for a call or 1 for a delegatecall (=> 1 byte),
+     *                     to as a address (=> 20 bytes),
+     *                     value as a uint256 (=> 32 bytes),
+     *                     data length as a uint256 (=> 32 bytes),
+     *                     data as bytes.
+     *                     see abi.encodePacked for more information on packed encoding
+     * @notice This method is payable as delegatecalls keep the msg.value from the previous call
+     *         If the calling method (e.g. execTransaction) received ETH this would revert otherwise
+     */
+    function multiSend(bytes memory transactions) external payable;
+}
+
 contract ArbStableFundConfig is DeployConfigLoader {
     address payable public constant STABLE_FUND =
         payable(address(0x3a3B7991613E6433C0753D0B7c7251f92c490F40));
@@ -26,6 +46,7 @@ contract ArbStableFundConfig is DeployConfigLoader {
     address constant ARB_USDT = 0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9;
     address constant ARB_USDC = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831;
     address constant ARB_DAI = 0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1;
+    address public constant MULTISEND_CALL = address(0x9641d764fc13c8B624c04430C7356C1C7C8102e2);
 
     address constant OPERATOR = address(0x5ed25671f65d0ca26d79326BF571f8AeaF856f00);
 
@@ -33,7 +54,40 @@ contract ArbStableFundConfig is DeployConfigLoader {
         super.setUp();
     }
 
-    function verify() public {
+    function stablecoins() public pure returns (address[] memory coins) {
+        coins = new address[](4);
+        coins[0] = ARB_USDCe;
+        coins[1] = ARB_USDT;
+        coins[2] = ARB_USDC;
+        coins[3] = ARB_DAI;
+        return coins;
+    }
+
+    function _multisendCall(bytes memory payload) private {
+        bytes memory transaction = abi.encodeWithSelector(IMultiSend.multiSend.selector, payload);
+
+        bytes memory transactionSignature = abi.encodePacked(
+            bytes32(uint256(uint160(FUND_ADMIN))), bytes32(uint256(uint160(FUND_ADMIN))), uint8(1)
+        );
+
+        vm.broadcast(FUND_ADMIN);
+        bool success = Safe(STABLE_FUND).execTransaction(
+            MULTISEND_CALL,
+            0,
+            transaction,
+            Enum.Operation.Call,
+            0,
+            0,
+            0,
+            address(0),
+            payable(address(0)),
+            transactionSignature
+        );
+
+        require(success, "multisend failed");
+    }
+
+    function verify() public view {
         HookRegistry hookRegistry = HookRegistry(HOOK_REGISTRY);
 
         bool defined = true;
@@ -169,44 +223,59 @@ contract ArbStableFundConfig is DeployConfigLoader {
         console2.log("AaveV3Hooks: ", address(aaveV3Hooks));
     }
 
-    function _enableAssetTrx(address hook, address asset) private {
-        bytes4 selector = bytes4(keccak256("enableAsset(address)"));
+    function _enableAsset(address hook, address asset) private pure returns (bytes memory) {
+        bytes4 selector = AaveV3Hooks.enableAsset.selector;
 
         bytes memory transaction = abi.encodeWithSelector(selector, asset);
 
-        bytes memory transactionSignature = abi.encodePacked(
-            bytes32(uint256(uint160(FUND_ADMIN))), bytes32(uint256(uint160(FUND_ADMIN))), uint8(1)
-        );
-
-        vm.broadcast(FUND_ADMIN);
-        bool success = Safe(STABLE_FUND).execTransaction(
-            hook,
-            0,
-            transaction,
-            Enum.Operation.Call,
-            0,
-            0,
-            0,
-            address(0),
-            payable(address(0)),
-            transactionSignature
-        );
-
-        require(success, "Failed to enable asset");
+        return abi.encodePacked(uint8(0), hook, uint256(0), transaction.length, transaction);
     }
 
     function configureUniswapAssets() public {
-        _enableAssetTrx(UNISWAP_V3_HOOKS, ARB_USDCe);
-        _enableAssetTrx(UNISWAP_V3_HOOKS, ARB_USDT);
-        _enableAssetTrx(UNISWAP_V3_HOOKS, ARB_USDC);
-        _enableAssetTrx(UNISWAP_V3_HOOKS, ARB_DAI);
+        bytes memory payload = abi.encodePacked(
+            _enableAsset(UNISWAP_V3_HOOKS, ARB_USDCe),
+            _enableAsset(UNISWAP_V3_HOOKS, ARB_USDT),
+            _enableAsset(UNISWAP_V3_HOOKS, ARB_USDC),
+            _enableAsset(UNISWAP_V3_HOOKS, ARB_DAI)
+        );
+
+        _multisendCall(payload);
+
+        for (uint256 i = 0; i < stablecoins().length; i++) {
+            require(
+                IHookGetters(UNISWAP_V3_HOOKS).assetWhitelist(stablecoins()[i]),
+                "Failed to enable uniswap v3 asset"
+            );
+        }
     }
 
     function configureAaveAssets() public {
-        _enableAssetTrx(AAVE_V3_HOOKS, ARB_USDCe);
-        _enableAssetTrx(AAVE_V3_HOOKS, ARB_USDT);
-        _enableAssetTrx(AAVE_V3_HOOKS, ARB_USDC);
-        _enableAssetTrx(AAVE_V3_HOOKS, ARB_DAI);
+        bytes memory payload = abi.encodePacked(
+            _enableAsset(AAVE_V3_HOOKS, ARB_USDCe),
+            _enableAsset(AAVE_V3_HOOKS, ARB_USDT),
+            _enableAsset(AAVE_V3_HOOKS, ARB_USDC),
+            _enableAsset(AAVE_V3_HOOKS, ARB_DAI)
+        );
+
+        _multisendCall(payload);
+
+        for (uint256 i = 0; i < stablecoins().length; i++) {
+            require(
+                IHookGetters(AAVE_V3_HOOKS).assetWhitelist(stablecoins()[i]),
+                "Failed to enable aave v3 asset"
+            );
+        }
+    }
+
+    function _setHook(address registry, HookConfig memory hookConfig)
+        private
+        pure
+        returns (bytes memory)
+    {
+        bytes memory transaction =
+            abi.encodeWithSelector(HookRegistry.setHooks.selector, hookConfig);
+
+        return abi.encodePacked(uint8(0), registry, uint256(0), transaction.length, transaction);
     }
 
     function setUniswapHooks() public {
@@ -274,28 +343,28 @@ contract ArbStableFundConfig is DeployConfigLoader {
             targetSelector: IUniswapRouter.exactOutputSingle.selector
         });
 
-        bytes memory transaction =
-            abi.encodeWithSelector(HookRegistry.batchSetHooks.selector, hookConfigs);
-
-        bytes memory transactionSignature = abi.encodePacked(
-            bytes32(uint256(uint160(FUND_ADMIN))), bytes32(uint256(uint160(FUND_ADMIN))), uint8(1)
+        bytes memory payload = abi.encodePacked(
+            _setHook(HOOK_REGISTRY, hookConfigs[0]),
+            _setHook(HOOK_REGISTRY, hookConfigs[1]),
+            _setHook(HOOK_REGISTRY, hookConfigs[2]),
+            _setHook(HOOK_REGISTRY, hookConfigs[3]),
+            _setHook(HOOK_REGISTRY, hookConfigs[4]),
+            _setHook(HOOK_REGISTRY, hookConfigs[5])
         );
 
-        vm.broadcast(FUND_ADMIN);
-        bool success = Safe(STABLE_FUND).execTransaction(
-            HOOK_REGISTRY,
-            0,
-            transaction,
-            Enum.Operation.Call,
-            0,
-            0,
-            0,
-            address(0),
-            payable(address(0)),
-            transactionSignature
-        );
+        _multisendCall(payload);
 
-        require(success, "Failed to set hooks");
+        for (uint256 i = 0; i < hookConfigs.length; i++) {
+            require(
+                HookRegistry(HOOK_REGISTRY).getHooks(
+                    hookConfigs[i].operator,
+                    hookConfigs[i].target,
+                    hookConfigs[i].operation,
+                    hookConfigs[i].targetSelector
+                ).defined,
+                "Failed to set uniswap v3 hooks"
+            );
+        }
     }
 
     function removeUniswapHooks() public {
@@ -363,28 +432,28 @@ contract ArbStableFundConfig is DeployConfigLoader {
             targetSelector: IUniswapRouter.exactOutputSingle.selector
         });
 
-        bytes memory transaction =
-            abi.encodeWithSelector(HookRegistry.batchRemoveHooks.selector, hookConfigs);
-
-        bytes memory transactionSignature = abi.encodePacked(
-            bytes32(uint256(uint160(FUND_ADMIN))), bytes32(uint256(uint160(FUND_ADMIN))), uint8(1)
+        bytes memory payload = abi.encodePacked(
+            _setHook(HOOK_REGISTRY, hookConfigs[0]),
+            _setHook(HOOK_REGISTRY, hookConfigs[1]),
+            _setHook(HOOK_REGISTRY, hookConfigs[2]),
+            _setHook(HOOK_REGISTRY, hookConfigs[3]),
+            _setHook(HOOK_REGISTRY, hookConfigs[4]),
+            _setHook(HOOK_REGISTRY, hookConfigs[5])
         );
 
-        vm.broadcast(FUND_ADMIN);
-        bool success = Safe(STABLE_FUND).execTransaction(
-            HOOK_REGISTRY,
-            0,
-            transaction,
-            Enum.Operation.Call,
-            0,
-            0,
-            0,
-            address(0),
-            payable(address(0)),
-            transactionSignature
-        );
+        _multisendCall(payload);
 
-        require(success, "Failed to unset hooks");
+        for (uint256 i = 0; i < hookConfigs.length; i++) {
+            require(
+                !HookRegistry(HOOK_REGISTRY).getHooks(
+                    hookConfigs[i].operator,
+                    hookConfigs[i].target,
+                    hookConfigs[i].operation,
+                    hookConfigs[i].targetSelector
+                ).defined,
+                "Failed to unset uniswap v3 hooks"
+            );
+        }
     }
 
     function setAaveHooks() public {
@@ -410,28 +479,23 @@ contract ArbStableFundConfig is DeployConfigLoader {
             targetSelector: IPool.withdraw.selector
         });
 
-        bytes memory transaction =
-            abi.encodeWithSelector(HookRegistry.batchSetHooks.selector, hookConfigs);
-
-        bytes memory transactionSignature = abi.encodePacked(
-            bytes32(uint256(uint160(FUND_ADMIN))), bytes32(uint256(uint160(FUND_ADMIN))), uint8(1)
+        bytes memory payload = abi.encodePacked(
+            _setHook(HOOK_REGISTRY, hookConfigs[0]), _setHook(HOOK_REGISTRY, hookConfigs[1])
         );
 
-        vm.broadcast(FUND_ADMIN);
-        bool success = Safe(STABLE_FUND).execTransaction(
-            HOOK_REGISTRY,
-            0,
-            transaction,
-            Enum.Operation.Call,
-            0,
-            0,
-            0,
-            address(0),
-            payable(address(0)),
-            transactionSignature
-        );
+        _multisendCall(payload);
 
-        require(success, "Failed to set hooks");
+        for (uint256 i = 0; i < hookConfigs.length; i++) {
+            require(
+                HookRegistry(HOOK_REGISTRY).getHooks(
+                    hookConfigs[i].operator,
+                    hookConfigs[i].target,
+                    hookConfigs[i].operation,
+                    hookConfigs[i].targetSelector
+                ).defined,
+                "Failed to set aave v3 hooks"
+            );
+        }
     }
 
     function removeAaveHooks() public {
@@ -457,72 +521,79 @@ contract ArbStableFundConfig is DeployConfigLoader {
             targetSelector: IPool.withdraw.selector
         });
 
-        bytes memory transaction =
-            abi.encodeWithSelector(HookRegistry.batchRemoveHooks.selector, hookConfigs);
-
-        bytes memory transactionSignature = abi.encodePacked(
-            bytes32(uint256(uint160(FUND_ADMIN))), bytes32(uint256(uint160(FUND_ADMIN))), uint8(1)
+        bytes memory payload = abi.encodePacked(
+            _setHook(HOOK_REGISTRY, hookConfigs[0]), _setHook(HOOK_REGISTRY, hookConfigs[1])
         );
 
-        vm.broadcast(FUND_ADMIN);
-        bool success = Safe(STABLE_FUND).execTransaction(
-            HOOK_REGISTRY,
-            0,
-            transaction,
-            Enum.Operation.Call,
-            0,
-            0,
-            0,
-            address(0),
-            payable(address(0)),
-            transactionSignature
-        );
+        _multisendCall(payload);
 
-        require(success, "Failed to unset hooks");
+        for (uint256 i = 0; i < hookConfigs.length; i++) {
+            require(
+                !HookRegistry(HOOK_REGISTRY).getHooks(
+                    hookConfigs[i].operator,
+                    hookConfigs[i].target,
+                    hookConfigs[i].operation,
+                    hookConfigs[i].targetSelector
+                ).defined,
+                "Failed to unset aave v3 hooks"
+            );
+        }
     }
 
-    function _approveToken(address token, address spender, uint256 amount) public {
-        bytes memory transaction = abi.encodeWithSelector(IERC20.approve.selector, spender, amount);
+    function _approve(address token, address spender, uint256 amount)
+        private
+        pure
+        returns (bytes memory)
+    {
+        bytes memory trx = abi.encodeWithSelector(IERC20.approve.selector, spender, amount);
 
-        bytes memory transactionSignature = abi.encodePacked(
-            bytes32(uint256(uint160(FUND_ADMIN))), bytes32(uint256(uint160(FUND_ADMIN))), uint8(1)
-        );
-
-        vm.broadcast(FUND_ADMIN);
-        bool success = Safe(STABLE_FUND).execTransaction(
-            token,
-            0,
-            transaction,
-            Enum.Operation.Call,
-            0,
-            0,
-            0,
-            address(0),
-            payable(address(0)),
-            transactionSignature
-        );
-
-        require(success, "Failed to approve");
+        return abi.encodePacked(uint8(0), token, uint256(0), trx.length, trx);
     }
 
     function approveAave() public {
-        //max approve
-        _approveToken(ARB_USDCe, chainConfig.aave.pool, type(uint256).max);
-        _approveToken(ARB_USDT, chainConfig.aave.pool, type(uint256).max);
-        _approveToken(ARB_USDC, chainConfig.aave.pool, type(uint256).max);
-        _approveToken(ARB_DAI, chainConfig.aave.pool, type(uint256).max);
+        bytes memory approvals = abi.encodePacked(
+            _approve(ARB_USDCe, chainConfig.aave.pool, type(uint256).max),
+            _approve(ARB_USDT, chainConfig.aave.pool, type(uint256).max),
+            _approve(ARB_USDC, chainConfig.aave.pool, type(uint256).max),
+            _approve(ARB_DAI, chainConfig.aave.pool, type(uint256).max)
+        );
+
+        _multisendCall(approvals);
+
+        for (uint256 i = 0; i < stablecoins().length; i++) {
+            require(
+                IERC20(stablecoins()[i]).allowance(STABLE_FUND, chainConfig.aave.pool)
+                    == type(uint256).max,
+                "Failed to approve tokent to aave"
+            );
+        }
     }
 
     function approveUniswap() public {
-        // max approve
-        _approveToken(ARB_USDCe, chainConfig.uniswap.router, type(uint256).max);
-        _approveToken(ARB_USDT, chainConfig.uniswap.router, type(uint256).max);
-        _approveToken(ARB_USDC, chainConfig.uniswap.router, type(uint256).max);
-        _approveToken(ARB_DAI, chainConfig.uniswap.router, type(uint256).max);
+        bytes memory approvals = abi.encodePacked(
+            _approve(ARB_USDCe, chainConfig.uniswap.router, type(uint256).max),
+            _approve(ARB_USDT, chainConfig.uniswap.router, type(uint256).max),
+            _approve(ARB_USDC, chainConfig.uniswap.router, type(uint256).max),
+            _approve(ARB_DAI, chainConfig.uniswap.router, type(uint256).max),
+            _approve(ARB_USDCe, chainConfig.uniswap.positionManager, type(uint256).max),
+            _approve(ARB_USDT, chainConfig.uniswap.positionManager, type(uint256).max),
+            _approve(ARB_USDC, chainConfig.uniswap.positionManager, type(uint256).max),
+            _approve(ARB_DAI, chainConfig.uniswap.positionManager, type(uint256).max)
+        );
 
-        _approveToken(ARB_USDCe, chainConfig.uniswap.positionManager, type(uint256).max);
-        _approveToken(ARB_USDT, chainConfig.uniswap.positionManager, type(uint256).max);
-        _approveToken(ARB_USDC, chainConfig.uniswap.positionManager, type(uint256).max);
-        _approveToken(ARB_DAI, chainConfig.uniswap.positionManager, type(uint256).max);
+        _multisendCall(approvals);
+
+        for (uint256 i = 0; i < stablecoins().length; i++) {
+            require(
+                IERC20(stablecoins()[i]).allowance(STABLE_FUND, chainConfig.uniswap.router)
+                    == type(uint256).max,
+                "Failed to approve token to uniswap router"
+            );
+            require(
+                IERC20(stablecoins()[i]).allowance(STABLE_FUND, chainConfig.uniswap.positionManager)
+                    == type(uint256).max,
+                "Failed to approve toke to uniswap position manager"
+            );
+        }
     }
 }

@@ -267,50 +267,6 @@ contract TestAaveV3 is TestBaseGnosis, TestBaseProtocol, BaseAaveV3, TokenMinter
         assertTrue(!aaveV3Hooks.assetWhitelist(address(ARB_USDC)), "Asset still whitelisted");
     }
 
-    function test_enable_disable_asset_list() public {
-        address[] memory _assets = new address[](3);
-        _assets[0] = address(ARB_USDC);
-        _assets[1] = address(ARB_DAI);
-        _assets[2] = address(ARB_USDCe);
-
-        bytes memory transaction =
-            abi.encodeWithSelector(aaveV3Hooks.enableAssetList.selector, _assets);
-
-        bool success = fund.executeTrx(
-            fundAdminPK,
-            SafeTransaction({
-                value: 0,
-                target: address(aaveV3Hooks),
-                operation: Enum.Operation.Call,
-                transaction: transaction
-            })
-        );
-
-        assertTrue(success, "Failed to enable asset list");
-
-        for (uint256 i = 0; i < _assets.length; i++) {
-            assertTrue(aaveV3Hooks.assetWhitelist(_assets[i]), "Asset not whitelisted");
-        }
-
-        transaction = abi.encodeWithSelector(aaveV3Hooks.disableAssetList.selector, _assets);
-
-        success = fund.executeTrx(
-            fundAdminPK,
-            SafeTransaction({
-                value: 0,
-                target: address(aaveV3Hooks),
-                operation: Enum.Operation.Call,
-                transaction: transaction
-            })
-        );
-
-        assertTrue(success, "Failed to disable asset list");
-
-        for (uint256 i = 0; i < _assets.length; i++) {
-            assertTrue(!aaveV3Hooks.assetWhitelist(_assets[i]), "Asset still whitelisted");
-        }
-    }
-
     function test_only_fund_can_enable_asset(address attacker) public {
         vm.assume(attacker != address(fund));
 

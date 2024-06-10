@@ -24,7 +24,7 @@ contract MockTarget {
         value += _value;
     }
 
-    function triggerRevert() public {
+    function triggerRevert() public pure {
         revert("MockTarget revert");
     }
 
@@ -38,6 +38,7 @@ contract MockTarget {
 contract VerifyValueHook is IBeforeTransaction {
     function checkBeforeTransaction(address, bytes4, uint8, uint256 value, bytes memory)
         external
+        pure
         override
     {
         require(value > 0, "Value must be greater than 0");
@@ -47,6 +48,7 @@ contract VerifyValueHook is IBeforeTransaction {
 contract RevertBeforeHook is IBeforeTransaction {
     function checkBeforeTransaction(address, bytes4, uint8, uint256, bytes memory)
         external
+        pure
         override
     {
         revert("RevertBeforeHook");
@@ -67,7 +69,7 @@ contract VerifyCallbackHook is IAfterTransaction {
         uint256,
         bytes memory,
         bytes memory returnData
-    ) external override {
+    ) external view override {
         require(
             keccak256(abi.encodePacked(abi.decode(returnData, (string))))
                 == keccak256(abi.encodePacked(callback)),
@@ -79,6 +81,7 @@ contract VerifyCallbackHook is IAfterTransaction {
 contract RevertAfterHook is IAfterTransaction {
     function checkAfterTransaction(address, bytes4, uint8, uint256, bytes memory, bytes memory)
         external
+        pure
         override
     {
         revert("RevertAfterHook");
@@ -237,6 +240,23 @@ contract TestTradingModule is Test, TestBaseGnosis, TestBaseProtocol {
             data: abi.encode(message)
         });
     }
+
+    /// @dev this function is used to generate test data for the SDK
+    // function test_generate_sdk_test_data() public withHook(mock_hook()) {
+    //     Transaction[] memory calls = new Transaction[](4);
+    //     calls[0] = incrementCall(10);
+    //     calls[1] = incrementCall(20);
+    //     calls[2] = incrementCall(0);
+    //     calls[3] = incrementCall(500);
+
+    //     console2.logAddress(address(target));
+    //     console2.logBytes4(calls[0].targetSelector);
+    //     console2.logBytes(calls[0].data);
+    //     console2.logBytes4(TradingModule.execute.selector);
+    //     console2.log(makeAddr("testing"));
+    //     console2.logBytes(abi.encode(calls));
+    //     console2.logBytes(abi.encodeWithSelector(TradingModule.execute.selector, calls));
+    // }
 
     function test_execute() public withHook(mock_hook()) {
         Transaction[] memory calls = new Transaction[](4);

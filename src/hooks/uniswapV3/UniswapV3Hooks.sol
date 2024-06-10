@@ -154,7 +154,7 @@ contract UniswapV3Hooks is IBeforeTransaction, IAfterTransaction {
         bytes calldata
     ) external override onlyFund {}
 
-    function _enableAsset(address asset) private {
+    function enableAsset(address asset) external onlyFund {
         if (
             asset == address(0) || asset == address(this) || asset == address(fund)
                 || asset == address(uniswapV3PositionManager) || asset == address(uniswapV3Router)
@@ -167,29 +167,9 @@ contract UniswapV3Hooks is IBeforeTransaction, IAfterTransaction {
         emit UniswapV3Hooks_AssetEnabled(asset);
     }
 
-    function enableAsset(address asset) external onlyFund {
-        _enableAsset(asset);
-    }
-
-    function enableAssetList(address[] calldata assets) external onlyFund {
-        for (uint256 i = 0; i < assets.length; i++) {
-            _enableAsset(assets[i]);
-        }
-    }
-
-    function _disableAsset(address asset) private {
+    function disableAsset(address asset) external onlyFund {
         assetWhitelist[asset] = false;
 
         emit UniswapV3Hooks_AssetDisabled(asset);
-    }
-
-    function disableAsset(address asset) external onlyFund {
-        _disableAsset(asset);
-    }
-
-    function disableAssetList(address[] calldata assets) external onlyFund {
-        for (uint256 i = 0; i < assets.length; i++) {
-            _disableAsset(assets[i]);
-        }
     }
 }

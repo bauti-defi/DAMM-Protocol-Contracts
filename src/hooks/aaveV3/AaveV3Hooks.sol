@@ -107,7 +107,7 @@ contract AaveV3Hooks is IBeforeTransaction, IAfterTransaction {
         }
     }
 
-    function _enableAsset(address asset) private {
+    function enableAsset(address asset) external onlyFund {
         if (
             asset == address(0) || asset == address(fund) || asset == address(this)
                 || asset == address(aaveV3Pool)
@@ -120,29 +120,9 @@ contract AaveV3Hooks is IBeforeTransaction, IAfterTransaction {
         emit AaveV3Hooks_AssetEnabled(asset);
     }
 
-    function _disableAsset(address asset) private {
+    function disableAsset(address asset) external onlyFund {
         assetWhitelist[asset] = false;
 
         emit AaveV3Hooks_AssetDisabled(asset);
-    }
-
-    function enableAsset(address asset) external onlyFund {
-        _enableAsset(asset);
-    }
-
-    function enableAssetList(address[] calldata assets) external onlyFund {
-        for (uint256 i = 0; i < assets.length; i++) {
-            _enableAsset(assets[i]);
-        }
-    }
-
-    function disableAsset(address asset) external onlyFund {
-        _disableAsset(asset);
-    }
-
-    function disableAssetList(address[] calldata assets) external onlyFund {
-        for (uint256 i = 0; i < assets.length; i++) {
-            _disableAsset(assets[i]);
-        }
     }
 }

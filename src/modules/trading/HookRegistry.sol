@@ -2,7 +2,8 @@
 pragma solidity ^0.8.0;
 
 import {IHookRegistry} from "@src/interfaces/IHookRegistry.sol";
-import {HookLib, HookConfig, Hooks} from "./Hooks.sol";
+import {HookLib} from "./Hooks.sol";
+import {HookConfig, Hooks} from "./Structs.sol";
 import "./Errors.sol";
 
 contract HookRegistry is IHookRegistry {
@@ -25,7 +26,15 @@ contract HookRegistry is IHookRegistry {
         fund = _fund;
     }
 
-    function _setHooks(HookConfig calldata config) internal {
+    function getHooks(address operator, address target, uint8 operation, bytes4 selector)
+        external
+        view
+        returns (Hooks memory)
+    {
+        return hooks[HookLib.hookPointer(operator, target, operation, selector)];
+    }
+
+    function setHooks(HookConfig calldata config) external onlyFund {
         config.checkConfigIsValid(fund);
 
         bytes32 pointer = config.pointer();
@@ -36,57 +45,19 @@ contract HookRegistry is IHookRegistry {
             defined: true // TODO: change to status code, same cost but more descriptive
         });
 
-        emit HookSet(pointer);
-    }
-
-    function batchSetHooks(HookConfig[] calldata configs) external onlyFund {
-        uint256 length = configs.length;
-        for (uint256 i = 0; i < length;) {
-            _setHooks(configs[i]);
-
-            unchecked {
-                ++i;
-            }
-        }
-    }
-
-    function getHooks(address operator, address target, uint8 operation, bytes4 selector)
-        external
-        view
-        returns (Hooks memory)
-    {
-        return hooks[HookLib.hookPointer(operator, target, operation, selector)];
-    }
-
-    function setHooks(HookConfig calldata config) external onlyFund {
-        _setHooks(config);
-    }
-
-    function _removeHooks(address operator, address target, uint8 operation, bytes4 selector)
-        internal
-    {
-        delete hooks[HookLib.hookPointer(operator, target, operation, selector)];
-
-        emit HookRemoved(operator, target, operation, selector);
-    }
-
-    function batchRemoveHooks(HookConfig[] calldata configs) external onlyFund {
-        uint256 length = configs.length;
-        for (uint256 i = 0; i < length;) {
-            _removeHooks(
-                configs[i].operator,
-                configs[i].target,
-                configs[i].operation,
-                configs[i].targetSelector
-            );
-
-            unchecked {
-                ++i;
-            }
-        }
+        emit HookSet(
+            config.operator,
+            config.target,
+            config.operation,
+            config.targetSelector,
+            config.beforeTrxHook,
+            config.afterTrxHook
+        );
     }
 
     function removeHooks(HookConfig calldata config) external onlyFund {
-        _removeHooks(config.operator, config.target, config.operation, config.targetSelector);
+        delete hooks[config.pointer()];
+
+        emit HookRemoved(config.operator, config.target, config.operation, config.targetSelector);
     }
 }
