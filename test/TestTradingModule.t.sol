@@ -5,13 +5,15 @@ import {Test, console2} from "@forge-std/Test.sol";
 import {TestBaseProtocol} from "@test/base/TestBaseProtocol.sol";
 import {TestBaseGnosis} from "@test/base/TestBaseGnosis.sol";
 import {SafeL2} from "@safe-contracts/SafeL2.sol";
-import {TradingModule} from "@src/TradingModule.sol";
+import {TradingModule} from "@src/modules/trading/TradingModule.sol";
 import {ITradingModule} from "@src/interfaces/ITradingModule.sol";
 import {Enum} from "@safe-contracts/common/Enum.sol";
 import {SafeUtils, SafeTransaction} from "@test/utils/SafeUtils.sol";
 import {IBeforeTransaction, IAfterTransaction} from "@src/interfaces/ITransactionHooks.sol";
-import "@src/lib/Hooks.sol";
-import "@src/HookRegistry.sol";
+import "@src/modules/trading/Hooks.sol";
+import "@src/modules/trading/HookRegistry.sol";
+import "@src/modules/trading/Errors.sol";
+import "@src/modules/trading/Structs.sol";
 
 contract MockTarget {
     uint256 public value;
@@ -202,62 +204,42 @@ contract TestTradingModule is Test, TestBaseGnosis, TestBaseProtocol {
         config.afterTrxHook = afterHook;
     }
 
-    function incrementCall(uint256 _value) private view returns (bytes memory) {
-        bytes memory externalCall = abi.encodeWithSelector(MockTarget.increment.selector, _value);
-
-        return abi.encodePacked(
-            uint8(Enum.Operation.Call),
-            address(target),
-            uint256(0),
-            externalCall.length,
-            externalCall
-        );
+    function incrementCall(uint256 _value) private view returns (Transaction memory trx) {
+        trx = Transaction({
+            operation: uint8(Enum.Operation.Call),
+            target: address(target),
+            value: 0,
+            data: abi.encode(_value),
+            targetSelector: MockTarget.increment.selector
+        });
     }
 
-    function triggerRevertCall() private view returns (bytes memory) {
-        bytes memory externalCall = abi.encodeWithSelector(MockTarget.triggerRevert.selector);
-
-        return abi.encodePacked(
-            uint8(Enum.Operation.Call),
-            address(target),
-            uint256(0),
-            externalCall.length,
-            externalCall
-        );
+    function triggerRevertCall() private view returns (Transaction memory trx) {
+        trx = Transaction({
+            target: address(target),
+            value: 0,
+            operation: uint8(Enum.Operation.Call),
+            targetSelector: MockTarget.triggerRevert.selector,
+            data: bytes("")
+        });
     }
 
     function emitMessageCall(string memory message, uint256 value)
         private
         view
-        returns (bytes memory)
+        returns (Transaction memory trx)
     {
-        bytes memory externalCall = abi.encodeWithSelector(target.emitMessage.selector, message);
-
-        return abi.encodePacked(
-            uint8(Enum.Operation.Call), address(target), value, externalCall.length, externalCall
-        );
-    }
-
-    function concatenate(bytes[] memory calls) internal pure returns (bytes memory) {
-        uint256 totalLength = 0;
-        for (uint256 i = 0; i < calls.length; i++) {
-            totalLength += calls[i].length;
-        }
-
-        bytes memory result = new bytes(totalLength);
-        uint256 currentIndex = 0;
-        for (uint256 i = 0; i < calls.length; i++) {
-            for (uint256 j = 0; j < calls[i].length; j++) {
-                result[currentIndex] = calls[i][j];
-                currentIndex++;
-            }
-        }
-
-        return result;
+        trx = Transaction({
+            target: address(target),
+            value: value,
+            operation: uint8(Enum.Operation.Call),
+            targetSelector: MockTarget.emitMessage.selector,
+            data: abi.encode(message)
+        });
     }
 
     function test_execute() public withHook(mock_hook()) {
-        bytes[] memory calls = new bytes[](4);
+        Transaction[] memory calls = new Transaction[](4);
         calls[0] = incrementCall(10);
         calls[1] = incrementCall(20);
         calls[2] = incrementCall(0);
@@ -266,53 +248,70 @@ contract TestTradingModule is Test, TestBaseGnosis, TestBaseProtocol {
         uint256 adjustedFundBalance = address(fund).balance - 530;
 
         vm.prank(operator);
-        tradingModule.execute(concatenate(calls));
+        tradingModule.execute(calls);
 
         assertEq(target.value(), 530, "Target value not incremented");
         assertTrue(adjustedFundBalance > address(fund).balance, "gas was not refunded");
     }
 
     function test_execute_reverts_if_gas_price_exceeds_limit() public withHook(mock_hook()) {
+        vm.prank(address(fund));
+        tradingModule.setMaxGasPriorityInBasisPoints(500);
+
         vm.txGasPrice(1000);
-        vm.expectRevert(ITradingModule.GasLimitExceeded.selector);
+
+        Transaction[] memory calls = new Transaction[](1);
+        calls[0] = incrementCall(10);
+
+        vm.expectRevert(Errors.TradingModule_GasLimitExceeded.selector);
         vm.prank(operator);
-        tradingModule.execute(incrementCall(10));
+        tradingModule.execute(calls);
     }
 
     function test_execute_reverts() public withHook(mock_trigger_revert_hook()) {
         vm.expectRevert("MockTarget revert");
+
+        Transaction[] memory calls = new Transaction[](1);
+        calls[0] = triggerRevertCall();
+
         vm.prank(operator);
-        tradingModule.execute(triggerRevertCall());
+        tradingModule.execute(calls);
     }
 
     function test_execute_with_full_hooks() public withHook(mock_custom_hook()) {
+        Transaction[] memory calls = new Transaction[](1);
+        calls[0] = emitMessageCall("hello world", 10);
+
         vm.prank(operator);
-        tradingModule.execute(emitMessageCall("hello world", 10));
+        tradingModule.execute(calls);
     }
 
     function test_only_operator_can_execute(address attacker) public withHook(mock_hook()) {
         vm.assume(attacker != operator);
 
-        vm.expectRevert(ITradingModule.UndefinedHooks.selector);
-        vm.prank(attacker);
-        tradingModule.execute(incrementCall(10));
-    }
+        Transaction[] memory calls = new Transaction[](1);
+        calls[0] = incrementCall(10);
 
-    function test_execute_undefined_hook() public {
-        vm.expectRevert(ITradingModule.UndefinedHooks.selector);
-        vm.prank(operator);
-        tradingModule.execute(incrementCall(10));
+        vm.expectRevert(Errors.TradingModule_HookNotDefined.selector);
+        vm.prank(attacker);
+        tradingModule.execute(calls);
     }
 
     function test_revert_before_hook() public withHook(mock_revert_before_hook()) {
+        Transaction[] memory calls = new Transaction[](1);
+        calls[0] = incrementCall(10);
+
         vm.expectRevert("RevertBeforeHook");
         vm.prank(operator);
-        tradingModule.execute(incrementCall(10));
+        tradingModule.execute(calls);
     }
 
     function test_revert_after_hook() public withHook(mock_revert_after_hook()) {
+        Transaction[] memory calls = new Transaction[](1);
+        calls[0] = incrementCall(10);
+
         vm.expectRevert("RevertAfterHook");
         vm.prank(operator);
-        tradingModule.execute(incrementCall(10));
+        tradingModule.execute(calls);
     }
 }

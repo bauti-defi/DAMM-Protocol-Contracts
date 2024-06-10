@@ -6,6 +6,7 @@ import {INonfungiblePositionManager} from "@src/interfaces/external/INonfungible
 import {IUniswapRouter} from "@src/interfaces/external/IUniswapRouter.sol";
 import {IERC721} from "@openzeppelin-contracts/token/ERC721/IERC721.sol";
 
+/// TODO: add method to enable/disable array of assets
 contract UniswapV3Hooks is IBeforeTransaction, IAfterTransaction {
     error OnlyFund();
     error OnlyWhitelistedTokens();

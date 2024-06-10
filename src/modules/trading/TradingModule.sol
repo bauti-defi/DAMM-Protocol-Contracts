@@ -7,6 +7,8 @@ import {ITradingModule} from "@src/interfaces/ITradingModule.sol";
 import {IBeforeTransaction, IAfterTransaction} from "@src/interfaces/ITransactionHooks.sol";
 import {ReentrancyGuard} from "@openzeppelin-contracts/utils/ReentrancyGuard.sol";
 import "@src/interfaces/IHookRegistry.sol";
+import "./Structs.sol";
+import "./Errors.sol";
 
 contract TradingModule is ITradingModule, ReentrancyGuard {
     address public immutable fund;
@@ -15,12 +17,12 @@ contract TradingModule is ITradingModule, ReentrancyGuard {
     bool public paused;
 
     modifier onlyFund() {
-        require(msg.sender == fund, "only fund");
+        if (msg.sender != fund) revert Errors.OnlyFund();
         _;
     }
 
     modifier notPaused() {
-        require(paused == false, "paused");
+        if (paused) revert Errors.TradingModule_Paused();
         _;
     }
 
@@ -37,23 +39,23 @@ contract TradingModule is ITradingModule, ReentrancyGuard {
             maxGasPriorityInBasisPoints > 0 && tx.gasprice > block.basefee
                 && ((tx.gasprice - block.basefee) * 10000) / tx.gasprice >= maxGasPriorityInBasisPoints
         ) {
-            revert GasLimitExceeded();
+            revert Errors.TradingModule_GasLimitExceeded();
         }
 
         _;
 
-        require(
-            ISafe(fund).execTransactionFromModule(
+        if (
+            !ISafe(fund).execTransactionFromModule(
                 msg.sender, (gasAtStart - gasleft()) * tx.gasprice, "", Enum.Operation.Call
-            ),
-            "gas refund failed"
-        );
+            )
+        ) {
+            revert Errors.TradingModule_GasRefundFailed();
+        }
     }
 
     constructor(address owner, address _hookRegistry) {
         fund = owner;
         hookRegistry = IHookRegistry(_hookRegistry);
-        maxGasPriorityInBasisPoints = 500; // 5% as default
     }
 
     function setMaxGasPriorityInBasisPoints(uint256 newMaxGasPriorityInBasisPoints)
@@ -96,88 +98,29 @@ contract TradingModule is ITradingModule, ReentrancyGuard {
      * @notice This method is payable as delegatecalls keep the msg.value from the previous call
      *         If the calling method (e.g. execTransaction) received ETH this would revert otherwise
      */
-    function execute(bytes calldata transactions)
+    function execute(Transaction[] calldata transactions)
         external
         nonReentrant
         refundGasToCaller
         notPaused
     {
-        uint256 transactionsLength = transactions.length;
+        uint256 transactionCount = transactions.length;
 
         /// @notice min transaction length is 85 bytes (a single function selector with no calldata)
-        if (transactionsLength < 85) revert InvalidTransactionLength();
+        if (transactionCount == 0) revert Errors.TradingModule_InvalidTransactionLength();
 
         // lets iterate over the transactions. Each transaction will be verified and then executed through the safe.
-        for (uint256 i = 0; i < transactionsLength;) {
-            address target;
-            bytes4 targetSelector;
-            uint256 value;
-            uint8 operation;
-            uint256 dataLength;
-            bytes memory data;
-            uint256 cursor = i;
-
-            /// @dev a lot of this code is heavily inspired by
-            /// -> https://github.com/safe-global/safe-smart-account/blob/main/contracts/libraries/MultiSend.sol
-            assembly {
-                cursor := add(cursor, transactions.offset)
-                // offset 32 bytes to skip the length of the transactions array
-                // cursor := add(cursor, 0x20)
-
-                // First byte of the data is the operation.
-                // We shift by 248 bits (256 - 8 [operation byte]) it right since mload will always load 32 bytes (a word).
-                // This will also zero out unused data.
-                // cursor := add(transactions, cursor)
-                operation := shr(0xf8, calldataload(cursor))
-
-                // We offset the cursor by 1 byte (operation byte)
-                // We shift it right by 96 bits (256 - 160 [20 address bytes]) to right-align the data and zero out unused data.
-                cursor := add(cursor, 0x01)
-                target := shr(0x60, calldataload(cursor))
-
-                // We offset the cursor by 21 byte (operation byte + 20 address bytes)
-                cursor := add(cursor, 0x14)
-                value := calldataload(cursor)
-
-                // We offset the cursor by another 32 bytes to read the data length
-                cursor := add(cursor, 0x20)
-                dataLength := calldataload(cursor)
-
-                // if the data length is not zero, we process the data as calldata
-                if not(iszero(dataLength)) {
-                    cursor := add(cursor, 0x20)
-
-                    targetSelector :=
-                        and(
-                            calldataload(cursor), // skip array length, grab the first word, first 4 bytes is the function selector
-                            0xFFFFFFFF00000000000000000000000000000000000000000000000000000000
-                        )
-
-                    // lets copy the data from the calldata to memory.
-                    if gt(dataLength, 0x03) {
-                        // we will start by fetching the free memory pointer location
-                        let ptr := mload(0x40)
-
-                        // data is a byte array so the first word is the length
-                        // but since we dont want the selector to be included in the data array
-                        // we will need to subtract selector length from data length
-                        mstore(ptr, sub(dataLength, 0x04))
-
-                        // copy the rest of the calldata to memory
-                        calldatacopy(add(ptr, 0x20), add(cursor, 0x04), sub(dataLength, 0x04))
-                        data := ptr // point data variable to it
-
-                        // reset free memory pointer
-                        mstore(0x40, add(ptr, add(dataLength, 0x20)))
-                    }
-                }
-            }
-
+        for (uint256 i = 0; i < transactionCount;) {
             // msg.sender is operator
-            Hooks memory hook = hookRegistry.getHooks(msg.sender, target, operation, targetSelector);
+            Hooks memory hook = hookRegistry.getHooks(
+                msg.sender,
+                transactions[i].target,
+                transactions[i].operation,
+                transactions[i].targetSelector
+            );
 
             if (!hook.defined) {
-                revert UndefinedHooks();
+                revert Errors.TradingModule_HookNotDefined();
             }
 
             if (hook.beforeTrxHook != address(0)) {
@@ -186,21 +129,21 @@ contract TradingModule is ITradingModule, ReentrancyGuard {
                     0, // value
                     abi.encodeWithSelector(
                         IBeforeTransaction.checkBeforeTransaction.selector,
-                        target,
-                        targetSelector,
-                        operation,
-                        value,
-                        data
+                        transactions[i].target,
+                        transactions[i].targetSelector,
+                        transactions[i].operation,
+                        transactions[i].value,
+                        transactions[i].data
                     ), // data
                     Enum.Operation.Call // operation
                 );
             }
 
             bytes memory returnData = _executeAndReturnDataOrRevert(
-                target,
-                value,
-                abi.encodePacked(targetSelector, data),
-                operation == uint8(Enum.Operation.DelegateCall)
+                transactions[i].target,
+                transactions[i].value,
+                abi.encodePacked(transactions[i].targetSelector, transactions[i].data),
+                transactions[i].operation == uint8(Enum.Operation.DelegateCall)
                     ? Enum.Operation.DelegateCall
                     : Enum.Operation.Call
             );
@@ -211,11 +154,11 @@ contract TradingModule is ITradingModule, ReentrancyGuard {
                     0,
                     abi.encodeWithSelector(
                         IAfterTransaction.checkAfterTransaction.selector,
-                        target,
-                        targetSelector,
-                        operation,
-                        value,
-                        data,
+                        transactions[i].target,
+                        transactions[i].targetSelector,
+                        transactions[i].operation,
+                        transactions[i].value,
+                        transactions[i].data,
                         returnData
                     ),
                     Enum.Operation.Call
@@ -223,8 +166,7 @@ contract TradingModule is ITradingModule, ReentrancyGuard {
             }
 
             unchecked {
-                /// @dev the next entry starts at 85 byte + data length.
-                i += 0x55 + dataLength;
+                ++i;
             }
         }
     }

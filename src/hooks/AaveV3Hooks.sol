@@ -5,6 +5,7 @@ import {IBeforeTransaction, IAfterTransaction} from "@src/interfaces/ITransactio
 import {IPortfolio} from "@src/interfaces/IPortfolio.sol";
 import {IPool} from "@aave-v3-core/interfaces/IPool.sol";
 
+/// TODO: add method to enable/disable array of assets
 contract AaveV3Hooks is IBeforeTransaction, IAfterTransaction {
     error OnlyFund();
     error OnlyWhitelistedTokens();
