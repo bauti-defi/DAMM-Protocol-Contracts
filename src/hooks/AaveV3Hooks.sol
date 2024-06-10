@@ -13,9 +13,8 @@ contract AaveV3Hooks is IBeforeTransaction, IAfterTransaction {
     /// TODO: subtract 1, word of cawf
     bytes32 constant POSITION_POINTER = keccak256("aave.v3.hooks");
 
-    /// TODO: pull dynamic from interface
-    bytes4 constant L1_WITHDRAW_SELECTOR = 0x69328dec;
-    bytes4 constant L1_SUPPLY_SELECTOR = 0x617ba037;
+    bytes4 constant L1_WITHDRAW_SELECTOR = IPool.withdraw.selector;
+    bytes4 constant L1_SUPPLY_SELECTOR = IPool.supply.selector;
 
     IPortfolio public immutable fund;
     IPool public immutable aaveV3Pool;
