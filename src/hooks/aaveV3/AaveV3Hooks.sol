@@ -5,11 +5,19 @@ import {IBeforeTransaction, IAfterTransaction} from "@src/interfaces/ITransactio
 import {IPortfolio} from "@src/interfaces/IPortfolio.sol";
 import {IPool} from "@aave-v3-core/interfaces/IPool.sol";
 
-/// TODO: add method to enable/disable array of assets
-contract AaveV3Hooks is IBeforeTransaction, IAfterTransaction {
-    error OnlyFund();
-    error OnlyWhitelistedTokens();
+error AaveV3Hooks_OnlyFund();
+error AaveV3Hooks_OnlyWhitelistedTokens();
+error AaveV3Hooks_InvalidTarget();
+error AaveV3Hooks_InvalidAsset();
+error AaveV3Hooks_PositionApertureFailed();
+error AaveV3Hooks_PositionClosureFailed();
+error AaveV3Hooks_InvalidTargetSelector();
 
+event AaveV3Hooks_AssetEnabled(address asset);
+
+event AaveV3Hooks_AssetDisabled(address asset);
+
+contract AaveV3Hooks is IBeforeTransaction, IAfterTransaction {
     /// TODO: subtract 1, word of cawf
     bytes32 constant POSITION_POINTER = keccak256("aave.v3.hooks");
 
@@ -28,7 +36,7 @@ contract AaveV3Hooks is IBeforeTransaction, IAfterTransaction {
 
     modifier onlyFund() {
         if (msg.sender != address(fund)) {
-            revert OnlyFund();
+            revert AaveV3Hooks_OnlyFund();
         }
         _;
     }
@@ -40,7 +48,9 @@ contract AaveV3Hooks is IBeforeTransaction, IAfterTransaction {
         uint256,
         bytes calldata data
     ) external view override onlyFund {
-        require(target == address(aaveV3Pool), "target not aave pool");
+        if (target != address(aaveV3Pool)) {
+            revert AaveV3Hooks_InvalidTarget();
+        }
 
         address asset;
         address onBehalfOf;
@@ -56,14 +66,14 @@ contract AaveV3Hooks is IBeforeTransaction, IAfterTransaction {
                 onBehalfOf := calldataload(add(data.offset, 0x40))
             }
         } else {
-            revert("unsupported selector");
+            revert AaveV3Hooks_InvalidTargetSelector();
         }
 
         if (!assetWhitelist[asset]) {
-            revert OnlyWhitelistedTokens();
+            revert AaveV3Hooks_OnlyWhitelistedTokens();
         }
         if (onBehalfOf != address(fund)) {
-            revert OnlyFund();
+            revert AaveV3Hooks_OnlyFund();
         }
     }
 
@@ -75,32 +85,64 @@ contract AaveV3Hooks is IBeforeTransaction, IAfterTransaction {
         bytes calldata,
         bytes calldata
     ) external override onlyFund {
-        require(target == address(aaveV3Pool), "pool not aave pool");
+        if (target != address(aaveV3Pool)) {
+            revert AaveV3Hooks_InvalidTarget();
+        }
 
         if (selector == L1_SUPPLY_SELECTOR) {
             /// @dev open position if not already open
             /// that means all open aave positions are represented by a single pointer
             if (!fund.holdsPosition(POSITION_POINTER)) {
-                require(fund.onPositionOpened(POSITION_POINTER), "failed to open position");
+                if (!fund.onPositionOpened(POSITION_POINTER)) {
+                    revert AaveV3Hooks_PositionApertureFailed();
+                }
             }
         } else if (selector == L1_WITHDRAW_SELECTOR) {
             (uint256 collateralDeposited,,,,,) = aaveV3Pool.getUserAccountData(address(fund));
             if (collateralDeposited == 0) {
-                require(fund.onPositionClosed(POSITION_POINTER), "failed to close position");
+                if (!fund.onPositionClosed(POSITION_POINTER)) {
+                    revert AaveV3Hooks_PositionClosureFailed();
+                }
             }
         }
     }
 
-    function enableAsset(address asset) external onlyFund {
-        require(asset != address(0), "invalid asset address");
-        require(asset != address(fund), "cannot enable fund");
-        require(asset != address(this), "cannot enable self");
-        require(asset != address(aaveV3Pool), "cannot enable pool");
+    function _enableAsset(address asset) private {
+        if (
+            asset == address(0) || asset == address(fund) || asset == address(this)
+                || asset == address(aaveV3Pool)
+        ) {
+            revert AaveV3Hooks_InvalidAsset();
+        }
 
         assetWhitelist[asset] = true;
+
+        emit AaveV3Hooks_AssetEnabled(asset);
+    }
+
+    function _disableAsset(address asset) private {
+        assetWhitelist[asset] = false;
+
+        emit AaveV3Hooks_AssetDisabled(asset);
+    }
+
+    function enableAsset(address asset) external onlyFund {
+        _enableAsset(asset);
+    }
+
+    function enableAssetList(address[] calldata assets) external onlyFund {
+        for (uint256 i = 0; i < assets.length; i++) {
+            _enableAsset(assets[i]);
+        }
     }
 
     function disableAsset(address asset) external onlyFund {
-        assetWhitelist[asset] = false;
+        _disableAsset(asset);
+    }
+
+    function disableAssetList(address[] calldata assets) external onlyFund {
+        for (uint256 i = 0; i < assets.length; i++) {
+            _disableAsset(assets[i]);
+        }
     }
 }

@@ -8,8 +8,8 @@ import "@src/ModuleFactory.sol";
 import "@src/modules/trading/HookRegistry.sol";
 import "@src/modules/trading/TradingModule.sol";
 import "@safe-contracts/Safe.sol";
-import "@src/hooks/UniswapV3Hooks.sol";
-import "@src/hooks/AaveV3Hooks.sol";
+import "@src/hooks/uniswapV3/UniswapV3Hooks.sol";
+import "@src/hooks/aaveV3/AaveV3Hooks.sol";
 
 contract ArbStableFundConfig is DeployConfigLoader {
     address payable public constant STABLE_FUND =

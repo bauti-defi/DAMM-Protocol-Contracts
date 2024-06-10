@@ -6,14 +6,19 @@ import {INonfungiblePositionManager} from "@src/interfaces/external/INonfungible
 import {IUniswapRouter} from "@src/interfaces/external/IUniswapRouter.sol";
 import {IERC721} from "@openzeppelin-contracts/token/ERC721/IERC721.sol";
 
+error UniswapV3Hooks_OnlyFund();
+error UniswapV3Hooks_OnlyWhitelistedTokens();
+error UniswapV3Hooks_InvalidPosition();
+error UniswapV3Hooks_InvalidTargetAddress();
+error UniswapV3Hooks_InvalidTargetSelector();
+error UniswapV3Hooks_InvalidAsset();
+
+event UniswapV3Hooks_AssetEnabled(address asset);
+
+event UniswapV3Hooks_AssetDisabled(address asset);
+
 /// TODO: add method to enable/disable array of assets
 contract UniswapV3Hooks is IBeforeTransaction, IAfterTransaction {
-    error OnlyFund();
-    error OnlyWhitelistedTokens();
-    error InvalidPosition();
-    error UnsupportedTarget();
-    error UnsupportedSelector();
-
     address public immutable fund;
     INonfungiblePositionManager public immutable uniswapV3PositionManager;
     IUniswapRouter public immutable uniswapV3Router;
@@ -28,19 +33,19 @@ contract UniswapV3Hooks is IBeforeTransaction, IAfterTransaction {
 
     function _checkPosition(uint256 tokenId) internal view {
         if (IERC721(address(uniswapV3PositionManager)).ownerOf(tokenId) != fund) {
-            revert InvalidPosition();
+            revert UniswapV3Hooks_InvalidPosition();
         }
 
         // get the position information
         (,, address token0, address token1,,,,,,,,) = uniswapV3PositionManager.positions(tokenId);
 
         if (!assetWhitelist[token0] || !assetWhitelist[token1]) {
-            revert OnlyWhitelistedTokens();
+            revert UniswapV3Hooks_OnlyWhitelistedTokens();
         }
     }
 
     modifier onlyFund() {
-        if (msg.sender != fund) revert OnlyFund();
+        if (msg.sender != fund) revert UniswapV3Hooks_OnlyFund();
         _;
     }
 
@@ -74,9 +79,9 @@ contract UniswapV3Hooks is IBeforeTransaction, IAfterTransaction {
                     recipient := calldataload(add(data.offset, 0x120))
                 }
 
-                if (recipient != fund) revert OnlyFund();
+                if (recipient != fund) revert UniswapV3Hooks_OnlyFund();
                 if (!assetWhitelist[token0] || !assetWhitelist[token1]) {
-                    revert OnlyWhitelistedTokens();
+                    revert UniswapV3Hooks_OnlyWhitelistedTokens();
                 }
             } else if (selector == INonfungiblePositionManager.increaseLiquidity.selector) {
                 uint256 tokenId;
@@ -103,7 +108,7 @@ contract UniswapV3Hooks is IBeforeTransaction, IAfterTransaction {
 
                 _checkPosition(tokenId);
             } else {
-                revert UnsupportedSelector();
+                revert UniswapV3Hooks_InvalidTargetSelector();
             }
         } else if (target == address(uniswapV3Router)) {
             if (
@@ -126,17 +131,17 @@ contract UniswapV3Hooks is IBeforeTransaction, IAfterTransaction {
                 }
 
                 if (!assetWhitelist[tokenIn] || !assetWhitelist[tokenOut]) {
-                    revert OnlyWhitelistedTokens();
+                    revert UniswapV3Hooks_OnlyWhitelistedTokens();
                 }
 
                 if (recipient != fund) {
-                    revert OnlyFund();
+                    revert UniswapV3Hooks_OnlyFund();
                 }
             } else {
-                revert UnsupportedSelector();
+                revert UniswapV3Hooks_InvalidTargetSelector();
             }
         } else {
-            revert UnsupportedTarget();
+            revert UniswapV3Hooks_InvalidTargetAddress();
         }
     }
 
@@ -149,17 +154,42 @@ contract UniswapV3Hooks is IBeforeTransaction, IAfterTransaction {
         bytes calldata
     ) external override onlyFund {}
 
-    function enableAsset(address asset) external onlyFund {
-        require(asset != address(0), "Invalid asset address");
-        require(asset != address(this), "Cannot enable self");
-        require(asset != address(fund), "Cannot enable fund");
-        require(asset != address(uniswapV3PositionManager), "Cannot enable position manager");
-        require(asset != address(uniswapV3Router), "Cannot enable router");
+    function _enableAsset(address asset) private {
+        if (
+            asset == address(0) || asset == address(this) || asset == address(fund)
+                || asset == address(uniswapV3PositionManager) || asset == address(uniswapV3Router)
+        ) {
+            revert UniswapV3Hooks_InvalidAsset();
+        }
 
         assetWhitelist[asset] = true;
+
+        emit UniswapV3Hooks_AssetEnabled(asset);
+    }
+
+    function enableAsset(address asset) external onlyFund {
+        _enableAsset(asset);
+    }
+
+    function enableAssetList(address[] calldata assets) external onlyFund {
+        for (uint256 i = 0; i < assets.length; i++) {
+            _enableAsset(assets[i]);
+        }
+    }
+
+    function _disableAsset(address asset) private {
+        assetWhitelist[asset] = false;
+
+        emit UniswapV3Hooks_AssetDisabled(asset);
     }
 
     function disableAsset(address asset) external onlyFund {
-        assetWhitelist[asset] = false;
+        _disableAsset(asset);
+    }
+
+    function disableAssetList(address[] calldata assets) external onlyFund {
+        for (uint256 i = 0; i < assets.length; i++) {
+            _disableAsset(assets[i]);
+        }
     }
 }

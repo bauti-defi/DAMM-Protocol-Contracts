@@ -8,7 +8,7 @@ import {Safe} from "@safe-contracts/Safe.sol";
 import {HookRegistry} from "@src/modules/trading/HookRegistry.sol";
 import {TradingModule} from "@src/modules/trading/TradingModule.sol";
 import {SafeUtils, SafeTransaction} from "@test/utils/SafeUtils.sol";
-import "@src/hooks/AaveV3Hooks.sol";
+import "@src/hooks/aaveV3/AaveV3Hooks.sol";
 import {HookConfig} from "@src/modules/trading/Hooks.sol";
 import {BaseAaveV3} from "@test/forked/BaseAaveV3.sol";
 import {TokenMinter} from "@test/forked/TokenMinter.sol";
@@ -176,7 +176,7 @@ contract TestAaveV3 is TestBaseGnosis, TestBaseProtocol, BaseAaveV3, TokenMinter
         });
 
         vm.prank(operator, operator);
-        vm.expectRevert(AaveV3Hooks.OnlyWhitelistedTokens.selector);
+        vm.expectRevert(AaveV3Hooks_OnlyWhitelistedTokens.selector);
         tradingModule.execute(calls);
 
         assertEq(aUSDC.balanceOf(address(fund)), 0);
@@ -227,7 +227,7 @@ contract TestAaveV3 is TestBaseGnosis, TestBaseProtocol, BaseAaveV3, TokenMinter
         });
 
         vm.prank(operator, operator);
-        vm.expectRevert(AaveV3Hooks.OnlyWhitelistedTokens.selector);
+        vm.expectRevert(AaveV3Hooks_OnlyWhitelistedTokens.selector);
         tradingModule.execute(calls);
 
         assertEq(aUSDC.balanceOf(address(fund)), 0);
@@ -267,10 +267,54 @@ contract TestAaveV3 is TestBaseGnosis, TestBaseProtocol, BaseAaveV3, TokenMinter
         assertTrue(!aaveV3Hooks.assetWhitelist(address(ARB_USDC)), "Asset still whitelisted");
     }
 
+    function test_enable_disable_asset_list() public {
+        address[] memory _assets = new address[](3);
+        _assets[0] = address(ARB_USDC);
+        _assets[1] = address(ARB_DAI);
+        _assets[2] = address(ARB_USDCe);
+
+        bytes memory transaction =
+            abi.encodeWithSelector(aaveV3Hooks.enableAssetList.selector, _assets);
+
+        bool success = fund.executeTrx(
+            fundAdminPK,
+            SafeTransaction({
+                value: 0,
+                target: address(aaveV3Hooks),
+                operation: Enum.Operation.Call,
+                transaction: transaction
+            })
+        );
+
+        assertTrue(success, "Failed to enable asset list");
+
+        for (uint256 i = 0; i < _assets.length; i++) {
+            assertTrue(aaveV3Hooks.assetWhitelist(_assets[i]), "Asset not whitelisted");
+        }
+
+        transaction = abi.encodeWithSelector(aaveV3Hooks.disableAssetList.selector, _assets);
+
+        success = fund.executeTrx(
+            fundAdminPK,
+            SafeTransaction({
+                value: 0,
+                target: address(aaveV3Hooks),
+                operation: Enum.Operation.Call,
+                transaction: transaction
+            })
+        );
+
+        assertTrue(success, "Failed to disable asset list");
+
+        for (uint256 i = 0; i < _assets.length; i++) {
+            assertTrue(!aaveV3Hooks.assetWhitelist(_assets[i]), "Asset still whitelisted");
+        }
+    }
+
     function test_only_fund_can_enable_asset(address attacker) public {
         vm.assume(attacker != address(fund));
 
-        vm.expectRevert(AaveV3Hooks.OnlyFund.selector);
+        vm.expectRevert(AaveV3Hooks_OnlyFund.selector);
         vm.prank(attacker);
         aaveV3Hooks.enableAsset(address(ARB_USDC));
     }

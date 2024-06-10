@@ -12,7 +12,7 @@ import "@src/modules/trading/HookRegistry.sol";
 import "@src/modules/trading/TradingModule.sol";
 import "@test/utils/SafeUtils.sol";
 import "@test/forked/TokenMinter.sol";
-import "@src/hooks/UniswapV3Hooks.sol";
+import "@src/hooks/uniswapV3/UniswapV3Hooks.sol";
 import {HookConfig} from "@src/modules/trading/Hooks.sol";
 import {Enum} from "@safe-contracts/common/Enum.sol";
 import {IERC721} from "@openzeppelin-contracts/token/ERC721/IERC721.sol";
@@ -374,7 +374,7 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
         });
 
         vm.prank(operator, operator);
-        vm.expectRevert(UniswapV3Hooks.OnlyWhitelistedTokens.selector);
+        vm.expectRevert(UniswapV3Hooks_OnlyWhitelistedTokens.selector);
         tradingModule.execute(calls);
     }
 
@@ -409,7 +409,7 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
         });
 
         vm.prank(operator, operator);
-        vm.expectRevert(UniswapV3Hooks.OnlyFund.selector);
+        vm.expectRevert(UniswapV3Hooks_OnlyFund.selector);
         tradingModule.execute(calls);
     }
 
@@ -502,7 +502,7 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
         });
 
         vm.prank(operator, operator);
-        vm.expectRevert(UniswapV3Hooks.OnlyWhitelistedTokens.selector);
+        vm.expectRevert(UniswapV3Hooks_OnlyWhitelistedTokens.selector);
         tradingModule.execute(increaseLiquidityCalls);
     }
 
@@ -543,7 +543,7 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
         calls[0] = _increase_liquidity_call(nextPositionId);
 
         vm.prank(operator, operator);
-        vm.expectRevert(UniswapV3Hooks.InvalidPosition.selector);
+        vm.expectRevert(UniswapV3Hooks_InvalidPosition.selector);
         tradingModule.execute(calls);
     }
 
@@ -618,7 +618,7 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
         calls[0] = _decrease_liquidity_call(nextPositionId);
 
         vm.prank(operator, operator);
-        vm.expectRevert(UniswapV3Hooks.OnlyWhitelistedTokens.selector);
+        vm.expectRevert(UniswapV3Hooks_OnlyWhitelistedTokens.selector);
         tradingModule.execute(calls);
     }
 
@@ -659,7 +659,7 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
         calls[0] = _decrease_liquidity_call(nextPositionId);
 
         vm.prank(operator, operator);
-        vm.expectRevert(UniswapV3Hooks.InvalidPosition.selector);
+        vm.expectRevert(UniswapV3Hooks_InvalidPosition.selector);
         tradingModule.execute(calls);
     }
 
@@ -736,7 +736,7 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
         calls[0] = _collect_call(nextPositionId);
 
         vm.prank(operator, operator);
-        vm.expectRevert(UniswapV3Hooks.InvalidPosition.selector);
+        vm.expectRevert(UniswapV3Hooks_InvalidPosition.selector);
         tradingModule.execute(calls);
     }
 
@@ -801,7 +801,7 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
         });
 
         vm.prank(operator, operator);
-        vm.expectRevert(UniswapV3Hooks.OnlyWhitelistedTokens.selector);
+        vm.expectRevert(UniswapV3Hooks_OnlyWhitelistedTokens.selector);
         tradingModule.execute(calls);
     }
 
@@ -832,7 +832,7 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
         });
 
         vm.prank(operator, operator);
-        vm.expectRevert(UniswapV3Hooks.OnlyFund.selector);
+        vm.expectRevert(UniswapV3Hooks_OnlyFund.selector);
         tradingModule.execute(calls);
     }
 
@@ -899,7 +899,7 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
         });
 
         vm.prank(operator, operator);
-        vm.expectRevert(UniswapV3Hooks.OnlyWhitelistedTokens.selector);
+        vm.expectRevert(UniswapV3Hooks_OnlyWhitelistedTokens.selector);
         tradingModule.execute(calls);
     }
 
@@ -931,7 +931,7 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
         });
 
         vm.prank(operator, operator);
-        vm.expectRevert(UniswapV3Hooks.OnlyFund.selector);
+        vm.expectRevert(UniswapV3Hooks_OnlyFund.selector);
         tradingModule.execute(calls);
     }
 
@@ -969,10 +969,52 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
         assertTrue(!uniswapV3Hooks.assetWhitelist(address(ARB_USDC)), "Asset still whitelisted");
     }
 
+    function test_enable_disable_asset_list() public {
+        address[] memory _assets = new address[](3);
+        _assets[0] = address(ARB_USDC);
+        _assets[1] = address(ARB_DAI);
+        _assets[2] = address(ARB_USDCe);
+
+        bytes memory transaction =
+            abi.encodeWithSelector(uniswapV3Hooks.enableAssetList.selector, _assets);
+
+        bool success = fund.executeTrx(
+            fundAdminPK,
+            SafeTransaction({
+                value: 0,
+                target: address(uniswapV3Hooks),
+                operation: Enum.Operation.Call,
+                transaction: transaction
+            })
+        );
+
+        assertTrue(success, "Failed to enable asset list");
+        for (uint256 i = 0; i < _assets.length; i++) {
+            assertTrue(uniswapV3Hooks.assetWhitelist(_assets[i]), "Asset not whitelisted");
+        }
+
+        transaction = abi.encodeWithSelector(uniswapV3Hooks.disableAssetList.selector, _assets);
+
+        success = fund.executeTrx(
+            fundAdminPK,
+            SafeTransaction({
+                value: 0,
+                target: address(uniswapV3Hooks),
+                operation: Enum.Operation.Call,
+                transaction: transaction
+            })
+        );
+
+        assertTrue(success, "Failed to disable asset list");
+        for (uint256 i = 0; i < _assets.length; i++) {
+            assertTrue(!uniswapV3Hooks.assetWhitelist(_assets[i]), "Asset still whitelisted");
+        }
+    }
+
     function test_only_fund_can_enable_asset(address attacker) public {
         vm.assume(attacker != address(fund));
 
-        vm.expectRevert(UniswapV3Hooks.OnlyFund.selector);
+        vm.expectRevert(UniswapV3Hooks_OnlyFund.selector);
         vm.prank(attacker);
         uniswapV3Hooks.enableAsset(address(ARB_USDC));
     }
