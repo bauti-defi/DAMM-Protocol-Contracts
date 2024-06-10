@@ -33,13 +33,13 @@ interface IMultiSend {
 
 contract ArbStableFundConfig is DeployConfigLoader {
     address payable public constant STABLE_FUND =
-        payable(address(0x3a3B7991613E6433C0753D0B7c7251f92c490F40));
+        payable(address(0x07A5DC8f6DD58e5bc88CF2feE1352D6B658522b8));
     address public constant FUND_ADMIN = address(0x5822B262EDdA82d2C6A436b598Ff96fA9AB894c4);
     address public constant MODULE_FACTORY = address(0xe30E57cf7D69cBdDD9713AAb109753b5fa1878A5);
-    address public constant HOOK_REGISTRY = address(0xeD521af25787c472A0428FAED83f3edf627EFcE7);
-    address public constant TRADING_MODULE = address(0x61e699f8f636917Cd9B2E4723756d5eF3257fd2c);
-    address public constant UNISWAP_V3_HOOKS = address(0x09991D5958f4d72812Aec65aF8b78969223D4799);
-    address public constant AAVE_V3_HOOKS = address(0x5dc3D4F83B4Cb9542689338079893Ca2b4B62411);
+    address public constant HOOK_REGISTRY = address(0x829C5cF481560F6b0ab29B802D90D2baCE20bC0E);
+    address public constant TRADING_MODULE = address(0x587F60B0f87e3582f84b77E7F647B6754E04F4d4);
+    address public constant UNISWAP_V3_HOOKS = address(0x9C0c182999fD9019c26A8C02fdc9F186ba8f2C57);
+    address public constant AAVE_V3_HOOKS = address(0xCeE902D5E970797AB029a9D6CbdCD284c373e250);
 
     // stablecoins deployed on arbitrum
     address constant ARB_USDCe = 0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8;
@@ -75,7 +75,7 @@ contract ArbStableFundConfig is DeployConfigLoader {
             MULTISEND_CALL,
             0,
             transaction,
-            Enum.Operation.Call,
+            Enum.Operation.DelegateCall,
             0,
             0,
             0,
