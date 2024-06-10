@@ -18,7 +18,6 @@ event AaveV3Hooks_AssetEnabled(address asset);
 event AaveV3Hooks_AssetDisabled(address asset);
 
 contract AaveV3Hooks is IBeforeTransaction, IAfterTransaction {
-    /// TODO: subtract 1, word of cawf
     bytes32 constant POSITION_POINTER = keccak256("aave.v3.hooks");
 
     bytes4 constant L1_WITHDRAW_SELECTOR = IPool.withdraw.selector;

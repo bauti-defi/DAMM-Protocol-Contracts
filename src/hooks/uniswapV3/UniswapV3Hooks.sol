@@ -17,7 +17,6 @@ event UniswapV3Hooks_AssetEnabled(address asset);
 
 event UniswapV3Hooks_AssetDisabled(address asset);
 
-/// TODO: add method to enable/disable array of assets
 contract UniswapV3Hooks is IBeforeTransaction, IAfterTransaction {
     address public immutable fund;
     INonfungiblePositionManager public immutable uniswapV3PositionManager;
