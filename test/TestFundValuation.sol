@@ -16,10 +16,10 @@ import {
     ARB_DAI_USD_FEED,
     ARB_ETH_USD_FEED
 } from "@test/forked/ChainlinkOracleFeeds.sol";
-import {Periphery} from "@src/deposits/Periphery.sol";
-import {AssetPolicy} from "@src/deposits/Structs.sol";
+import {Periphery} from "@src/modules/deposit/Periphery.sol";
+import {AssetPolicy} from "@src/modules/deposit/Structs.sol";
 import {IFund} from "@src/interfaces/IFund.sol";
-import {FundNotFullyDivested_Error} from "@src/deposits/Errors.sol";
+import {FundNotFullyDivested_Error} from "@src/modules/deposit/Errors.sol";
 import {POSITION_OPENER, POSITION_CLOSER, NULL} from "@src/FundCallbackHandler.sol";
 
 // keccak256("fallback_manager.handler.address")
