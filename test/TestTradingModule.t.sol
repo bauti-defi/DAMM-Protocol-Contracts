@@ -10,7 +10,7 @@ import {ITradingModule} from "@src/interfaces/ITradingModule.sol";
 import {Enum} from "@safe-contracts/common/Enum.sol";
 import {SafeUtils, SafeTransaction} from "@test/utils/SafeUtils.sol";
 import {IBeforeTransaction, IAfterTransaction} from "@src/interfaces/ITransactionHooks.sol";
-import "@src/lib/Hooks.sol";
+import "@src/modules/trading/Hooks.sol";
 import "@src/modules/trading/HookRegistry.sol";
 import "@src/modules/trading/Errors.sol";
 import "@src/modules/trading/Structs.sol";
@@ -263,7 +263,7 @@ contract TestTradingModule is Test, TestBaseGnosis, TestBaseProtocol {
         Transaction[] memory calls = new Transaction[](1);
         calls[0] = incrementCall(10);
 
-        vm.expectRevert(Errors.GasLimitExceeded.selector);
+        vm.expectRevert(Errors.TradingModule_GasLimitExceeded.selector);
         vm.prank(operator);
         tradingModule.execute(calls);
     }
@@ -292,7 +292,7 @@ contract TestTradingModule is Test, TestBaseGnosis, TestBaseProtocol {
         Transaction[] memory calls = new Transaction[](1);
         calls[0] = incrementCall(10);
 
-        vm.expectRevert(Errors.HookNotDefined.selector);
+        vm.expectRevert(Errors.TradingModule_HookNotDefined.selector);
         vm.prank(attacker);
         tradingModule.execute(calls);
     }

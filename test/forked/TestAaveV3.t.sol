@@ -9,7 +9,7 @@ import {HookRegistry} from "@src/modules/trading/HookRegistry.sol";
 import {TradingModule} from "@src/modules/trading/TradingModule.sol";
 import {SafeUtils, SafeTransaction} from "@test/utils/SafeUtils.sol";
 import "@src/hooks/AaveV3Hooks.sol";
-import {HookConfig} from "@src/lib/Hooks.sol";
+import {HookConfig} from "@src/modules/trading/Hooks.sol";
 import {BaseAaveV3} from "@test/forked/BaseAaveV3.sol";
 import {TokenMinter} from "@test/forked/TokenMinter.sol";
 import {IERC20} from "@openzeppelin-contracts/token/ERC20/IERC20.sol";

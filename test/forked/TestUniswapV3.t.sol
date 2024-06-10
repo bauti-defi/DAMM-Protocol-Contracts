@@ -13,7 +13,7 @@ import "@src/modules/trading/TradingModule.sol";
 import "@test/utils/SafeUtils.sol";
 import "@test/forked/TokenMinter.sol";
 import "@src/hooks/UniswapV3Hooks.sol";
-import {HookConfig} from "@src/lib/Hooks.sol";
+import {HookConfig} from "@src/modules/trading/Hooks.sol";
 import {Enum} from "@safe-contracts/common/Enum.sol";
 import {IERC721} from "@openzeppelin-contracts/token/ERC721/IERC721.sol";
 import "@src/modules/trading/Structs.sol";

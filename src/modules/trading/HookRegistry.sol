@@ -2,7 +2,8 @@
 pragma solidity ^0.8.0;
 
 import {IHookRegistry} from "@src/interfaces/IHookRegistry.sol";
-import {HookLib, HookConfig, Hooks} from "@src/lib/Hooks.sol";
+import {HookLib, HookConfig, Hooks} from "./Hooks.sol";
+import "./Errors.sol";
 
 contract HookRegistry is IHookRegistry {
     using HookLib for HookConfig;
@@ -14,7 +15,9 @@ contract HookRegistry is IHookRegistry {
     mapping(bytes32 hookPointer => Hooks) private hooks;
 
     modifier onlyFund() {
-        require(msg.sender == fund, "only fund");
+        if (msg.sender != fund) {
+            revert Errors.OnlyFund();
+        }
         _;
     }
 

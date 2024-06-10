@@ -7,8 +7,9 @@ import {TestBaseGnosis} from "@test/base/TestBaseGnosis.sol";
 import {SafeL2} from "@safe-contracts/SafeL2.sol";
 import {Enum} from "@safe-contracts/common/Enum.sol";
 import {SafeUtils, SafeTransaction} from "@test/utils/SafeUtils.sol";
-import "@src/lib/Hooks.sol";
+import "@src/modules/trading/Hooks.sol";
 import "@src/modules/trading/HookRegistry.sol";
+import "@src/modules/trading/Errors.sol";
 
 contract TestHookRegistry is Test, TestBaseGnosis, TestBaseProtocol {
     using SafeUtils for SafeL2;
@@ -98,7 +99,7 @@ contract TestHookRegistry is Test, TestBaseGnosis, TestBaseProtocol {
     function test_only_fund_can_set_hook(address attacker) public {
         vm.assume(attacker != address(fund));
 
-        vm.expectRevert("only fund");
+        vm.expectRevert(Errors.OnlyFund.selector);
         vm.prank(attacker);
         hookRegistry.setHooks(mock_hook());
     }
@@ -134,7 +135,7 @@ contract TestHookRegistry is Test, TestBaseGnosis, TestBaseProtocol {
     function test_only_fund_can_unset_hook(address attacker) public withHook(mock_hook()) {
         vm.assume(attacker != address(fund));
 
-        vm.expectRevert("only fund");
+        vm.expectRevert(Errors.OnlyFund.selector);
         vm.prank(attacker);
         hookRegistry.removeHooks(mock_hook());
     }

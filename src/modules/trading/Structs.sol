@@ -8,3 +8,18 @@ struct Transaction {
     bytes4 targetSelector;
     bytes data;
 }
+
+struct Hooks {
+    address beforeTrxHook;
+    address afterTrxHook;
+    bool defined;
+}
+
+struct HookConfig {
+    address operator;
+    address target;
+    address beforeTrxHook;
+    address afterTrxHook;
+    uint8 operation;
+    bytes4 targetSelector;
+}
