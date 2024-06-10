@@ -6,7 +6,7 @@ import {TestBaseProtocol} from "@test/base/TestBaseProtocol.sol";
 import {SafeL2} from "@safe-contracts/SafeL2.sol";
 import {Safe} from "@safe-contracts/Safe.sol";
 import {HookRegistry} from "@src/HookRegistry.sol";
-import {TradingModule} from "@src/TradingModule.sol";
+import {TradingModule} from "@src/trading/TradingModule.sol";
 import {SafeUtils, SafeTransaction} from "@test/utils/SafeUtils.sol";
 import "@src/hooks/AaveV3Hooks.sol";
 import {HookConfig} from "@src/lib/Hooks.sol";
@@ -15,6 +15,7 @@ import {TokenMinter} from "@test/forked/TokenMinter.sol";
 import {IERC20} from "@openzeppelin-contracts/token/ERC20/IERC20.sol";
 import {Enum} from "@safe-contracts/common/Enum.sol";
 import {console2} from "@forge-std/Test.sol";
+import "@src/trading/Structs.sol";
 
 contract TestAaveV3 is TestBaseGnosis, TestBaseProtocol, BaseAaveV3, TokenMinter {
     using SafeUtils for SafeL2;
@@ -147,41 +148,36 @@ contract TestAaveV3 is TestBaseGnosis, TestBaseProtocol, BaseAaveV3, TokenMinter
     function test_supply() public withAllowance(USDC) enableAsset(address(ARB_USDC)) {
         assertEq(aUSDC.balanceOf(address(fund)), 0);
 
-        bytes memory supplyAaveCall = abi.encodeWithSelector(
-            aaveV3Pool.supply.selector, ARB_USDC, 1000, address(fund), uint16(0)
-        );
+        Transaction[] memory calls = new Transaction[](1);
 
-        bytes memory payload = abi.encodePacked(
-            uint8(Enum.Operation.Call),
-            address(aaveV3Pool),
-            uint256(0),
-            supplyAaveCall.length,
-            supplyAaveCall
-        );
+        calls[0] = Transaction({
+            target: address(aaveV3Pool),
+            value: 0,
+            targetSelector: aaveV3Pool.supply.selector,
+            data: abi.encode(ARB_USDC, 1000, address(fund), uint16(0)),
+            operation: uint8(Enum.Operation.Call)
+        });
 
         vm.prank(operator, operator);
-        tradingModule.execute(payload);
+        tradingModule.execute(calls);
 
         assertEq(aUSDC.balanceOf(address(fund)), 1000);
         assertEq(USDC.balanceOf(address(fund)), BIG_NUMBER - 1000);
     }
 
     function test_cannot_supply_unauthorized_asset() public withAllowance(USDT) {
-        bytes memory supplyAaveCall = abi.encodeWithSelector(
-            aaveV3Pool.supply.selector, address(USDC), 1000, address(fund), uint16(0)
-        );
-
-        bytes memory payload = abi.encodePacked(
-            uint8(Enum.Operation.Call),
-            address(aaveV3Pool),
-            uint256(0),
-            supplyAaveCall.length,
-            supplyAaveCall
-        );
+        Transaction[] memory calls = new Transaction[](1);
+        calls[0] = Transaction({
+            target: address(aaveV3Pool),
+            value: 0,
+            targetSelector: aaveV3Pool.supply.selector,
+            data: abi.encode(address(USDC), 1000, address(fund), uint16(0)),
+            operation: uint8(Enum.Operation.Call)
+        });
 
         vm.prank(operator, operator);
         vm.expectRevert(AaveV3Hooks.OnlyWhitelistedTokens.selector);
-        tradingModule.execute(payload);
+        tradingModule.execute(calls);
 
         assertEq(aUSDC.balanceOf(address(fund)), 0);
         assertEq(USDC.balanceOf(address(fund)), BIG_NUMBER);
@@ -190,57 +186,49 @@ contract TestAaveV3 is TestBaseGnosis, TestBaseProtocol, BaseAaveV3, TokenMinter
     function test_withdraw() public withAllowance(USDC) enableAsset(address(ARB_USDC)) {
         assertEq(aUSDC.balanceOf(address(fund)), 0);
 
-        bytes memory supplyAaveCall = abi.encodeWithSelector(
-            aaveV3Pool.supply.selector, ARB_USDC, 1000, address(fund), uint16(0)
-        );
-
-        bytes memory payload = abi.encodePacked(
-            uint8(Enum.Operation.Call),
-            address(aaveV3Pool),
-            uint256(0),
-            supplyAaveCall.length,
-            supplyAaveCall
-        );
+        Transaction[] memory calls = new Transaction[](1);
+        calls[0] = Transaction({
+            target: address(aaveV3Pool),
+            value: 0,
+            targetSelector: aaveV3Pool.supply.selector,
+            data: abi.encode(ARB_USDC, 1000, address(fund), uint16(0)),
+            operation: uint8(Enum.Operation.Call)
+        });
 
         vm.prank(operator, operator);
-        tradingModule.execute(payload);
+        tradingModule.execute(calls);
 
         assertEq(aUSDC.balanceOf(address(fund)), 1000);
         assertEq(USDC.balanceOf(address(fund)), BIG_NUMBER - 1000);
 
-        bytes memory withdrawAaveCall =
-            abi.encodeWithSelector(aaveV3Pool.withdraw.selector, ARB_USDC, 1000, address(fund));
-
-        payload = abi.encodePacked(
-            uint8(Enum.Operation.Call),
-            address(aaveV3Pool),
-            uint256(0),
-            withdrawAaveCall.length,
-            withdrawAaveCall
-        );
+        calls[0] = Transaction({
+            target: address(aaveV3Pool),
+            value: 0,
+            targetSelector: aaveV3Pool.withdraw.selector,
+            data: abi.encode(ARB_USDC, 1000, address(fund)),
+            operation: uint8(Enum.Operation.Call)
+        });
 
         vm.prank(operator, operator);
-        tradingModule.execute(payload);
+        tradingModule.execute(calls);
 
         assertEq(aUSDC.balanceOf(address(fund)), 0);
         assertEq(USDC.balanceOf(address(fund)), BIG_NUMBER);
     }
 
     function test_cannot_withdraw_unauthorized_asset() public withAllowance(USDC) {
-        bytes memory withdrawAaveCall =
-            abi.encodeWithSelector(aaveV3Pool.withdraw.selector, address(USDC), 1000, address(fund));
-
-        bytes memory payload = abi.encodePacked(
-            uint8(Enum.Operation.Call),
-            address(aaveV3Pool),
-            uint256(0),
-            withdrawAaveCall.length,
-            withdrawAaveCall
-        );
+        Transaction[] memory calls = new Transaction[](1);
+        calls[0] = Transaction({
+            target: address(aaveV3Pool),
+            value: 0,
+            targetSelector: aaveV3Pool.withdraw.selector,
+            data: abi.encode(address(USDC), 1000, address(fund)),
+            operation: uint8(Enum.Operation.Call)
+        });
 
         vm.prank(operator, operator);
         vm.expectRevert(AaveV3Hooks.OnlyWhitelistedTokens.selector);
-        tradingModule.execute(payload);
+        tradingModule.execute(calls);
 
         assertEq(aUSDC.balanceOf(address(fund)), 0);
         assertEq(USDC.balanceOf(address(fund)), BIG_NUMBER);

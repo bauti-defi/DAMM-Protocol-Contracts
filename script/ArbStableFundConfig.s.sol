@@ -6,7 +6,7 @@ import {DeployConfigLoader} from "@script/DeployConfigLoader.sol";
 import {IERC20} from "@openzeppelin-contracts/token/ERC20/IERC20.sol";
 import "@src/ModuleFactory.sol";
 import "@src/HookRegistry.sol";
-import "@src/TradingModule.sol";
+import "@src/trading/TradingModule.sol";
 import "@safe-contracts/Safe.sol";
 import "@src/hooks/UniswapV3Hooks.sol";
 import "@src/hooks/AaveV3Hooks.sol";

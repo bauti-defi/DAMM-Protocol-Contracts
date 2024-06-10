@@ -9,13 +9,14 @@ import "@test/base/TestBaseProtocol.sol";
 import "@safe-contracts/SafeL2.sol";
 import "@safe-contracts/Safe.sol";
 import "@src/HookRegistry.sol";
-import "@src/TradingModule.sol";
+import "@src/trading/TradingModule.sol";
 import "@test/utils/SafeUtils.sol";
 import "@test/forked/TokenMinter.sol";
 import "@src/hooks/UniswapV3Hooks.sol";
 import {HookConfig} from "@src/lib/Hooks.sol";
 import {Enum} from "@safe-contracts/common/Enum.sol";
 import {IERC721} from "@openzeppelin-contracts/token/ERC721/IERC721.sol";
+import "@src/trading/Structs.sol";
 
 contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, TokenMinter {
     using SafeUtils for SafeL2;
@@ -208,7 +209,7 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
         return uint176(uint256(vm.load(UNI_V3_POSITION_MANAGER_ADDRESS, bytes32(uint256(13)))));
     }
 
-    function _mint_call() private view returns (bytes memory) {
+    function _mint_call() private view returns (Transaction memory trx) {
         INonfungiblePositionManager.MintParams memory mintParams = INonfungiblePositionManager
             .MintParams({
             token0: ARB_USDC,
@@ -224,22 +225,19 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
             deadline: block.timestamp + 100
         });
 
-        bytes memory mintCall =
-            abi.encodeWithSelector(uniswapPositionManager.mint.selector, mintParams);
-
-        return abi.encodePacked(
-            uint8(Enum.Operation.Call),
-            address(uniswapPositionManager),
-            uint256(0),
-            mintCall.length,
-            mintCall
-        );
+        trx = Transaction({
+            target: address(uniswapPositionManager),
+            value: 0,
+            targetSelector: uniswapPositionManager.mint.selector,
+            data: abi.encode(mintParams),
+            operation: uint8(Enum.Operation.Call)
+        });
     }
 
     function _decrease_liquidity_call(uint176 positionId, uint128 liq)
         private
         view
-        returns (bytes memory)
+        returns (Transaction memory trx)
     {
         INonfungiblePositionManager.DecreaseLiquidityParams memory params =
         INonfungiblePositionManager.DecreaseLiquidityParams({
@@ -250,19 +248,20 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
             deadline: block.timestamp + 100
         });
 
-        bytes memory decreaseLiquidityCall =
-            abi.encodeWithSelector(uniswapPositionManager.decreaseLiquidity.selector, params);
-
-        return abi.encodePacked(
-            uint8(Enum.Operation.Call),
-            address(uniswapPositionManager),
-            uint256(0),
-            decreaseLiquidityCall.length,
-            decreaseLiquidityCall
-        );
+        trx = Transaction({
+            target: address(uniswapPositionManager),
+            value: 0,
+            targetSelector: uniswapPositionManager.decreaseLiquidity.selector,
+            data: abi.encode(params),
+            operation: uint8(Enum.Operation.Call)
+        });
     }
 
-    function _increase_liquidity_call(uint176 positionId) private view returns (bytes memory) {
+    function _increase_liquidity_call(uint176 positionId)
+        private
+        view
+        returns (Transaction memory trx)
+    {
         INonfungiblePositionManager.IncreaseLiquidityParams memory params =
         INonfungiblePositionManager.IncreaseLiquidityParams({
             tokenId: positionId,
@@ -273,19 +272,16 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
             deadline: block.timestamp + 100
         });
 
-        bytes memory increaseLiquidityCall =
-            abi.encodeWithSelector(uniswapPositionManager.increaseLiquidity.selector, params);
-
-        return abi.encodePacked(
-            uint8(Enum.Operation.Call),
-            address(uniswapPositionManager),
-            uint256(0),
-            increaseLiquidityCall.length,
-            increaseLiquidityCall
-        );
+        trx = Transaction({
+            target: address(uniswapPositionManager),
+            value: 0,
+            targetSelector: uniswapPositionManager.increaseLiquidity.selector,
+            data: abi.encode(params),
+            operation: uint8(Enum.Operation.Call)
+        });
     }
 
-    function _collect_call(uint176 positionId) private view returns (bytes memory) {
+    function _collect_call(uint176 positionId) private view returns (Transaction memory trx) {
         INonfungiblePositionManager.CollectParams memory params = INonfungiblePositionManager
             .CollectParams({
             tokenId: positionId,
@@ -294,19 +290,20 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
             amount1Max: 1000
         });
 
-        bytes memory collectCall =
-            abi.encodeWithSelector(uniswapPositionManager.collect.selector, params);
-
-        return abi.encodePacked(
-            uint8(Enum.Operation.Call),
-            address(uniswapPositionManager),
-            uint256(0),
-            collectCall.length,
-            collectCall
-        );
+        trx = Transaction({
+            target: address(uniswapPositionManager),
+            value: 0,
+            targetSelector: uniswapPositionManager.collect.selector,
+            data: abi.encode(params),
+            operation: uint8(Enum.Operation.Call)
+        });
     }
 
-    function _decrease_liquidity_call(uint176 positionId) private view returns (bytes memory) {
+    function _decrease_liquidity_call(uint176 positionId)
+        private
+        view
+        returns (Transaction memory trx)
+    {
         INonfungiblePositionManager.DecreaseLiquidityParams memory params =
         INonfungiblePositionManager.DecreaseLiquidityParams({
             tokenId: positionId,
@@ -316,16 +313,13 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
             deadline: block.timestamp + 100
         });
 
-        bytes memory decreaseLiquidityCall =
-            abi.encodeWithSelector(uniswapPositionManager.decreaseLiquidity.selector, params);
-
-        return abi.encodePacked(
-            uint8(Enum.Operation.Call),
-            address(uniswapPositionManager),
-            uint256(0),
-            decreaseLiquidityCall.length,
-            decreaseLiquidityCall
-        );
+        trx = Transaction({
+            target: address(uniswapPositionManager),
+            value: 0,
+            targetSelector: uniswapPositionManager.decreaseLiquidity.selector,
+            data: abi.encode(params),
+            operation: uint8(Enum.Operation.Call)
+        });
     }
 
     function test_mint_position()
@@ -334,8 +328,11 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
         enableAsset(ARB_USDC)
         enableAsset(ARB_USDCe)
     {
+        Transaction[] memory calls = new Transaction[](1);
+        calls[0] = _mint_call();
+
         vm.prank(operator, operator);
-        tradingModule.execute(_mint_call());
+        tradingModule.execute(calls);
 
         assertEq(
             IERC721(UNI_V3_POSITION_MANAGER_ADDRESS).balanceOf(address(fund)),
@@ -367,20 +364,18 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
             deadline: block.timestamp + 100
         });
 
-        bytes memory mintCall =
-            abi.encodeWithSelector(uniswapPositionManager.mint.selector, mintParams);
-
-        bytes memory mintPayload = abi.encodePacked(
-            uint8(Enum.Operation.Call),
-            address(uniswapPositionManager),
-            uint256(0),
-            mintCall.length,
-            mintCall
-        );
+        Transaction[] memory calls = new Transaction[](1);
+        calls[0] = Transaction({
+            target: address(uniswapPositionManager),
+            value: 0,
+            targetSelector: uniswapPositionManager.mint.selector,
+            data: abi.encode(mintParams),
+            operation: uint8(Enum.Operation.Call)
+        });
 
         vm.prank(operator, operator);
         vm.expectRevert(UniswapV3Hooks.OnlyWhitelistedTokens.selector);
-        tradingModule.execute(mintPayload);
+        tradingModule.execute(calls);
     }
 
     function test_cannot_mint_position_to_other(address attacker)
@@ -404,20 +399,18 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
             deadline: block.timestamp + 100
         });
 
-        bytes memory mintCall =
-            abi.encodeWithSelector(uniswapPositionManager.mint.selector, mintParams);
-
-        bytes memory mintPayload = abi.encodePacked(
-            uint8(Enum.Operation.Call),
-            address(uniswapPositionManager),
-            uint256(0),
-            mintCall.length,
-            mintCall
-        );
+        Transaction[] memory calls = new Transaction[](1);
+        calls[0] = Transaction({
+            target: address(uniswapPositionManager),
+            value: 0,
+            targetSelector: uniswapPositionManager.mint.selector,
+            data: abi.encode(mintParams),
+            operation: uint8(Enum.Operation.Call)
+        });
 
         vm.prank(operator, operator);
         vm.expectRevert(UniswapV3Hooks.OnlyFund.selector);
-        tradingModule.execute(mintPayload);
+        tradingModule.execute(calls);
     }
 
     function test_increase_liquidity()
@@ -426,8 +419,11 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
         enableAsset(ARB_USDC)
         enableAsset(ARB_USDCe)
     {
+        Transaction[] memory calls = new Transaction[](1);
+        calls[0] = _mint_call();
+
         vm.prank(operator, operator);
-        tradingModule.execute(_mint_call());
+        tradingModule.execute(calls);
 
         assertEq(
             IERC721(UNI_V3_POSITION_MANAGER_ADDRESS).balanceOf(address(fund)),
@@ -442,8 +438,10 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
         uint256 token0Balance = USDC.balanceOf(address(fund));
         uint256 token1Balance = USDCe.balanceOf(address(fund));
 
+        calls[0] = _increase_liquidity_call(nextPositionId);
+
         vm.prank(operator, operator);
-        tradingModule.execute(_increase_liquidity_call(nextPositionId));
+        tradingModule.execute(calls);
 
         assertEq(
             IERC721(UNI_V3_POSITION_MANAGER_ADDRESS).ownerOf(nextPositionId),
@@ -494,20 +492,18 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
             deadline: block.timestamp + 100
         });
 
-        bytes memory increaseLiquidityCall =
-            abi.encodeWithSelector(uniswapPositionManager.increaseLiquidity.selector, params);
-
-        bytes memory increaseLiquidityPayload = abi.encodePacked(
-            uint8(Enum.Operation.Call),
-            address(uniswapPositionManager),
-            uint256(0),
-            increaseLiquidityCall.length,
-            increaseLiquidityCall
-        );
+        Transaction[] memory increaseLiquidityCalls = new Transaction[](1);
+        increaseLiquidityCalls[0] = Transaction({
+            target: address(uniswapPositionManager),
+            value: 0,
+            targetSelector: uniswapPositionManager.increaseLiquidity.selector,
+            data: abi.encode(params),
+            operation: uint8(Enum.Operation.Call)
+        });
 
         vm.prank(operator, operator);
         vm.expectRevert(UniswapV3Hooks.OnlyWhitelistedTokens.selector);
-        tradingModule.execute(increaseLiquidityPayload);
+        tradingModule.execute(increaseLiquidityCalls);
     }
 
     function test_cannot_increase_liquidity_of_position_that_is_not_owned_by_fund()
@@ -543,9 +539,12 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
         );
         vm.stopPrank();
 
+        Transaction[] memory calls = new Transaction[](1);
+        calls[0] = _increase_liquidity_call(nextPositionId);
+
         vm.prank(operator, operator);
         vm.expectRevert(UniswapV3Hooks.InvalidPosition.selector);
-        tradingModule.execute(_increase_liquidity_call(nextPositionId));
+        tradingModule.execute(calls);
     }
 
     function test_decrease_liquidity()
@@ -554,34 +553,11 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
         enableAsset(ARB_USDC)
         enableAsset(ARB_USDCe)
     {
-        INonfungiblePositionManager.MintParams memory mintParams = INonfungiblePositionManager
-            .MintParams({
-            token0: ARB_USDC,
-            token1: ARB_USDCe,
-            fee: 500,
-            tickLower: 0,
-            tickUpper: 500,
-            amount0Desired: 1000,
-            amount1Desired: 1000,
-            amount0Min: 0,
-            amount1Min: 0,
-            recipient: address(fund),
-            deadline: block.timestamp + 100
-        });
-
-        bytes memory mintCall =
-            abi.encodeWithSelector(uniswapPositionManager.mint.selector, mintParams);
-
-        bytes memory mintPayload = abi.encodePacked(
-            uint8(Enum.Operation.Call),
-            address(uniswapPositionManager),
-            uint256(0),
-            mintCall.length,
-            mintCall
-        );
+        Transaction[] memory calls = new Transaction[](1);
+        calls[0] = _mint_call();
 
         vm.prank(operator, operator);
-        tradingModule.execute(mintPayload);
+        tradingModule.execute(calls);
 
         assertEq(
             IERC721(UNI_V3_POSITION_MANAGER_ADDRESS).balanceOf(address(fund)),
@@ -595,8 +571,10 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
 
         (,,,,,,, uint128 liquidity,,,,) = uniswapPositionManager.positions(nextPositionId);
 
+        calls[0] = _decrease_liquidity_call(nextPositionId);
+
         vm.prank(operator, operator);
-        tradingModule.execute(_decrease_liquidity_call(nextPositionId));
+        tradingModule.execute(calls);
 
         assertEq(
             IERC721(UNI_V3_POSITION_MANAGER_ADDRESS).ownerOf(nextPositionId),
@@ -636,9 +614,12 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
         vm.prank(address(fund));
         uniswapPositionManager.mint(mintParams);
 
+        Transaction[] memory calls = new Transaction[](1);
+        calls[0] = _decrease_liquidity_call(nextPositionId);
+
         vm.prank(operator, operator);
         vm.expectRevert(UniswapV3Hooks.OnlyWhitelistedTokens.selector);
-        tradingModule.execute(_decrease_liquidity_call(nextPositionId));
+        tradingModule.execute(calls);
     }
 
     function test_cannot_decrease_liquidity_of_position_that_is_not_owned_by_fund()
@@ -674,9 +655,12 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
         );
         vm.stopPrank();
 
+        Transaction[] memory calls = new Transaction[](1);
+        calls[0] = _decrease_liquidity_call(nextPositionId);
+
         vm.prank(operator, operator);
         vm.expectRevert(UniswapV3Hooks.InvalidPosition.selector);
-        tradingModule.execute(_decrease_liquidity_call(nextPositionId));
+        tradingModule.execute(calls);
     }
 
     function test_collect_from_position()
@@ -685,36 +669,23 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
         enableAsset(ARB_USDC)
         enableAsset(ARB_USDCe)
     {
+        Transaction[] memory calls = new Transaction[](1);
+        calls[0] = _mint_call();
+
         vm.prank(operator, operator);
-        tradingModule.execute(_mint_call());
+        tradingModule.execute(calls);
 
         uint256 token0Balance = USDC.balanceOf(address(fund));
         uint256 token1Balance = USDCe.balanceOf(address(fund));
+        calls[0] = _decrease_liquidity_call(nextPositionId, 100);
 
         vm.prank(operator, operator);
-        tradingModule.execute(_decrease_liquidity_call(nextPositionId, 100));
+        tradingModule.execute(calls);
 
-        INonfungiblePositionManager.CollectParams memory params = INonfungiblePositionManager
-            .CollectParams({
-            tokenId: nextPositionId,
-            recipient: address(fund),
-            amount0Max: 1000,
-            amount1Max: 1000
-        });
-
-        bytes memory collectCall =
-            abi.encodeWithSelector(uniswapPositionManager.collect.selector, params);
-
-        bytes memory collectPayload = abi.encodePacked(
-            uint8(Enum.Operation.Call),
-            address(uniswapPositionManager),
-            uint256(0),
-            collectCall.length,
-            collectCall
-        );
+        calls[0] = _collect_call(nextPositionId);
 
         vm.prank(operator, operator);
-        tradingModule.execute(collectPayload);
+        tradingModule.execute(calls);
 
         assertEq(
             IERC721(UNI_V3_POSITION_MANAGER_ADDRESS).ownerOf(nextPositionId),
@@ -761,9 +732,12 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
         uniswapPositionManager.mint(mintParams);
         vm.stopPrank();
 
+        Transaction[] memory calls = new Transaction[](1);
+        calls[0] = _collect_call(nextPositionId);
+
         vm.prank(operator, operator);
         vm.expectRevert(UniswapV3Hooks.InvalidPosition.selector);
-        tradingModule.execute(_collect_call(nextPositionId));
+        tradingModule.execute(calls);
     }
 
     function test_exact_input_single_swap()
@@ -786,19 +760,17 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
             sqrtPriceLimitX96: 0
         });
 
-        bytes memory swapCall =
-            abi.encodeWithSelector(uniswapRouter.exactInputSingle.selector, params);
-
-        bytes memory swapPayload = abi.encodePacked(
-            uint8(Enum.Operation.Call),
-            address(uniswapRouter),
-            uint256(0),
-            swapCall.length,
-            swapCall
-        );
+        Transaction[] memory calls = new Transaction[](1);
+        calls[0] = Transaction({
+            target: address(uniswapRouter),
+            value: 0,
+            targetSelector: uniswapRouter.exactInputSingle.selector,
+            data: abi.encode(params),
+            operation: uint8(Enum.Operation.Call)
+        });
 
         vm.prank(operator, operator);
-        tradingModule.execute(swapPayload);
+        tradingModule.execute(calls);
 
         assertTrue(USDC.balanceOf(address(fund)) < usdcBalance, "no tokens spent");
         assertTrue(USDCe.balanceOf(address(fund)) > bridgedBalance, "no tokens recieved");
@@ -819,20 +791,18 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
             sqrtPriceLimitX96: 0
         });
 
-        bytes memory swapCall =
-            abi.encodeWithSelector(uniswapRouter.exactInputSingle.selector, params);
-
-        bytes memory swapPayload = abi.encodePacked(
-            uint8(Enum.Operation.Call),
-            address(uniswapRouter),
-            uint256(0),
-            swapCall.length,
-            swapCall
-        );
+        Transaction[] memory calls = new Transaction[](1);
+        calls[0] = Transaction({
+            target: address(uniswapRouter),
+            value: 0,
+            targetSelector: uniswapRouter.exactInputSingle.selector,
+            data: abi.encode(params),
+            operation: uint8(Enum.Operation.Call)
+        });
 
         vm.prank(operator, operator);
         vm.expectRevert(UniswapV3Hooks.OnlyWhitelistedTokens.selector);
-        tradingModule.execute(swapPayload);
+        tradingModule.execute(calls);
     }
 
     function test_cannot_exact_input_single_swap_not_to_fund()
@@ -852,20 +822,18 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
             sqrtPriceLimitX96: 0
         });
 
-        bytes memory swapCall =
-            abi.encodeWithSelector(uniswapRouter.exactInputSingle.selector, params);
-
-        bytes memory swapPayload = abi.encodePacked(
-            uint8(Enum.Operation.Call),
-            address(uniswapRouter),
-            uint256(0),
-            swapCall.length,
-            swapCall
-        );
+        Transaction[] memory calls = new Transaction[](1);
+        calls[0] = Transaction({
+            target: address(uniswapRouter),
+            value: 0,
+            targetSelector: uniswapRouter.exactInputSingle.selector,
+            data: abi.encode(params),
+            operation: uint8(Enum.Operation.Call)
+        });
 
         vm.prank(operator, operator);
         vm.expectRevert(UniswapV3Hooks.OnlyFund.selector);
-        tradingModule.execute(swapPayload);
+        tradingModule.execute(calls);
     }
 
     function test_exact_output_single_swap()
@@ -889,19 +857,17 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
             sqrtPriceLimitX96: 0
         });
 
-        bytes memory swapCall =
-            abi.encodeWithSelector(uniswapRouter.exactOutputSingle.selector, params);
-
-        bytes memory swapPayload = abi.encodePacked(
-            uint8(Enum.Operation.Call),
-            address(uniswapRouter),
-            uint256(0),
-            swapCall.length,
-            swapCall
-        );
+        Transaction[] memory calls = new Transaction[](1);
+        calls[0] = Transaction({
+            target: address(uniswapRouter),
+            value: 0,
+            targetSelector: uniswapRouter.exactOutputSingle.selector,
+            data: abi.encode(params),
+            operation: uint8(Enum.Operation.Call)
+        });
 
         vm.prank(operator, operator);
-        tradingModule.execute(swapPayload);
+        tradingModule.execute(calls);
 
         assertTrue(USDC.balanceOf(address(fund)) < usdcBalance, "no tokens spent");
         assertTrue(USDCe.balanceOf(address(fund)) > bridgedBalance, "no tokens recieved");
@@ -923,20 +889,18 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
             sqrtPriceLimitX96: 0
         });
 
-        bytes memory swapCall =
-            abi.encodeWithSelector(uniswapRouter.exactOutputSingle.selector, params);
-
-        bytes memory swapPayload = abi.encodePacked(
-            uint8(Enum.Operation.Call),
-            address(uniswapRouter),
-            uint256(0),
-            swapCall.length,
-            swapCall
-        );
+        Transaction[] memory calls = new Transaction[](1);
+        calls[0] = Transaction({
+            target: address(uniswapRouter),
+            value: 0,
+            targetSelector: uniswapRouter.exactOutputSingle.selector,
+            data: abi.encode(params),
+            operation: uint8(Enum.Operation.Call)
+        });
 
         vm.prank(operator, operator);
         vm.expectRevert(UniswapV3Hooks.OnlyWhitelistedTokens.selector);
-        tradingModule.execute(swapPayload);
+        tradingModule.execute(calls);
     }
 
     function test_cannot_exact_output_single_swap_not_to_fund()
@@ -957,20 +921,18 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
             sqrtPriceLimitX96: 0
         });
 
-        bytes memory swapCall =
-            abi.encodeWithSelector(uniswapRouter.exactOutputSingle.selector, params);
-
-        bytes memory swapPayload = abi.encodePacked(
-            uint8(Enum.Operation.Call),
-            address(uniswapRouter),
-            uint256(0),
-            swapCall.length,
-            swapCall
-        );
+        Transaction[] memory calls = new Transaction[](1);
+        calls[0] = Transaction({
+            target: address(uniswapRouter),
+            value: 0,
+            targetSelector: uniswapRouter.exactOutputSingle.selector,
+            data: abi.encode(params),
+            operation: uint8(Enum.Operation.Call)
+        });
 
         vm.prank(operator, operator);
         vm.expectRevert(UniswapV3Hooks.OnlyFund.selector);
-        tradingModule.execute(swapPayload);
+        tradingModule.execute(calls);
     }
 
     function test_enable_disable_asset() public {
