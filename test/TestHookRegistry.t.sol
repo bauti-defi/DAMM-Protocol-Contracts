@@ -43,6 +43,7 @@ contract TestHookRegistry is Test, TestBaseGnosis, TestBaseProtocol {
                 payable(address(fund)),
                 fundAdmin,
                 fundAdminPK,
+                address(createCall),
                 bytes32("hookRegistry"),
                 0,
                 abi.encodePacked(type(HookRegistry).creationCode, abi.encode(address(fund)))

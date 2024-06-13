@@ -7,39 +7,39 @@ import {Safe} from "@safe-contracts/Safe.sol";
 import {Enum} from "@src/interfaces/ISafe.sol";
 import {SafeUtils} from "@test/utils/SafeUtils.sol";
 import {IOwnable} from "@src/interfaces/IOwnable.sol";
-import {DeployContract} from "@src/libs/DeployContract.sol";
+import "@openzeppelin-contracts/utils/Create2.sol";
+
+interface ICreateCall {
+    function performCreate2(uint256 value, bytes memory deploymentData, bytes32 salt)
+        external
+        returns (address newContract);
+}
 
 abstract contract TestBaseProtocol is Test {
     ModuleLib internal moduleLib;
-    DeployContract internal deployContractLib;
 
     function setUp() public virtual {
         moduleLib = new ModuleLib();
         vm.label(address(moduleLib), "ModuleLib");
-
-        deployContractLib = new DeployContract();
-        vm.label(address(deployContractLib), "DeployContract");
     }
 
     function deployContract(
         address payable fund,
         address admin,
         uint256 adminPK,
+        address createCall,
         bytes32 creationSalt,
         uint256 valueToForward,
         bytes memory contractCreationCode
     ) internal returns (address deployed) {
         bytes memory transaction = abi.encodeWithSelector(
-            DeployContract.deployContract.selector,
-            creationSalt,
-            valueToForward,
-            contractCreationCode
+            ICreateCall.performCreate2.selector, valueToForward, contractCreationCode, creationSalt
         );
 
         Safe safe = Safe(fund);
 
         bytes memory transactionData = safe.encodeTransactionData(
-            address(deployContractLib),
+            address(createCall),
             valueToForward,
             transaction,
             Enum.Operation.DelegateCall,
@@ -56,7 +56,7 @@ abstract contract TestBaseProtocol is Test {
 
         vm.startPrank(admin, admin);
         bool success = safe.execTransaction(
-            address(deployContractLib),
+            address(createCall),
             valueToForward,
             transaction,
             Enum.Operation.DelegateCall,
@@ -71,8 +71,7 @@ abstract contract TestBaseProtocol is Test {
 
         assertTrue(success, "Failed to deploy contract");
 
-        deployed =
-            deployContractLib.computeAddress(creationSalt, keccak256(contractCreationCode), fund);
+        deployed = Create2.computeAddress(creationSalt, keccak256(contractCreationCode), fund);
     }
 
     function deployModule(
@@ -122,8 +121,7 @@ abstract contract TestBaseProtocol is Test {
 
         assertTrue(success, "Failed to deploy module");
 
-        deployedModule =
-            deployContractLib.computeAddress(creationSalt, keccak256(moduleCreationCode), fund);
+        deployedModule = Create2.computeAddress(creationSalt, keccak256(moduleCreationCode), fund);
 
         assertTrue(safe.isModuleEnabled(deployedModule), "Module not enabled");
     }
@@ -182,8 +180,7 @@ abstract contract TestBaseProtocol is Test {
             assertTrue(success, "Failed to deploy module with roles");
         }
 
-        deployedModule =
-            deployContractLib.computeAddress(creationSalt, keccak256(moduleCreationCode), fund);
+        deployedModule = Create2.computeAddress(creationSalt, keccak256(moduleCreationCode), fund);
 
         assertTrue(safe.isModuleEnabled(deployedModule), "Module not enabled");
         assertTrue(IOwnable(address(fund)).hasAllRoles(deployedModule, roles), "Roles not set");

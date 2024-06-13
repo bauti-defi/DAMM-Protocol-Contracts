@@ -10,7 +10,8 @@ import "@src/modules/trading/TradingModule.sol";
 import "@safe-contracts/Safe.sol";
 import "@src/hooks/uniswapV3/UniswapV3Hooks.sol";
 import "@src/hooks/aaveV3/AaveV3Hooks.sol";
-import "@src/libs/DeployContract.sol";
+import "@safe-contracts/libraries/CreateCall.sol";
+import "@openzeppelin-contracts/utils/Create2.sol";
 
 interface IHookGetters {
     function assetWhitelist(address) external view returns (bool);
@@ -38,7 +39,7 @@ contract ArbStableFundConfig is DeployConfigLoader {
     address public constant FUND_ADMIN = address(0x5822B262EDdA82d2C6A436b598Ff96fA9AB894c4);
 
     /// @notice not set
-    address public constant DEPLOY_CONTRACT_LIB = address(0);
+    address public constant CREATE_CALL = address(0);
 
     address public constant MODULE_LIB = address(0xe30E57cf7D69cBdDD9713AAb109753b5fa1878A5);
     address public constant HOOK_REGISTRY = address(0x829C5cF481560F6b0ab29B802D90D2baCE20bC0E);
@@ -57,6 +58,14 @@ contract ArbStableFundConfig is DeployConfigLoader {
 
     function setUp() public override {
         super.setUp();
+
+        vm.label(CREATE_CALL, "CreateCall");
+        vm.label(MODULE_LIB, "ModuleLib");
+        vm.label(HOOK_REGISTRY, "HookRegistry");
+        vm.label(TRADING_MODULE, "TradingModule");
+        vm.label(UNISWAP_V3_HOOKS, "UniswapV3Hooks");
+        vm.label(AAVE_V3_HOOKS, "AaveV3Hooks");
+        vm.label(FUND_ADMIN, "FundAdmin");
     }
 
     function stablecoins() public pure returns (address[] memory coins) {
@@ -157,13 +166,6 @@ contract ArbStableFundConfig is DeployConfigLoader {
         );
     }
 
-    function deployDeployContract() public {
-        vm.broadcast(FUND_ADMIN);
-        DeployContract deployContract = new DeployContract();
-
-        console2.log("DeployContract: ", address(deployContract));
-    }
-
     function deployModuleLib() public {
         vm.broadcast(FUND_ADMIN);
         ModuleLib moduleLib = new ModuleLib();
@@ -213,8 +215,8 @@ contract ArbStableFundConfig is DeployConfigLoader {
         require(success, "Failed to deploy TradingModule");
         console2.log(
             "TradingModule: ",
-            DeployContract(DEPLOY_CONTRACT_LIB).computeAddress(
-                keccak256("deployTradingModule.salt"), keccak256(moduleCreationCode), STABLE_FUND
+            Create2.computeAddress(
+                keccak256("deployTradingModule.salt"), keccak256(moduleCreationCode), CREATE_CALL
             )
         );
     }
