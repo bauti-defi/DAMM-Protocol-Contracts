@@ -8,6 +8,8 @@ import {ISafe, Enum} from "@src/interfaces/ISafe.sol";
 import {IModuleFactory} from "@src/interfaces/IModuleFactory.sol";
 import {SafeL2} from "@safe-contracts/SafeL2.sol";
 import {SafeUtils} from "@test/utils/SafeUtils.sol";
+import {IOwnable} from "@src/interfaces/IOwnable.sol";
+import {TestBaseFund} from "@test/base/TestBaseFund.sol";
 
 contract MockModule {
     address internal owner;
@@ -17,14 +19,13 @@ contract MockModule {
     }
 }
 
-contract TestModuleFactory is Test, TestBaseProtocol, TestBaseGnosis {
+contract TestModuleFactory is TestBaseProtocol, TestBaseFund {
     address internal fundAdmin;
     uint256 internal fundAdminPK;
-    SafeL2 internal fund;
 
-    function setUp() public override(TestBaseProtocol, TestBaseGnosis) {
+    function setUp() public override(TestBaseProtocol, TestBaseFund) {
         TestBaseProtocol.setUp();
-        TestBaseGnosis.setUp();
+        TestBaseFund.setUp();
 
         (fundAdmin, fundAdminPK) = makeAddrAndKey("FundAdmin");
         vm.deal(fundAdmin, 1000 ether);
@@ -32,7 +33,7 @@ contract TestModuleFactory is Test, TestBaseProtocol, TestBaseGnosis {
         address[] memory admins = new address[](1);
         admins[0] = fundAdmin;
 
-        fund = deploySafe(admins, 1);
+        fund = fundFactory.deployFund(address(safeProxyFactory), address(safeSingleton), admins, 1);
         vm.label(address(fund), "Fund");
         assertTrue(address(fund) != address(0), "Failed to deploy fund");
         assertTrue(fund.isOwner(fundAdmin), "Fund admin not owner");
@@ -218,5 +219,50 @@ contract TestModuleFactory is Test, TestBaseProtocol, TestBaseGnosis {
             transactionSignature
         );
         vm.stopPrank();
+    }
+
+    function test_add_module_with_roles() public {
+        address moduleAddress = makeAddr("Module");
+
+        uint256 roles = uint256(1 << 4);
+
+        bytes memory transaction =
+            abi.encodeWithSelector(IModuleFactory.addModuleWithRoles.selector, moduleAddress, roles);
+
+        bytes memory transactionData = fund.encodeTransactionData(
+            address(moduleFactory),
+            0,
+            transaction,
+            Enum.Operation.DelegateCall,
+            0,
+            0,
+            0,
+            address(0),
+            payable(address(0)),
+            fund.nonce()
+        );
+
+        bytes memory transactionSignature =
+            SafeUtils.buildSafeSignatures(abi.encode(fundAdminPK), keccak256(transactionData), 1);
+
+        vm.startPrank(fundAdmin, fundAdmin);
+        bool success = fund.execTransaction(
+            address(moduleFactory),
+            0,
+            transaction,
+            Enum.Operation.DelegateCall,
+            0,
+            0,
+            0,
+            address(0),
+            payable(address(0)),
+            transactionSignature
+        );
+        vm.stopPrank();
+
+        assertTrue(success, "Failed to deploy module");
+
+        assertTrue(fund.isModuleEnabled(moduleAddress), "Module not enabled");
+        assertTrue(IOwnable(address(fund)).hasAllRoles(moduleAddress, roles), "Roles not set");
     }
 }

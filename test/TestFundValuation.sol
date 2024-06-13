@@ -21,6 +21,8 @@ import {AssetPolicy} from "@src/modules/deposit/Structs.sol";
 import {IFund} from "@src/interfaces/IFund.sol";
 import {FundNotFullyDivested_Error} from "@src/modules/deposit/Errors.sol";
 import {POSITION_OPENER, POSITION_CLOSER, NULL} from "@src/FundCallbackHandler.sol";
+import "@src/interfaces/IOwnable.sol";
+import "@src/libs/Constants.sol";
 
 // keccak256("fallback_manager.handler.address")
 bytes32 constant FALLBACK_HANDLER_STORAGE_SLOT =
@@ -35,6 +37,8 @@ contract TestFundValuation is Test, TestBaseProtocol, TestBaseGnosis, TokenMinte
     FundCallbackHandler internal callbackHandler;
     EulerRouter internal oracleRouter;
     Periphery internal periphery;
+
+    address positionOpenerCloser;
 
     uint256 internal arbitrumFork;
 
@@ -59,6 +63,8 @@ contract TestFundValuation is Test, TestBaseProtocol, TestBaseGnosis, TokenMinte
         fund = IFund(address(deploySafe(admins, 1)));
 
         callbackHandler = new FundCallbackHandler(address(fund));
+
+        positionOpenerCloser = makeAddr("PositionOpener");
 
         vm.prank(address(fund));
         fund.setFallbackHandler(address(callbackHandler));
@@ -100,6 +106,21 @@ contract TestFundValuation is Test, TestBaseProtocol, TestBaseGnosis, TokenMinte
 
         assertTrue(fund.isModuleEnabled(address(periphery)), "Periphery not module");
 
+        // set up position opener
+        addModuleWithRoles(
+            payable(address(fund)),
+            fundAdmin,
+            fundAdminPK,
+            positionOpenerCloser,
+            POSITION_OPENER | POSITION_CLOSER
+        );
+
+        assertTrue(fund.isModuleEnabled(positionOpenerCloser), "Position opener not module");
+        assertTrue(
+            fund.hasAllRoles(positionOpenerCloser, POSITION_OPENER),
+            "Position opener not authorized"
+        );
+
         // lets enable assets on the fund
         vm.startPrank(address(fund));
         IFund(address(fund)).addAssetOfInterest(ARB_USDC);
@@ -108,7 +129,7 @@ contract TestFundValuation is Test, TestBaseProtocol, TestBaseGnosis, TokenMinte
         IFund(address(fund)).addAssetOfInterest(ARB_USDCe);
 
         // native eth
-        IFund(address(fund)).addAssetOfInterest(address(0));
+        IFund(address(fund)).addAssetOfInterest(NATIVE_ASSET);
         vm.stopPrank();
 
         // setup USDC/USD oracle
@@ -141,10 +162,10 @@ contract TestFundValuation is Test, TestBaseProtocol, TestBaseGnosis, TokenMinte
 
         // setup ETH/USD oracle
         chainlinkOracle =
-            new ChainlinkOracle(address(0), address(periphery), ARB_ETH_USD_FEED, 24 hours);
+            new ChainlinkOracle(NATIVE_ASSET, address(periphery), ARB_ETH_USD_FEED, 24 hours);
         vm.label(address(chainlinkOracle), "ChainlinkOracle-ETH");
         vm.prank(address(fund));
-        oracleRouter.govSetConfig(address(0), address(periphery), address(chainlinkOracle));
+        oracleRouter.govSetConfig(NATIVE_ASSET, address(periphery), address(chainlinkOracle));
     }
 
     function test_cannot_valuate_fund_with_open_positions() public {
@@ -152,7 +173,7 @@ contract TestFundValuation is Test, TestBaseProtocol, TestBaseGnosis, TokenMinte
         assertEq(fund.hasOpenPositions(), false, "No open positions");
 
         // the caller must be an active module
-        vm.prank(address(periphery));
+        vm.prank(positionOpenerCloser);
         fund.onPositionOpened(bytes32(uint256(1)));
 
         mintUSDC(address(fund), 1000 * (10 ** 6));
@@ -166,7 +187,7 @@ contract TestFundValuation is Test, TestBaseProtocol, TestBaseGnosis, TokenMinte
         assertEq(fund.hasOpenPositions(), true, "No open positions");
 
         // close the position
-        vm.prank(address(periphery));
+        vm.prank(positionOpenerCloser);
         fund.onPositionClosed(bytes32(uint256(1)));
 
         assertEq(fund.hasOpenPositions(), false, "No open positions");

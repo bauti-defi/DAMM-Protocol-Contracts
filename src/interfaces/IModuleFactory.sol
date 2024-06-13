@@ -17,6 +17,10 @@ interface IModuleFactory {
         uint256 roles
     ) external returns (address module);
 
+    function addModule(address module) external;
+
+    function addModuleWithRoles(address module, uint256 roles) external;
+
     function computeAddress(bytes32 salt, bytes32 bytecodeHash, address deployer)
         external
         pure

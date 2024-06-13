@@ -6,11 +6,13 @@ import "@safe-contracts/handler/HandlerContext.sol";
 import "@openzeppelin-contracts/utils/structs/EnumerableSet.sol";
 import {ISafe} from "@src/interfaces/ISafe.sol";
 import {IPortfolio} from "@src/interfaces/IPortfolio.sol";
-import {OwnableRoles} from "@solady/auth/OwnableRoles.sol";
+import {IOwnable} from "@src/interfaces/IOwnable.sol";
 
 event PositionOpened(address indexed by, bytes32 positionPointer);
 
 event PositionClosed(address indexed by, bytes32 positionPointer);
+
+event RolesGranted(address indexed module, uint256 roles);
 
 error NotModule();
 
@@ -24,7 +26,7 @@ uint256 constant POSITION_OPENER = 1 << 2;
 uint256 constant POSITION_CLOSER = 1 << 3;
 
 /// @dev should only be truly global variables. nothing module specific.
-contract FundCallbackHandler is OwnableRoles, TokenCallbackHandler, HandlerContext, IPortfolio {
+contract FundCallbackHandler is TokenCallbackHandler, HandlerContext, IPortfolio, IOwnable {
     using EnumerableSet for EnumerableSet.Bytes32Set;
     using EnumerableSet for EnumerableSet.AddressSet;
 
@@ -36,12 +38,7 @@ contract FundCallbackHandler is OwnableRoles, TokenCallbackHandler, HandlerConte
     mapping(address module => uint256 role) private moduleRoles;
 
     constructor(address _fund) {
-        // fallback needs to be owner because OwnableRoles is not aware of the msg.sender passed along by _msgSender()
-        /// TODO: intializable ?
-        _initializeOwner(address(this));
         fund = _fund;
-
-        _grantRoles(_fund, FUND);
     }
 
     modifier onlyModule() {
@@ -49,8 +46,8 @@ contract FundCallbackHandler is OwnableRoles, TokenCallbackHandler, HandlerConte
         _;
     }
 
-    modifier withRole(uint256 role) {
-        if (rolesOf(_msgSender()) & role != role) revert NotAuthorized();
+    modifier withRole(uint256 roles) {
+        if (moduleRoles[_msgSender()] & roles != roles) revert NotAuthorized();
         _;
     }
 
@@ -59,17 +56,21 @@ contract FundCallbackHandler is OwnableRoles, TokenCallbackHandler, HandlerConte
         _;
     }
 
-    function grantRoles(address account, uint256 roles) public payable override onlyFund {
-        _grantRoles(account, roles);
+    function grantRoles(address module, uint256 roles) external override onlyFund {
+        moduleRoles[module] = roles;
+
+        emit RolesGranted(module, roles);
+    }
+
+    function hasAllRoles(address module, uint256 roles) external view override returns (bool) {
+        return moduleRoles[module] & roles == roles;
     }
 
     function onPositionOpened(bytes32 positionPointer)
         external
         onlyModule
-        returns (
-            // withRole(POSITION_OPENER)
-            bool result
-        )
+        withRole(POSITION_OPENER)
+        returns (bool result)
     {
         result = openPositions.add(positionPointer);
 
@@ -79,10 +80,8 @@ contract FundCallbackHandler is OwnableRoles, TokenCallbackHandler, HandlerConte
     function onPositionClosed(bytes32 positionPointer)
         external
         onlyModule
-        returns (
-            // withRole(POSITION_CLOSER)
-            bool result
-        )
+        withRole(POSITION_CLOSER)
+        returns (bool result)
     {
         result = openPositions.remove(positionPointer);
 
@@ -107,19 +106,9 @@ contract FundCallbackHandler is OwnableRoles, TokenCallbackHandler, HandlerConte
         }
     }
 
-    /// @notice native asset = address(0)
+    /// @notice native asset = address(0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF)
     function addAssetOfInterest(address _asset) external onlyFund returns (bool result) {
         result = assetsOfInterest.add(_asset);
-    }
-
-    function removeAssetsOfInterest(address[] calldata _assets)
-        external
-        onlyFund
-        returns (bool result)
-    {
-        for (uint256 i = 0; i < _assets.length; i++) {
-            result = assetsOfInterest.remove(_assets[i]);
-        }
     }
 
     function removeAssetOfInterest(address _asset) external onlyFund returns (bool result) {

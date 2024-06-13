@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.0;
 
-import {ISafe} from "@src/interfaces/ISafe.sol";
 import {IModuleFactory} from "@src/interfaces/IModuleFactory.sol";
-import {IOwnable} from "@src/interfaces/IOwnable.sol";
+import {IFund} from "@src/interfaces/IFund.sol";
 
 contract ModuleFactory is IModuleFactory {
     error DeploymentFailed();
@@ -59,8 +58,8 @@ contract ModuleFactory is IModuleFactory {
         if (module == address(0)) revert DeploymentFailed();
 
         // callback: add module to the safe. msg.sender == this because of delegatecall
-        ISafe(address(this)).enableModule(module);
-        if (!ISafe(address(this)).isModuleEnabled(module)) revert ModuleSetupFailed();
+        IFund(address(this)).enableModule(module);
+        if (!IFund(address(this)).isModuleEnabled(module)) revert ModuleSetupFailed();
 
         emit ModuleDeployed(address(this), module);
     }
@@ -82,7 +81,16 @@ contract ModuleFactory is IModuleFactory {
         module = _deployModule(salt, value, creationCode);
 
         // callback: set roles for the module. msg.sender == this because of delegatecall
-        IOwnable(address(this)).grantRoles(module, roles);
+        IFund(address(this)).grantRoles(module, roles);
+    }
+
+    function addModule(address module) external isDelegateCall {
+        IFund(address(this)).enableModule(module);
+    }
+
+    function addModuleWithRoles(address module, uint256 roles) external isDelegateCall {
+        IFund(address(this)).enableModule(module);
+        IFund(address(this)).grantRoles(module, roles);
     }
 
     /**

@@ -22,6 +22,7 @@ import {FundShareVault} from "./FundShareVault.sol";
 import "@euler-price-oracle/interfaces/IPriceOracle.sol";
 import {IPeriphery} from "@src/interfaces/IPeriphery.sol";
 import "./Events.sol";
+import "@src/libs/Constants.sol";
 
 uint256 constant BP_DIVISOR = 10000;
 
@@ -87,8 +88,7 @@ contract Periphery is ERC20, IPeriphery {
             uint256 balance;
 
             // native asset
-            /// TODO: change this to not zero
-            if (assets[i] == address(0)) {
+            if (assets[i] == NATIVE_ASSET) {
                 balance = address(fund).balance;
             } else {
                 balance = ERC20(assets[i]).balanceOf(address(fund));

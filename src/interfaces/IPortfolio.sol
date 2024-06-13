@@ -14,8 +14,6 @@ interface IPortfolio {
 
     function addAssetOfInterest(address _asset) external returns (bool);
 
-    function removeAssetsOfInterest(address[] calldata _assets) external returns (bool);
-
     function removeAssetOfInterest(address _asset) external returns (bool);
 
     function isAssetOfInterest(address asset) external view returns (bool);
