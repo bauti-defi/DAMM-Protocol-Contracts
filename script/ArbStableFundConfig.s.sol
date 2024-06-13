@@ -4,12 +4,13 @@ pragma solidity ^0.8.0;
 import {Script, console2, stdJson} from "forge-std/Script.sol";
 import {DeployConfigLoader} from "@script/DeployConfigLoader.sol";
 import {IERC20} from "@openzeppelin-contracts/token/ERC20/IERC20.sol";
-import "@src/ModuleFactory.sol";
+import "@src/libs/ModuleLib.sol";
 import "@src/modules/trading/HookRegistry.sol";
 import "@src/modules/trading/TradingModule.sol";
 import "@safe-contracts/Safe.sol";
 import "@src/hooks/uniswapV3/UniswapV3Hooks.sol";
 import "@src/hooks/aaveV3/AaveV3Hooks.sol";
+import "@src/libs/DeployContract.sol";
 
 interface IHookGetters {
     function assetWhitelist(address) external view returns (bool);
@@ -35,7 +36,11 @@ contract ArbStableFundConfig is DeployConfigLoader {
     address payable public constant STABLE_FUND =
         payable(address(0x07A5DC8f6DD58e5bc88CF2feE1352D6B658522b8));
     address public constant FUND_ADMIN = address(0x5822B262EDdA82d2C6A436b598Ff96fA9AB894c4);
-    address public constant MODULE_FACTORY = address(0xe30E57cf7D69cBdDD9713AAb109753b5fa1878A5);
+
+    /// @notice not set
+    address public constant DEPLOY_CONTRACT_LIB = address(0);
+
+    address public constant MODULE_LIB = address(0xe30E57cf7D69cBdDD9713AAb109753b5fa1878A5);
     address public constant HOOK_REGISTRY = address(0x829C5cF481560F6b0ab29B802D90D2baCE20bC0E);
     address public constant TRADING_MODULE = address(0x587F60B0f87e3582f84b77E7F647B6754E04F4d4);
     address public constant UNISWAP_V3_HOOKS = address(0x9C0c182999fD9019c26A8C02fdc9F186ba8f2C57);
@@ -152,11 +157,18 @@ contract ArbStableFundConfig is DeployConfigLoader {
         );
     }
 
-    function deployModuleFactory() public {
+    function deployDeployContract() public {
         vm.broadcast(FUND_ADMIN);
-        ModuleFactory moduleFactory = new ModuleFactory();
+        DeployContract deployContract = new DeployContract();
 
-        console2.log("ModuleFactory: ", address(moduleFactory));
+        console2.log("DeployContract: ", address(deployContract));
+    }
+
+    function deployModuleLib() public {
+        vm.broadcast(FUND_ADMIN);
+        ModuleLib moduleLib = new ModuleLib();
+
+        console2.log("ModuleLib: ", address(moduleLib));
     }
 
     function deployHookRegistry() public {
@@ -174,7 +186,7 @@ contract ArbStableFundConfig is DeployConfigLoader {
         );
 
         bytes memory transaction = abi.encodeWithSelector(
-            ModuleFactory.deployModule.selector,
+            ModuleLib.deployModule.selector,
             keccak256("deployTradingModule.salt"),
             0,
             moduleCreationCode
@@ -186,7 +198,7 @@ contract ArbStableFundConfig is DeployConfigLoader {
 
         vm.broadcast(FUND_ADMIN);
         bool success = safe.execTransaction(
-            MODULE_FACTORY,
+            MODULE_LIB,
             0,
             transaction,
             Enum.Operation.DelegateCall,
@@ -201,7 +213,7 @@ contract ArbStableFundConfig is DeployConfigLoader {
         require(success, "Failed to deploy TradingModule");
         console2.log(
             "TradingModule: ",
-            ModuleFactory(MODULE_FACTORY).computeAddress(
+            DeployContract(DEPLOY_CONTRACT_LIB).computeAddress(
                 keccak256("deployTradingModule.salt"), keccak256(moduleCreationCode), STABLE_FUND
             )
         );

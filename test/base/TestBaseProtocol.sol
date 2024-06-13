@@ -2,18 +2,23 @@
 pragma solidity ^0.8.0;
 
 import {Test} from "@forge-std/Test.sol";
-import {ModuleFactory} from "@src/ModuleFactory.sol";
+import {ModuleLib} from "@src/libs/ModuleLib.sol";
 import {Safe} from "@safe-contracts/Safe.sol";
 import {Enum} from "@src/interfaces/ISafe.sol";
 import {SafeUtils} from "@test/utils/SafeUtils.sol";
 import {IOwnable} from "@src/interfaces/IOwnable.sol";
+import {DeployContract} from "@src/libs/DeployContract.sol";
 
 abstract contract TestBaseProtocol is Test {
-    ModuleFactory internal moduleFactory;
+    ModuleLib internal moduleLib;
+    DeployContract internal deployContractLib;
 
     function setUp() public virtual {
-        moduleFactory = new ModuleFactory();
-        vm.label(address(moduleFactory), "ModuleFactory");
+        moduleLib = new ModuleLib();
+        vm.label(address(moduleLib), "ModuleLib");
+
+        deployContractLib = new DeployContract();
+        vm.label(address(deployContractLib), "DeployContract");
     }
 
     function deployContract(
@@ -25,7 +30,7 @@ abstract contract TestBaseProtocol is Test {
         bytes memory contractCreationCode
     ) internal returns (address deployed) {
         bytes memory transaction = abi.encodeWithSelector(
-            ModuleFactory.deployContract.selector,
+            DeployContract.deployContract.selector,
             creationSalt,
             valueToForward,
             contractCreationCode
@@ -34,7 +39,7 @@ abstract contract TestBaseProtocol is Test {
         Safe safe = Safe(fund);
 
         bytes memory transactionData = safe.encodeTransactionData(
-            address(moduleFactory),
+            address(deployContractLib),
             valueToForward,
             transaction,
             Enum.Operation.DelegateCall,
@@ -51,7 +56,7 @@ abstract contract TestBaseProtocol is Test {
 
         vm.startPrank(admin, admin);
         bool success = safe.execTransaction(
-            address(moduleFactory),
+            address(deployContractLib),
             valueToForward,
             transaction,
             Enum.Operation.DelegateCall,
@@ -66,7 +71,8 @@ abstract contract TestBaseProtocol is Test {
 
         assertTrue(success, "Failed to deploy contract");
 
-        deployed = moduleFactory.computeAddress(creationSalt, keccak256(contractCreationCode), fund);
+        deployed =
+            deployContractLib.computeAddress(creationSalt, keccak256(contractCreationCode), fund);
     }
 
     function deployModule(
@@ -78,13 +84,13 @@ abstract contract TestBaseProtocol is Test {
         bytes memory moduleCreationCode
     ) internal returns (address deployedModule) {
         bytes memory transaction = abi.encodeWithSelector(
-            ModuleFactory.deployModule.selector, creationSalt, valueToForward, moduleCreationCode
+            ModuleLib.deployModule.selector, creationSalt, valueToForward, moduleCreationCode
         );
 
         Safe safe = Safe(fund);
 
         bytes memory transactionData = safe.encodeTransactionData(
-            address(moduleFactory),
+            address(moduleLib),
             valueToForward,
             transaction,
             Enum.Operation.DelegateCall,
@@ -101,7 +107,7 @@ abstract contract TestBaseProtocol is Test {
 
         vm.startPrank(admin, admin);
         bool success = safe.execTransaction(
-            address(moduleFactory),
+            address(moduleLib),
             valueToForward,
             transaction,
             Enum.Operation.DelegateCall,
@@ -117,7 +123,7 @@ abstract contract TestBaseProtocol is Test {
         assertTrue(success, "Failed to deploy module");
 
         deployedModule =
-            moduleFactory.computeAddress(creationSalt, keccak256(moduleCreationCode), fund);
+            deployContractLib.computeAddress(creationSalt, keccak256(moduleCreationCode), fund);
 
         assertTrue(safe.isModuleEnabled(deployedModule), "Module not enabled");
     }
@@ -132,7 +138,7 @@ abstract contract TestBaseProtocol is Test {
         uint256 roles
     ) internal returns (address deployedModule) {
         bytes memory transaction = abi.encodeWithSelector(
-            ModuleFactory.deployModuleWithRoles.selector,
+            ModuleLib.deployModuleWithRoles.selector,
             creationSalt,
             valueToForward,
             moduleCreationCode,
@@ -143,7 +149,7 @@ abstract contract TestBaseProtocol is Test {
 
         {
             bytes memory transactionData = safe.encodeTransactionData(
-                address(moduleFactory),
+                address(moduleLib),
                 valueToForward,
                 transaction,
                 Enum.Operation.DelegateCall,
@@ -160,7 +166,7 @@ abstract contract TestBaseProtocol is Test {
 
             vm.startPrank(admin, admin);
             bool success = safe.execTransaction(
-                address(moduleFactory),
+                address(moduleLib),
                 valueToForward,
                 transaction,
                 Enum.Operation.DelegateCall,
@@ -177,7 +183,7 @@ abstract contract TestBaseProtocol is Test {
         }
 
         deployedModule =
-            moduleFactory.computeAddress(creationSalt, keccak256(moduleCreationCode), fund);
+            deployContractLib.computeAddress(creationSalt, keccak256(moduleCreationCode), fund);
 
         assertTrue(safe.isModuleEnabled(deployedModule), "Module not enabled");
         assertTrue(IOwnable(address(fund)).hasAllRoles(deployedModule, roles), "Roles not set");
@@ -191,12 +197,12 @@ abstract contract TestBaseProtocol is Test {
         uint256 roles
     ) internal {
         bytes memory transaction =
-            abi.encodeWithSelector(ModuleFactory.addModuleWithRoles.selector, module, roles);
+            abi.encodeWithSelector(ModuleLib.addModuleWithRoles.selector, module, roles);
 
         Safe safe = Safe(fund);
 
         bytes memory transactionData = safe.encodeTransactionData(
-            address(moduleFactory),
+            address(moduleLib),
             0,
             transaction,
             Enum.Operation.DelegateCall,
@@ -213,7 +219,7 @@ abstract contract TestBaseProtocol is Test {
 
         vm.startPrank(admin, admin);
         bool success = safe.execTransaction(
-            address(moduleFactory),
+            address(moduleLib),
             0,
             transaction,
             Enum.Operation.DelegateCall,

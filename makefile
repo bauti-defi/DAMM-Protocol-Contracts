@@ -2,8 +2,8 @@
 # (-include to ignore error if it does not exist)
 -include .env
 
-deploy-module-factory:
-	DEPLOYMENT_CHAIN=arb forge script script/ArbStableFundConfig.s.sol:ArbStableFundConfig --broadcast --rpc-url ${ARBI_RPC_URL} --sig "deployModuleFactory()" --optimizer-runs 1000 -vvvv -l --mnemonic-indexes 1
+deploy-module-lib:
+	DEPLOYMENT_CHAIN=arb forge script script/ArbStableFundConfig.s.sol:ArbStableFundConfig --broadcast --rpc-url ${ARBI_RPC_URL} --sig "deployModuleLib()" --optimizer-runs 1000 -vvvv -l --mnemonic-indexes 1
 
 deploy-hook-registry:
 	DEPLOYMENT_CHAIN=arb forge script script/ArbStableFundConfig.s.sol:ArbStableFundConfig --broadcast --rpc-url ${ARBI_RPC_URL} --sig "deployHookRegistry()" --optimizer-runs 10000000 -vvvv -l --mnemonic-indexes 1

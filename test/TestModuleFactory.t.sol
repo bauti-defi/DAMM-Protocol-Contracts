@@ -5,11 +5,12 @@ import {Test} from "@forge-std/Test.sol";
 import {TestBaseProtocol} from "@test/base/TestBaseProtocol.sol";
 import {TestBaseGnosis} from "@test/base/TestBaseGnosis.sol";
 import {ISafe, Enum} from "@src/interfaces/ISafe.sol";
-import {IModuleFactory} from "@src/interfaces/IModuleFactory.sol";
+import {IModuleLib} from "@src/interfaces/IModuleLib.sol";
 import {SafeL2} from "@safe-contracts/SafeL2.sol";
 import {SafeUtils} from "@test/utils/SafeUtils.sol";
 import {IOwnable} from "@src/interfaces/IOwnable.sol";
 import {TestBaseFund} from "@test/base/TestBaseFund.sol";
+import {IDeployContract} from "@src/interfaces/IDeployContract.sol";
 
 contract MockModule {
     address internal owner;
@@ -19,7 +20,7 @@ contract MockModule {
     }
 }
 
-contract TestModuleFactory is TestBaseProtocol, TestBaseFund {
+contract TestModuleLib is TestBaseProtocol, TestBaseFund {
     address internal fundAdmin;
     uint256 internal fundAdminPK;
 
@@ -46,11 +47,11 @@ contract TestModuleFactory is TestBaseProtocol, TestBaseFund {
             abi.encodePacked(type(MockModule).creationCode, abi.encode(address(fund)));
 
         bytes memory transaction = abi.encodeWithSelector(
-            IModuleFactory.deployContract.selector, bytes32("salt"), 0, creationCode
+            IDeployContract.deployContract.selector, bytes32("salt"), 0, creationCode
         );
 
         bytes memory transactionData = fund.encodeTransactionData(
-            address(moduleFactory),
+            address(deployContractLib),
             0,
             transaction,
             Enum.Operation.DelegateCall,
@@ -67,7 +68,7 @@ contract TestModuleFactory is TestBaseProtocol, TestBaseFund {
 
         vm.startPrank(fundAdmin, fundAdmin);
         bool success = fund.execTransaction(
-            address(moduleFactory),
+            address(deployContractLib),
             0,
             transaction,
             Enum.Operation.DelegateCall,
@@ -82,8 +83,9 @@ contract TestModuleFactory is TestBaseProtocol, TestBaseFund {
 
         assertTrue(success, "Failed to deploy contract");
 
-        address contractAddress =
-            moduleFactory.computeAddress(bytes32("salt"), keccak256(creationCode), address(fund));
+        address contractAddress = deployContractLib.computeAddress(
+            bytes32("salt"), keccak256(creationCode), address(fund)
+        );
 
         assertTrue(contractAddress.code.length > 0, "Contract not deployed");
     }
@@ -93,11 +95,11 @@ contract TestModuleFactory is TestBaseProtocol, TestBaseFund {
             abi.encodePacked(type(MockModule).creationCode, abi.encode(address(fund)));
 
         bytes memory transaction = abi.encodeWithSelector(
-            IModuleFactory.deployContract.selector, bytes32("salt"), 0, creationCode
+            IDeployContract.deployContract.selector, bytes32("salt"), 0, creationCode
         );
 
         bytes memory transactionData = fund.encodeTransactionData(
-            address(moduleFactory),
+            address(moduleLib),
             0,
             transaction,
             Enum.Operation.Call,
@@ -115,7 +117,7 @@ contract TestModuleFactory is TestBaseProtocol, TestBaseFund {
         vm.startPrank(fundAdmin, fundAdmin);
         vm.expectRevert();
         fund.execTransaction(
-            address(moduleFactory),
+            address(moduleLib),
             0,
             transaction,
             Enum.Operation.Call,
@@ -134,11 +136,11 @@ contract TestModuleFactory is TestBaseProtocol, TestBaseFund {
             abi.encodePacked(type(MockModule).creationCode, abi.encode(address(fund)));
 
         bytes memory transaction = abi.encodeWithSelector(
-            IModuleFactory.deployModule.selector, bytes32("salt"), 0, creationCode
+            IModuleLib.deployModule.selector, bytes32("salt"), 0, creationCode
         );
 
         bytes memory transactionData = fund.encodeTransactionData(
-            address(moduleFactory),
+            address(moduleLib),
             0,
             transaction,
             Enum.Operation.DelegateCall,
@@ -155,7 +157,7 @@ contract TestModuleFactory is TestBaseProtocol, TestBaseFund {
 
         vm.startPrank(fundAdmin, fundAdmin);
         bool success = fund.execTransaction(
-            address(moduleFactory),
+            address(moduleLib),
             0,
             transaction,
             Enum.Operation.DelegateCall,
@@ -172,7 +174,7 @@ contract TestModuleFactory is TestBaseProtocol, TestBaseFund {
 
         assertTrue(
             fund.isModuleEnabled(
-                moduleFactory.computeAddress(
+                deployContractLib.computeAddress(
                     bytes32("salt"), keccak256(creationCode), address(fund)
                 )
             ),
@@ -185,11 +187,11 @@ contract TestModuleFactory is TestBaseProtocol, TestBaseFund {
             abi.encodePacked(type(MockModule).creationCode, abi.encode(address(fund)));
 
         bytes memory transaction = abi.encodeWithSelector(
-            IModuleFactory.deployModule.selector, bytes32("salt"), 0, creationCode
+            IModuleLib.deployModule.selector, bytes32("salt"), 0, creationCode
         );
 
         bytes memory transactionData = fund.encodeTransactionData(
-            address(moduleFactory),
+            address(moduleLib),
             0,
             transaction,
             Enum.Operation.Call,
@@ -207,7 +209,7 @@ contract TestModuleFactory is TestBaseProtocol, TestBaseFund {
         vm.startPrank(fundAdmin, fundAdmin);
         vm.expectRevert();
         fund.execTransaction(
-            address(moduleFactory),
+            address(moduleLib),
             0,
             transaction,
             Enum.Operation.Call,
@@ -227,10 +229,10 @@ contract TestModuleFactory is TestBaseProtocol, TestBaseFund {
         uint256 roles = uint256(1 << 4);
 
         bytes memory transaction =
-            abi.encodeWithSelector(IModuleFactory.addModuleWithRoles.selector, moduleAddress, roles);
+            abi.encodeWithSelector(IModuleLib.addModuleWithRoles.selector, moduleAddress, roles);
 
         bytes memory transactionData = fund.encodeTransactionData(
-            address(moduleFactory),
+            address(moduleLib),
             0,
             transaction,
             Enum.Operation.DelegateCall,
@@ -247,7 +249,7 @@ contract TestModuleFactory is TestBaseProtocol, TestBaseFund {
 
         vm.startPrank(fundAdmin, fundAdmin);
         bool success = fund.execTransaction(
-            address(moduleFactory),
+            address(moduleLib),
             0,
             transaction,
             Enum.Operation.DelegateCall,
