@@ -123,13 +123,13 @@ contract TestFundValuation is Test, TestBaseProtocol, TestBaseGnosis, TokenMinte
 
         // lets enable assets on the fund
         vm.startPrank(address(fund));
-        IFund(address(fund)).addAssetOfInterest(ARB_USDC);
-        IFund(address(fund)).addAssetOfInterest(ARB_USDT);
-        IFund(address(fund)).addAssetOfInterest(ARB_DAI);
-        IFund(address(fund)).addAssetOfInterest(ARB_USDCe);
+        IFund(address(fund)).setAssetOfInterest(ARB_USDC);
+        IFund(address(fund)).setAssetOfInterest(ARB_USDT);
+        IFund(address(fund)).setAssetOfInterest(ARB_DAI);
+        IFund(address(fund)).setAssetOfInterest(ARB_USDCe);
 
         // native eth
-        IFund(address(fund)).addAssetOfInterest(NATIVE_ASSET);
+        IFund(address(fund)).setAssetOfInterest(NATIVE_ASSET);
         vm.stopPrank();
 
         // setup USDC/USD oracle

@@ -14,6 +14,10 @@ event PositionClosed(address indexed by, bytes32 positionPointer);
 
 event RolesGranted(address indexed module, uint256 roles);
 
+event AssetOfInterestSet(address indexed asset);
+
+event AssetOfInterestRemoved(address indexed asset);
+
 error NotModule();
 
 error NotAuthorized();
@@ -74,7 +78,7 @@ contract FundCallbackHandler is TokenCallbackHandler, HandlerContext, IPortfolio
     {
         result = openPositions.add(positionPointer);
 
-        emit PositionOpened(msg.sender, positionPointer);
+        emit PositionOpened(_msgSender(), positionPointer);
     }
 
     function onPositionClosed(bytes32 positionPointer)
@@ -85,7 +89,7 @@ contract FundCallbackHandler is TokenCallbackHandler, HandlerContext, IPortfolio
     {
         result = openPositions.remove(positionPointer);
 
-        emit PositionClosed(msg.sender, positionPointer);
+        emit PositionClosed(_msgSender(), positionPointer);
     }
 
     function holdsPosition(bytes32 positionPointer) external view returns (bool) {
@@ -96,23 +100,17 @@ contract FundCallbackHandler is TokenCallbackHandler, HandlerContext, IPortfolio
         return openPositions.length() > 0;
     }
 
-    function setAssetsOfInterest(address[] calldata _assets)
-        external
-        onlyFund
-        returns (bool result)
-    {
-        for (uint256 i = 0; i < _assets.length; i++) {
-            result = assetsOfInterest.add(_assets[i]);
-        }
-    }
-
     /// @notice native asset = address(0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF)
-    function addAssetOfInterest(address _asset) external onlyFund returns (bool result) {
+    function setAssetOfInterest(address _asset) external onlyFund returns (bool result) {
         result = assetsOfInterest.add(_asset);
+
+        emit AssetOfInterestSet(_asset);
     }
 
     function removeAssetOfInterest(address _asset) external onlyFund returns (bool result) {
         result = assetsOfInterest.remove(_asset);
+
+        emit AssetOfInterestRemoved(_asset);
     }
 
     function isAssetOfInterest(address asset) external view returns (bool) {
