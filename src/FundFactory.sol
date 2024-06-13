@@ -21,6 +21,13 @@ event FundDeployed(
 contract FundFactory is IFundFactory {
     bool private deploying;
 
+    modifier lock() {
+        require(!deploying, "Already deploying");
+        deploying = true;
+        _;
+        deploying = false;
+    }
+
     // this should be a delegate call from the fund right after creation.
     function fundDeploymentCallback() external override {
         require(deploying, "Not Deploying");
@@ -67,15 +74,9 @@ contract FundFactory is IFundFactory {
         address safeSingleton,
         address[] memory admins,
         uint256 threshold
-    ) external returns (IFund fund) {
-        require(deploying == false, "Already deploying");
-
-        deploying = true;
-
+    ) external lock returns (IFund fund) {
         // deploy the fund
         fund = _deployFund(safeProxyFactory, safeSingleton, admins, threshold);
-
-        deploying = false;
 
         emit FundDeployed(address(fund), msg.sender, admins, threshold, safeSingleton);
     }
