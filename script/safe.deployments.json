@@ -1,0 +1,84 @@
+{
+    "deployments": [
+        {
+            "chain": "42161",
+            "admin": "0x5822B262EDdA82d2C6A436b598Ff96fA9AB894c4",
+            "safeAddress": "0x07A5DC8f6DD58e5bc88CF2feE1352D6B658522b8",
+            "hookRegistry": "0x829C5cF481560F6b0ab29B802D90D2baCE20bC0E",
+            "operator": "0x5ed25671f65d0ca26d79326BF571f8AeaF856f00",
+            "tradingModule": {
+                "address": "0x587F60B0f87e3582f84b77E7F647B6754E04F4d4",
+                "hooks": [
+                {
+                    "name": "uniswapV3",
+                    "address": "0x9C0c182999fD9019c26A8C02fdc9F186ba8f2C57"
+                },
+                {
+                    "name": "aaveV3",
+                    "address": "0xCeE902D5E970797AB029a9D6CbdCD284c373e250"
+                }
+            ]
+            }
+        },
+        {
+            "chain": "42161",
+            "admin": "0x5822B262EDdA82d2C6A436b598Ff96fA9AB894c4",
+            "safeAddress": "0x3EE817Afa79D0ff24b25681eC4f3E4A89c939503",
+            "hookRegistry": "0x7046272cBFc5B964582dEa710AAFD3452a015ae6",
+            "operator": "0x5ed25671f65d0ca26d79326BF571f8AeaF856f00",
+            "tradingModule": {
+                "address": "0x19e7Fb1677Be3A3328983a56C9707Fd8D4F84433",
+                "hooks": [
+                {
+                    "name": "uniswapV3",
+                    "address": "0x2DD5BBd44A33F66F36Ac83A192A97eA0465FB8e1"
+                },
+                {
+                    "name": "aaveV3",
+                    "address": "0x00f483B7F75e1AF71363B01053D594a29Fc0f21d"
+                }
+            ]
+            }
+        },
+        {
+            "chain": "42161",
+            "admin": "0x5822B262EDdA82d2C6A436b598Ff96fA9AB894c4",
+            "safeAddress": "0xE924F6f7F099D34afb6621E3D7E228A6fBe963E9",
+            "hookRegistry": "0x7dD9C90f9621eeF8859A82B55828A72eaCcb7ad9",
+            "operator": "0x19e7Fb1677Be3A3328983a56C9707Fd8D4F84433",
+            "tradingModule": {
+                "address": "0x9588e15F13F8219D600d7EfF0a420375e539176a",
+                "hooks": [
+                {
+                    "name": "uniswapV3",
+                    "address": "0x12B12BEe3226f1192C5cE0144BA608D211cdb629"
+                },
+                {
+                    "name": "aaveV3",
+                    "address": "0xeE3E6dc232aea030D69e2F53181d7D9E2aeC54b4"
+                }
+            ]
+            }
+        },
+        {
+            "chain": "42161",
+            "admin": "0x5822B262EDdA82d2C6A436b598Ff96fA9AB894c4",
+            "safeAddress": "0x964Bb08b217C3E5D4380A54e5f7c51Bd1f2a68DB",
+            "hookRegistry": "0xfAcC9bE6e79034C679B0A1E0de407B58Fb240E0c",
+            "operator": "0x19e7Fb1677Be3A3328983a56C9707Fd8D4F84433",
+            "tradingModule": {
+                "address": "0x20580451fEc6B5dc824A2d6D4cC295c1Cf3f0d3E",
+                "hooks": [
+                {
+                    "name": "uniswapV3",
+                    "address": "0xcBF8Da5eAd0DF403e5496D24D1C00e1aaCC09256"
+                },
+                {
+                    "name": "aaveV3",
+                    "address": "0x1F4D2F68Efebe4C0cC731027598669449BAf49F7"
+                }
+            ]
+            }
+        }
+    ]
+}

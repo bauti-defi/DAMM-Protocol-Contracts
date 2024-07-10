@@ -33,25 +33,34 @@ interface IMultiSend {
     function multiSend(bytes memory transactions) external payable;
 }
 
-contract ArbStableFundConfig is DeployConfigLoader {
+contract ArbVariedFundDeployer is DeployConfigLoader {
     address payable public constant STABLE_FUND =
-        payable(address(0x07A5DC8f6DD58e5bc88CF2feE1352D6B658522b8));
+        payable(address(0xE924F6f7F099D34afb6621E3D7E228A6fBe963E9));
     address public constant FUND_ADMIN = address(0x5822B262EDdA82d2C6A436b598Ff96fA9AB894c4);
 
-    /// @notice not set
-    address public constant CREATE_CALL = address(0);
-
+    address public constant CREATE_CALL = address(0x9b35Af71d77eaf8d7e40252370304687390A1A52);
     address public constant MODULE_LIB = address(0xe30E57cf7D69cBdDD9713AAb109753b5fa1878A5);
-    address public constant HOOK_REGISTRY = address(0x829C5cF481560F6b0ab29B802D90D2baCE20bC0E);
-    address public constant TRADING_MODULE = address(0x587F60B0f87e3582f84b77E7F647B6754E04F4d4);
-    address public constant UNISWAP_V3_HOOKS = address(0x9C0c182999fD9019c26A8C02fdc9F186ba8f2C57);
-    address public constant AAVE_V3_HOOKS = address(0xCeE902D5E970797AB029a9D6CbdCD284c373e250);
 
-    // stablecoins deployed on arbitrum
-    address constant ARB_USDCe = 0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8;
-    address constant ARB_USDT = 0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9;
-    address constant ARB_USDC = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831;
-    address constant ARB_DAI = 0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1;
+    address public constant HOOK_REGISTRY = address(0x7dD9C90f9621eeF8859A82B55828A72eaCcb7ad9);
+    address public constant TRADING_MODULE = address(0x9588e15F13F8219D600d7EfF0a420375e539176a);
+    address public constant UNISWAP_V3_HOOKS = address(0x12B12BEe3226f1192C5cE0144BA608D211cdb629);
+    address public constant AAVE_V3_HOOKS = address(0xeE3E6dc232aea030D69e2F53181d7D9E2aeC54b4);
+
+    // tokens deployed on arbitrum
+    address constant ARB_USDCe = address(0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8);
+    address constant ARB_USDT = address(0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9);
+    address constant ARB_USDC = address(0xaf88d065e77c8cC2239327C5EDb3A432268e5831);
+    address constant ARB_DAI = address(0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1);
+    address constant WETH = address(0x82aF49447D8a07e3bd95BD0d56f35241523fBab1);
+    address constant ARB = address(0x912CE59144191C1204E64559FE8253a0e49E6548);
+    address constant wstETH = address(0x5979D7b546E38E414F7E9822514be443A4800529);
+    address constant WBTC = address(0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f);
+    address constant LINK = address(0xf97f4df75117a78c1A5a0DBb814Af92458539FB4);
+    address constant CRV = address(0x11cDb42B0EB46D95f990BeDD4695A6e3fA034978);
+    address constant UNI = address(0xFa7F8980b0f1E64A2062791cc3b0871572f1F7f0);
+    address constant GMX = address(0xfc5A1A6EB076a2C7aD06eD22C90d7E710E35ad0a);
+    address constant LDO = address(0x13Ad51ed4F1B7e9Dc168d8a00cB3f4dDD85EfA60);
+
     address public constant MULTISEND_CALL = address(0x9641d764fc13c8B624c04430C7356C1C7C8102e2);
 
     address constant OPERATOR = address(0x5ed25671f65d0ca26d79326BF571f8AeaF856f00);
@@ -68,12 +77,21 @@ contract ArbStableFundConfig is DeployConfigLoader {
         vm.label(FUND_ADMIN, "FundAdmin");
     }
 
-    function stablecoins() public pure returns (address[] memory coins) {
-        coins = new address[](4);
+    function tokens() public pure returns (address[] memory coins) {
+        coins = new address[](13);
         coins[0] = ARB_USDCe;
         coins[1] = ARB_USDT;
         coins[2] = ARB_USDC;
         coins[3] = ARB_DAI;
+        coins[4] = WETH;
+        coins[5] = ARB;
+        coins[6] = wstETH;
+        coins[7] = WBTC;
+        coins[8] = LINK;
+        coins[9] = CRV;
+        coins[10] = UNI;
+        coins[11] = GMX;
+        coins[12] = LDO;
         return coins;
     }
 
@@ -246,36 +264,34 @@ contract ArbStableFundConfig is DeployConfigLoader {
     }
 
     function configureUniswapAssets() public {
-        bytes memory payload = abi.encodePacked(
-            _enableAsset(UNISWAP_V3_HOOKS, ARB_USDCe),
-            _enableAsset(UNISWAP_V3_HOOKS, ARB_USDT),
-            _enableAsset(UNISWAP_V3_HOOKS, ARB_USDC),
-            _enableAsset(UNISWAP_V3_HOOKS, ARB_DAI)
-        );
+        bytes memory payload = "";
+
+        for (uint256 i = 0; i < tokens().length; i++) {
+            payload = abi.encodePacked(payload, _enableAsset(UNISWAP_V3_HOOKS, tokens()[i]));
+        }
 
         _multisendCall(payload);
 
-        for (uint256 i = 0; i < stablecoins().length; i++) {
+        for (uint256 i = 0; i < tokens().length; i++) {
             require(
-                IHookGetters(UNISWAP_V3_HOOKS).assetWhitelist(stablecoins()[i]),
+                IHookGetters(UNISWAP_V3_HOOKS).assetWhitelist(tokens()[i]),
                 "Failed to enable uniswap v3 asset"
             );
         }
     }
 
     function configureAaveAssets() public {
-        bytes memory payload = abi.encodePacked(
-            _enableAsset(AAVE_V3_HOOKS, ARB_USDCe),
-            _enableAsset(AAVE_V3_HOOKS, ARB_USDT),
-            _enableAsset(AAVE_V3_HOOKS, ARB_USDC),
-            _enableAsset(AAVE_V3_HOOKS, ARB_DAI)
-        );
+        bytes memory payload = "";
+
+        for (uint256 i = 0; i < tokens().length; i++) {
+            payload = abi.encodePacked(payload, _enableAsset(AAVE_V3_HOOKS, tokens()[i]));
+        }
 
         _multisendCall(payload);
 
-        for (uint256 i = 0; i < stablecoins().length; i++) {
+        for (uint256 i = 0; i < tokens().length; i++) {
             require(
-                IHookGetters(AAVE_V3_HOOKS).assetWhitelist(stablecoins()[i]),
+                IHookGetters(AAVE_V3_HOOKS).assetWhitelist(tokens()[i]),
                 "Failed to enable aave v3 asset"
             );
         }
@@ -565,49 +581,72 @@ contract ArbStableFundConfig is DeployConfigLoader {
     }
 
     function approveAave() public {
-        bytes memory approvals = abi.encodePacked(
-            _approve(ARB_USDCe, chainConfig.aave.pool, type(uint256).max),
-            _approve(ARB_USDT, chainConfig.aave.pool, type(uint256).max),
-            _approve(ARB_USDC, chainConfig.aave.pool, type(uint256).max),
-            _approve(ARB_DAI, chainConfig.aave.pool, type(uint256).max)
-        );
+        bytes memory approvals = "";
+        for (uint256 i = 0; i < tokens().length; i++) {
+            approvals = abi.encodePacked(
+                approvals, _approve(tokens()[i], chainConfig.aave.pool, type(uint256).max)
+            );
+        }
 
         _multisendCall(approvals);
 
-        for (uint256 i = 0; i < stablecoins().length; i++) {
+        for (uint256 i = 0; i < tokens().length; i++) {
             require(
-                IERC20(stablecoins()[i]).allowance(STABLE_FUND, chainConfig.aave.pool)
+                IERC20(tokens()[i]).allowance(STABLE_FUND, chainConfig.aave.pool)
                     == type(uint256).max,
                 "Failed to approve tokent to aave"
             );
         }
     }
 
-    function approveUniswap() public {
-        bytes memory approvals = abi.encodePacked(
-            _approve(ARB_USDCe, chainConfig.uniswap.router, type(uint256).max),
-            _approve(ARB_USDT, chainConfig.uniswap.router, type(uint256).max),
-            _approve(ARB_USDC, chainConfig.uniswap.router, type(uint256).max),
-            _approve(ARB_DAI, chainConfig.uniswap.router, type(uint256).max),
-            _approve(ARB_USDCe, chainConfig.uniswap.positionManager, type(uint256).max),
-            _approve(ARB_USDT, chainConfig.uniswap.positionManager, type(uint256).max),
-            _approve(ARB_USDC, chainConfig.uniswap.positionManager, type(uint256).max),
-            _approve(ARB_DAI, chainConfig.uniswap.positionManager, type(uint256).max)
-        );
+    function approveUniswapRouter() public {
+        bytes memory approvals = "";
+
+        for (uint256 i = 0; i < tokens().length; i++) {
+            approvals = abi.encodePacked(
+                approvals, _approve(tokens()[i], chainConfig.uniswap.router, type(uint256).max)
+            );
+        }
 
         _multisendCall(approvals);
 
-        for (uint256 i = 0; i < stablecoins().length; i++) {
+        for (uint256 i = 0; i < tokens().length; i++) {
             require(
-                IERC20(stablecoins()[i]).allowance(STABLE_FUND, chainConfig.uniswap.router)
+                IERC20(tokens()[i]).allowance(STABLE_FUND, chainConfig.uniswap.router)
                     == type(uint256).max,
                 "Failed to approve token to uniswap router"
             );
+        }
+    }
+
+    function approveUniswapPositionManager() public {
+        bytes memory approvals = "";
+
+        for (uint256 i = 0; i < tokens().length; i++) {
+            approvals = abi.encodePacked(
+                approvals,
+                _approve(tokens()[i], chainConfig.uniswap.positionManager, type(uint256).max)
+            );
+        }
+
+        _multisendCall(approvals);
+
+        for (uint256 i = 0; i < tokens().length; i++) {
             require(
-                IERC20(stablecoins()[i]).allowance(STABLE_FUND, chainConfig.uniswap.positionManager)
+                IERC20(tokens()[i]).allowance(STABLE_FUND, chainConfig.uniswap.positionManager)
                     == type(uint256).max,
                 "Failed to approve toke to uniswap position manager"
             );
         }
+    }
+
+    function approveUniswap() public {
+        approveUniswapRouter();
+        approveUniswapPositionManager();
+    }
+
+    function approveAll() public {
+        approveAave();
+        approveUniswap();
     }
 }
