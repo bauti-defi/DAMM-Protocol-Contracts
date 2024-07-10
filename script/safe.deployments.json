@@ -45,7 +45,7 @@
             "admin": "0x5822B262EDdA82d2C6A436b598Ff96fA9AB894c4",
             "safeAddress": "0xE924F6f7F099D34afb6621E3D7E228A6fBe963E9",
             "hookRegistry": "0x7dD9C90f9621eeF8859A82B55828A72eaCcb7ad9",
-            "operator": "0x19e7Fb1677Be3A3328983a56C9707Fd8D4F84433",
+            "operator": "0x5ed25671f65d0ca26d79326BF571f8AeaF856f00",
             "tradingModule": {
                 "address": "0x9588e15F13F8219D600d7EfF0a420375e539176a",
                 "hooks": [
@@ -65,7 +65,7 @@
             "admin": "0x5822B262EDdA82d2C6A436b598Ff96fA9AB894c4",
             "safeAddress": "0x964Bb08b217C3E5D4380A54e5f7c51Bd1f2a68DB",
             "hookRegistry": "0xfAcC9bE6e79034C679B0A1E0de407B58Fb240E0c",
-            "operator": "0x19e7Fb1677Be3A3328983a56C9707Fd8D4F84433",
+            "operator": "0x5ed25671f65d0ca26d79326BF571f8AeaF856f00",
             "tradingModule": {
                 "address": "0x20580451fEc6B5dc824A2d6D4cC295c1Cf3f0d3E",
                 "hooks": [
