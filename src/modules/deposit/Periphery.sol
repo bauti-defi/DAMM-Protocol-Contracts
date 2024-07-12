@@ -169,13 +169,15 @@ contract Periphery is ERC20, IPeriphery {
 
         ERC20 assetToken = ERC20(order.intent.asset);
 
-        /// transfer asset from caller to fund
-        assetToken.safeTransferFrom(order.intent.user, address(fund), order.intent.amount);
-
         // pay the relayer if required
         if (order.intent.relayerTip > 0) {
+            require(order.intent.relayerTip < order.intent.amount, InsufficientAmount_Error);
+
             assetToken.safeTransferFrom(order.intent.user, msg.sender, order.intent.relayerTip);
         }
+
+        /// transfer asset from user to fund
+        assetToken.safeTransferFrom(order.intent.user, address(fund), order.intent.amount);
 
         // update user liquidity balance
         userAccountInfo[order.intent.user].despositedLiquidity += liquidity;
@@ -253,15 +255,17 @@ contract Periphery is ERC20, IPeriphery {
             SlippageLimit_Error
         );
 
+        /// pay the relayer if required
+        if (order.intent.relayerTip > 0) {
+            require(order.intent.relayerTip < assetAmountOut, InsufficientAmount_Error);
+
+            _transferAsset(order.intent.asset, msg.sender, order.intent.relayerTip);
+        }
+
         /// transfer asset from fund to receiver
         _transferAsset(
             order.intent.asset, order.intent.to, assetAmountOut - order.intent.relayerTip
         );
-
-        /// pay the relayer if required
-        if (order.intent.relayerTip > 0) {
-            _transferAsset(order.intent.asset, msg.sender, order.intent.relayerTip);
-        }
 
         /// TODO: emit event
     }
