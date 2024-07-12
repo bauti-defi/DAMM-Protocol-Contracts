@@ -185,6 +185,7 @@ contract TestDepositModule is TestBaseFund, TestBaseProtocol {
             user: user,
             asset: token,
             amount: amount,
+            chaindId: block.chainid,
             deadline: block.timestamp + 1000,
             minSharesOut: 0,
             relayerTip: 0,
@@ -205,8 +206,9 @@ contract TestDepositModule is TestBaseFund, TestBaseProtocol {
             user: user,
             to: to,
             asset: asset,
-            amount: amount,
-            maxSharesIn: 0,
+            chaindId: block.chainid,
+            shares: amount,
+            minAmountOut: 0,
             deadline: block.timestamp + 1000,
             relayerTip: 0,
             nonce: periphery.getUserAccountInfo(user).nonce
@@ -218,9 +220,37 @@ contract TestDepositModule is TestBaseFund, TestBaseProtocol {
         return WithdrawOrder({intent: intent, signature: abi.encodePacked(r, s, v)});
     }
 
-    function test_deposit_withdraw() public {
-        mockToken1.mint(alice, 100_000_000 * 10 ** mockToken1.decimals());
-        mockToken1.mint(bob, 100_000_000 * 10 ** mockToken1.decimals());
+    function test_deposit_withdraw_single_user() public {
+        mockToken1.mint(alice, 100_000_000 * mock1Unit);
+
+        vm.prank(alice);
+        mockToken1.approve(address(periphery), type(uint256).max);
+
+        vm.prank(relayer);
+        periphery.deposit(_depositOrder(alice, alicePK, address(mockToken1), mock1Unit));
+
+        /// simulate that the fund gains 10 units of mockToken1
+        mockToken1.mint(address(fund), 10 * mock1Unit);
+
+        vm.prank(relayer);
+        periphery.deposit(_depositOrder(alice, alicePK, address(mockToken1), mock1Unit));
+
+        address claimer = makeAddr("Claimer");
+
+        assertEq(mockToken1.balanceOf(address(fund)), 12 * mock1Unit);
+
+        vm.prank(relayer);
+        periphery.withdraw(_withdrawOrder(alice, alicePK, claimer, address(mockToken1), 0));
+
+        /// @notice you wont get exact amount out because of vault inflation attack protection
+        assertApproxEqRel(mockToken1.balanceOf(claimer), 12 * mock1Unit, 0.1e18);
+        assertApproxEqRel(mockToken1.balanceOf(address(fund)), 10, 1);
+        assertEq(mockToken1.balanceOf(address(fund)), periphery.vault().totalAssets());
+    }
+
+    function test_deposit_withdraw_multi_user() public {
+        mockToken1.mint(alice, 10 * mock1Unit);
+        mockToken1.mint(bob, 10 * mock1Unit);
 
         vm.prank(alice);
         mockToken1.approve(address(periphery), type(uint256).max);
@@ -228,80 +258,23 @@ contract TestDepositModule is TestBaseFund, TestBaseProtocol {
         vm.prank(bob);
         mockToken1.approve(address(periphery), type(uint256).max);
 
-        vm.prank(relayer);
-        periphery.deposit(_depositOrder(alice, alicePK, address(mockToken1), mock1Unit));
+        vm.startPrank(relayer);
+        periphery.deposit(_depositOrder(alice, alicePK, address(mockToken1), 10 * mock1Unit));
+        periphery.deposit(_depositOrder(bob, bobPK, address(mockToken1), 10 * mock1Unit));
+        vm.stopPrank();
 
-        assertEq(periphery.vault().balanceOf(alice), periphery1Unit);
+        /// simulate that the fund gains 100 units of mockToken1
+        mockToken1.mint(address(fund), 100 * mock1Unit);
 
-        /// mock fund gains 1 unit of mockToken1
-        mockToken1.mint(address(fund), mock1Unit);
+        vm.startPrank(relayer);
+        periphery.withdraw(_withdrawOrder(alice, alicePK, alice, address(mockToken1), 0));
+        periphery.withdraw(_withdrawOrder(bob, bobPK, bob, address(mockToken1), 0));
+        vm.stopPrank();
 
-        uint256 aliceBalance = periphery.vault().balanceOf(alice);
-
-        assertApproxEqRel(
-            oracleRouter.getQuote(
-                periphery.vault().previewRedeem(aliceBalance),
-                address(periphery),
-                address(mockToken1)
-            ),
-            2 * mock1Unit,
-            0.1e18
-        );
-        assertApproxEqRel(
-            oracleRouter.getQuote(
-                periphery.vault().previewRedeem(aliceBalance),
-                address(periphery),
-                address(mockToken2)
-            ),
-            1 * mock2Unit,
-            0.1e18
-        );
-
-        vm.prank(relayer);
-        periphery.deposit(_depositOrder(bob, bobPK, address(mockToken1), mock1Unit));
-
-        uint256 bobBalance = periphery.vault().balanceOf(bob);
-
-        assertApproxEqRel(
-            oracleRouter.getQuote(
-                periphery.vault().previewRedeem(aliceBalance),
-                address(periphery),
-                address(mockToken1)
-            ),
-            2 * mock1Unit,
-            0.1e18
-        );
-        assertApproxEqRel(
-            oracleRouter.getQuote(
-                periphery.vault().previewRedeem(bobBalance), address(periphery), address(mockToken1)
-            ),
-            1 * mock1Unit,
-            0.1e18
-        );
-
-        /// mock fund gains 3 units of mockToken1
-        mockToken1.mint(address(fund), 3 * mock1Unit);
-
-        assertApproxEqRel(
-            oracleRouter.getQuote(
-                periphery.vault().previewRedeem(aliceBalance),
-                address(periphery),
-                address(mockToken1)
-            ),
-            4 * mock1Unit,
-            0.1e18
-        );
-        assertApproxEqRel(
-            oracleRouter.getQuote(
-                periphery.vault().previewRedeem(bobBalance), address(periphery), address(mockToken1)
-            ),
-            2 * mock1Unit,
-            0.1e18
-        );
-
-        address claimer = makeAddr("Claimer");
-
-        vm.prank(relayer);
-        periphery.withdraw(_withdrawOrder(alice, alicePK, claimer, address(mockToken1), mock1Unit));
+        /// @notice you wont get exact amount out because of vault inflation attack protection
+        assertApproxEqRel(mockToken1.balanceOf(alice), 60 * mock1Unit, 0.1e18);
+        assertApproxEqRel(mockToken1.balanceOf(bob), 60 * mock1Unit, 0.1e18);
+        assertApproxEqRel(mockToken1.balanceOf(address(fund)), 5, 1);
+        assertEq(mockToken1.balanceOf(address(fund)), periphery.vault().totalAssets());
     }
 }

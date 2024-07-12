@@ -103,10 +103,29 @@ contract Periphery is ERC20, IPeriphery {
         }
     }
 
+    /// @dev forgive me for my sins but the vault is only meant to be used by the periphery for accounting
+    modifier balanceVault() {
+        uint256 assetsInFund = this.totalAssets();
+        uint256 assetsInVault = vault.totalAssets();
+
+        /// The idea here is that the vault should always have the same amount of assets as the fund
+        /// keep in mind that the vault assets are liquidity tokens meant to represent the assets in the fund
+        if (assetsInFund > assetsInVault) {
+            _mint(address(vault), assetsInFund - assetsInVault);
+        } else if (assetsInFund < assetsInVault) {
+            _burn(address(vault), assetsInVault - assetsInFund);
+        }
+
+        _;
+
+        /// invariant
+        require(this.totalAssets() == vault.totalAssets(), AssetInvariant_Error);
+    }
+
     function deposit(DepositOrder calldata order)
         public
-        onlyWhenFundIsFullyDivested
         onlyActiveUser(order.intent.user)
+        balanceVault
         returns (uint256 shares)
     {
         require(
@@ -122,6 +141,7 @@ contract Periphery is ERC20, IPeriphery {
         );
         require(order.intent.deadline >= block.timestamp, IntentExpired_Error);
         require(order.intent.amount > 0, InsufficientAmount_Error);
+        require(order.intent.chaindId == block.chainid, InvalidChain_Error);
 
         AssetPolicy memory policy = assetPolicy[order.intent.asset];
 
@@ -152,12 +172,15 @@ contract Periphery is ERC20, IPeriphery {
         /// transfer asset from caller to fund
         assetToken.safeTransferFrom(order.intent.user, address(fund), order.intent.amount);
 
+        // pay the relayer if required
         if (order.intent.relayerTip > 0) {
             assetToken.safeTransferFrom(order.intent.user, msg.sender, order.intent.relayerTip);
         }
 
         // update user liquidity balance
         userAccountInfo[order.intent.user].despositedLiquidity += liquidity;
+
+        /// TODO: emit event
     }
 
     function _transferAsset(address asset, address to, uint256 amount) private {
@@ -179,9 +202,9 @@ contract Periphery is ERC20, IPeriphery {
     // TODO: permit2 ?
     function withdraw(WithdrawOrder calldata order)
         public
-        onlyWhenFundIsFullyDivested
         onlyActiveUser(order.intent.user)
-        returns (uint256 vaultShares)
+        balanceVault
+        returns (uint256 assetAmountOut)
     {
         require(
             SignatureChecker.isValidSignatureNow(
@@ -195,7 +218,7 @@ contract Periphery is ERC20, IPeriphery {
             order.intent.nonce == userAccountInfo[order.intent.user].nonce++, InvalidNonce_Error
         );
         require(order.intent.deadline >= block.timestamp, IntentExpired_Error);
-        require(order.intent.amount > 0, InsufficientAmount_Error);
+        require(order.intent.chaindId == block.chainid, InvalidChain_Error);
 
         AssetPolicy memory policy = assetPolicy[order.intent.asset];
 
@@ -205,33 +228,42 @@ contract Periphery is ERC20, IPeriphery {
             require(userAccountInfo[order.intent.user].role == Role.SUPER_USER, OnlySuperUser_Error);
         }
 
-        // calculate how much liquidity for the amount of asset to be withdrawn
-        uint256 liquidity = oracleRouter.getQuote(
-            order.intent.amount + order.intent.relayerTip, order.intent.asset, address(this)
-        );
+        uint256 sharesToBurn = order.intent.shares;
+
+        // if shares to burn is 0, then burn all shares owned by user
+        if (sharesToBurn == 0) {
+            sharesToBurn = vault.balanceOf(order.intent.user);
+        }
+
+        // burn shares from vault in exchange for liquidity tokens
+        uint256 liquidity = vault.redeem(sharesToBurn, address(this), order.intent.user);
 
         // make sure the withdrawal is above the minimum
         require(liquidity > policy.minimumWithdrawal, InsufficientWithdraw_Error);
 
-        /// withdraw liquidity from vault to periphery
-        vaultShares = vault.withdraw(liquidity, address(this), order.intent.user);
-
-        /// make sure slippage is acceptable
-        require(
-            order.intent.maxSharesIn == 0 || vaultShares <= order.intent.maxSharesIn,
-            SlippageLimit_Error
-        );
-
         /// burn liquidity from periphery
         _burn(address(this), liquidity);
 
+        // calculate how much asset for this amount of liquidity
+        assetAmountOut = oracleRouter.getQuote(liquidity, address(this), order.intent.asset);
+
+        /// make sure slippage is acceptable
+        require(
+            order.intent.minAmountOut == 0 || assetAmountOut >= order.intent.minAmountOut,
+            SlippageLimit_Error
+        );
+
         /// transfer asset from fund to receiver
-        _transferAsset(order.intent.asset, order.intent.user, order.intent.amount);
+        _transferAsset(
+            order.intent.asset, order.intent.to, assetAmountOut - order.intent.relayerTip
+        );
 
         /// pay the relayer if required
         if (order.intent.relayerTip > 0) {
             _transferAsset(order.intent.asset, msg.sender, order.intent.relayerTip);
         }
+
+        /// TODO: emit event
     }
 
     function setFeeRecipient(address recipient) external onlyFund {

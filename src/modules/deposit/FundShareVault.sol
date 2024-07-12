@@ -20,9 +20,9 @@ contract FundShareVault is ERC4626 {
         _;
     }
 
-    function totalAssets() public view override returns (uint256) {
-        return periphery.totalAssets();
-    }
+    // function totalAssets() public view override returns (uint256) {
+    //     return periphery.totalAssets();
+    // }
 
     function deposit(uint256 assets, address receiver)
         public

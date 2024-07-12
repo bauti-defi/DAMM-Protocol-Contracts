@@ -4,6 +4,7 @@ pragma solidity ^0.8.0;
 struct DepositIntent {
     address user;
     address asset;
+    uint256 chaindId;
     uint256 amount;
     uint256 deadline;
     uint256 minSharesOut;
@@ -16,14 +17,14 @@ struct DepositOrder {
     bytes signature;
 }
 
-// TODO: add chainId
 struct WithdrawIntent {
     address user;
     address to;
     address asset;
-    uint256 amount;
+    uint256 chaindId;
+    uint256 shares;
     uint256 deadline;
-    uint256 maxSharesIn;
+    uint256 minAmountOut;
     uint256 relayerTip;
     uint256 nonce;
 }

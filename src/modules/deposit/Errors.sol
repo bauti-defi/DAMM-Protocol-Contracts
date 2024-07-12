@@ -13,6 +13,7 @@ string constant InvalidOracle_Error = "Oracle is invalid";
 string constant UnExpectedSupplyIncrease_Error = "Unexpected supply increase";
 string constant FundNotFullyDivested_Error = "Fund is not fully divested";
 string constant InvalidAssetPolicy_Error = "Asset policy is invalid";
+string constant InvalidChain_Error = "Chain id mismatch";
 
 string constant AssetTransfer_Error = "Asset transfer failed";
 string constant AssetUnavailable_Error = "Asset is not enabled";
@@ -38,3 +39,4 @@ string constant PerfomanceFeeIsZero_Error = "Performance fee is zero";
 string constant InvalidPerformanceFee_Error = "Invalid performance fee";
 
 string constant NonZeroValueExpected_Error = "Non-zero value expected";
+string constant AssetInvariant_Error = "Asset Invariant violated";
