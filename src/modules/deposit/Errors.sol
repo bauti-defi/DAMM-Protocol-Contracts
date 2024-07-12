@@ -28,6 +28,7 @@ string constant OnlyFeeRecipient_Error = "Caller is not fee recipient";
 string constant OnlyFund_Error = "Caller is not fund";
 string constant OnlyUser_Error = "Caller is not registered user";
 string constant OnlySuperUser_Error = "Caller is not super user";
+string constant OnlyPeriphery_Error = "Caller is not periphery";
 
 string constant EpochsEmpty_Error = "No epochs have been created";
 string constant EpochEnded_Error = "Epoch has ended";

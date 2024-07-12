@@ -29,7 +29,7 @@ abstract contract TokenMinter is Test {
     address public constant DAI_MINTER = 0x467194771dAe2967Aef3ECbEDD3Bf9a310C76C65;
 
     function setUp() public virtual {
-        MOCK_ERC20 = new MockERC20();
+        MOCK_ERC20 = new MockERC20(18);
 
         // label tokens
         vm.label(address(USDC), "USDC");

@@ -31,12 +31,12 @@ contract Periphery is ERC20, IPeriphery {
     using MessageHashUtils for bytes;
     using Math for uint256;
 
-    IFund immutable fund;
+    IFund public immutable fund;
 
     /// @dev should be a Euler Oracle Router
-    IPriceOracle immutable oracleRouter;
+    IPriceOracle public immutable oracleRouter;
 
-    FundShareVault immutable vault;
+    FundShareVault public immutable vault;
 
     mapping(address asset => AssetPolicy policy) private assetPolicy;
     mapping(address user => UserAccountInfo) private userAccountInfo;
@@ -131,15 +131,6 @@ contract Periphery is ERC20, IPeriphery {
             require(userAccountInfo[order.intent.user].role == Role.SUPER_USER, OnlySuperUser_Error);
         }
 
-        ERC20 assetToken = ERC20(order.intent.asset);
-
-        /// transfer asset from caller to fund
-        assetToken.safeTransferFrom(order.intent.user, address(fund), order.intent.amount);
-
-        if (order.intent.relayerTip > 0) {
-            assetToken.safeTransferFrom(order.intent.user, msg.sender, order.intent.relayerTip);
-        }
-
         // calculate how much liquidity for this amount of deposited asset
         uint256 liquidity =
             oracleRouter.getQuote(order.intent.amount, order.intent.asset, address(this));
@@ -150,14 +141,39 @@ contract Periphery is ERC20, IPeriphery {
         /// mint liquidity to periphery
         _mint(address(this), liquidity);
 
-        /// mint shares to user using their liquidity
+        /// mint shares to user using the liquidity that was just minted to periphery
         shares = vault.deposit(liquidity, order.intent.user);
 
         // lets make sure slippage is acceptable
         require(shares >= order.intent.minSharesOut, SlippageLimit_Error);
 
+        ERC20 assetToken = ERC20(order.intent.asset);
+
+        /// transfer asset from caller to fund
+        assetToken.safeTransferFrom(order.intent.user, address(fund), order.intent.amount);
+
+        if (order.intent.relayerTip > 0) {
+            assetToken.safeTransferFrom(order.intent.user, msg.sender, order.intent.relayerTip);
+        }
+
         // update user liquidity balance
         userAccountInfo[order.intent.user].despositedLiquidity += liquidity;
+    }
+
+    function _transferAsset(address asset, address to, uint256 amount) private {
+        /// call fund to transfer asset out
+        (bool success, bytes memory returnData) = fund.execTransactionFromModuleReturnData(
+            asset,
+            0,
+            abi.encodeWithSignature("transfer(address,uint256)", to, amount),
+            Enum.Operation.Call
+        );
+
+        /// check transfer was successful
+        require(
+            success && (returnData.length == 0 || abi.decode(returnData, (bool))),
+            AssetTransfer_Error
+        );
     }
 
     // TODO: permit2 ?
@@ -189,10 +205,10 @@ contract Periphery is ERC20, IPeriphery {
             require(userAccountInfo[order.intent.user].role == Role.SUPER_USER, OnlySuperUser_Error);
         }
 
-        uint256 cumAmount = order.intent.amount + order.intent.relayerTip;
-
-        // calculate how much liquidity for this amount of withdrawed asset
-        uint256 liquidity = oracleRouter.getQuote(cumAmount, order.intent.asset, address(this));
+        // calculate how much liquidity for the amount of asset to be withdrawn
+        uint256 liquidity = oracleRouter.getQuote(
+            order.intent.amount + order.intent.relayerTip, order.intent.asset, address(this)
+        );
 
         // make sure the withdrawal is above the minimum
         require(liquidity > policy.minimumWithdrawal, InsufficientWithdraw_Error);
@@ -201,41 +217,20 @@ contract Periphery is ERC20, IPeriphery {
         vaultShares = vault.withdraw(liquidity, address(this), order.intent.user);
 
         /// make sure slippage is acceptable
-        require(vaultShares <= order.intent.maxSharesIn, SlippageLimit_Error);
+        require(
+            order.intent.maxSharesIn == 0 || vaultShares <= order.intent.maxSharesIn,
+            SlippageLimit_Error
+        );
 
         /// burn liquidity from periphery
         _burn(address(this), liquidity);
 
         /// transfer asset from fund to receiver
-        require(
-            // TODO: transfer returns a bool, check it
-            // TODO: look at using SecuredTokenTransfer.sol in safe contracts
-            fund.execTransactionFromModule(
-                order.intent.asset,
-                0,
-                // TODO: abi.encodeCall
-                abi.encodeWithSignature(
-                    "transfer(address,uint256)", order.intent.to, order.intent.amount
-                ),
-                Enum.Operation.Call
-            ),
-            AssetTransfer_Error
-        );
+        _transferAsset(order.intent.asset, order.intent.user, order.intent.amount);
 
+        /// pay the relayer if required
         if (order.intent.relayerTip > 0) {
-            // TODO: transfer returns a bool, check it
-            require(
-                fund.execTransactionFromModule(
-                    order.intent.asset,
-                    0,
-                    // TODO: abi.encodeCall
-                    abi.encodeWithSignature(
-                        "transfer(address,uint256)", msg.sender, order.intent.relayerTip
-                    ),
-                    Enum.Operation.Call
-                ),
-                AssetTransfer_Error
-            );
+            _transferAsset(order.intent.asset, msg.sender, order.intent.relayerTip);
         }
     }
 
@@ -276,6 +271,10 @@ contract Periphery is ERC20, IPeriphery {
         userAccountInfo[msg.sender].nonce += increment > 0 ? increment : 1;
     }
 
+    function getUserAccountInfo(address user) external view returns (UserAccountInfo memory) {
+        return userAccountInfo[user];
+    }
+
     function pauseAccount(address user) public onlyFund {
         require(userAccountInfo[user].status == AccountStatus.ACTIVE, AccountNotActive_Error);
 
@@ -311,5 +310,28 @@ contract Periphery is ERC20, IPeriphery {
         });
 
         emit AccountOpened(user, role);
+    }
+
+    /// @dev override to only allow vault to transfer shares
+    function transferFrom(address from, address to, uint256 amount)
+        public
+        virtual
+        override
+        returns (bool)
+    {
+        /// @notice only vault can transfer shares
+        if (msg.sender != address(vault)) return false;
+
+        balanceOf[from] -= amount;
+
+        // Cannot overflow because the sum of all user
+        // balances can't exceed the max uint256 value.
+        unchecked {
+            balanceOf[to] += amount;
+        }
+
+        emit Transfer(from, to, amount);
+
+        return true;
     }
 }

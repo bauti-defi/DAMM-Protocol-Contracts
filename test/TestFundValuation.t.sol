@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.0;
 
-import {Test} from "@forge-std/Test.sol";
 import {TestBaseProtocol} from "@test/base/TestBaseProtocol.sol";
 import {TestBaseGnosis} from "@test/base/TestBaseGnosis.sol";
 import {SafeL2} from "@safe-contracts/SafeL2.sol";
@@ -30,7 +29,7 @@ bytes32 constant FALLBACK_HANDLER_STORAGE_SLOT =
 
 uint256 constant USD_DECIMALS = 8;
 
-contract TestFundValuation is Test, TestBaseProtocol, TestBaseGnosis, TokenMinter {
+contract TestFundValuation is TestBaseProtocol, TestBaseGnosis, TokenMinter {
     address internal fundAdmin;
     uint256 internal fundAdminPK;
     IFund internal fund;
