@@ -140,7 +140,6 @@ contract Periphery is ERC20, IPeriphery {
             order.intent.nonce == userAccountInfo[order.intent.user].nonce++, InvalidNonce_Error
         );
         require(order.intent.deadline >= block.timestamp, IntentExpired_Error);
-        require(order.intent.amount > 0, InsufficientAmount_Error);
         require(order.intent.chaindId == block.chainid, InvalidChain_Error);
 
         AssetPolicy memory policy = assetPolicy[order.intent.asset];
@@ -151,9 +150,24 @@ contract Periphery is ERC20, IPeriphery {
             require(userAccountInfo[order.intent.user].role == Role.SUPER_USER, OnlySuperUser_Error);
         }
 
+        uint256 assetAmountIn = order.intent.amount;
+        ERC20 assetToken = ERC20(order.intent.asset);
+
+        // if amount is 0, then deposit the user's entire balance
+        if (assetAmountIn == 0) {
+            assetAmountIn = assetToken.balanceOf(order.intent.user);
+
+            // make sure there is enough asset to cover the relayer tip
+            if (order.intent.relayerTip > 0) {
+                require(assetAmountIn > order.intent.relayerTip, InsufficientAmount_Error);
+
+                // deduct it from the amount to deposit
+                assetAmountIn -= order.intent.relayerTip;
+            }
+        }
+
         // calculate how much liquidity for this amount of deposited asset
-        uint256 liquidity =
-            oracleRouter.getQuote(order.intent.amount, order.intent.asset, address(this));
+        uint256 liquidity = oracleRouter.getQuote(assetAmountIn, order.intent.asset, address(this));
 
         // make sure the deposit is above the minimum
         require(liquidity > policy.minimumDeposit, InsufficientDeposit_Error);
@@ -167,17 +181,13 @@ contract Periphery is ERC20, IPeriphery {
         // lets make sure slippage is acceptable
         require(shares >= order.intent.minSharesOut, SlippageLimit_Error);
 
-        ERC20 assetToken = ERC20(order.intent.asset);
-
         // pay the relayer if required
         if (order.intent.relayerTip > 0) {
-            require(order.intent.relayerTip < order.intent.amount, InsufficientAmount_Error);
-
             assetToken.safeTransferFrom(order.intent.user, msg.sender, order.intent.relayerTip);
         }
 
         /// transfer asset from user to fund
-        assetToken.safeTransferFrom(order.intent.user, address(fund), order.intent.amount);
+        assetToken.safeTransferFrom(order.intent.user, address(fund), assetAmountIn);
 
         // update user liquidity balance
         userAccountInfo[order.intent.user].despositedLiquidity += liquidity;

@@ -260,7 +260,7 @@ contract TestDepositModule is TestBaseFund, TestBaseProtocol {
 
         vm.startPrank(relayer);
         periphery.deposit(_depositOrder(alice, alicePK, address(mockToken1), 10 * mock1Unit));
-        periphery.deposit(_depositOrder(bob, bobPK, address(mockToken1), 10 * mock1Unit));
+        periphery.deposit(_depositOrder(bob, bobPK, address(mockToken1), 0));
         vm.stopPrank();
 
         /// simulate that the fund gains 100 units of mockToken1
