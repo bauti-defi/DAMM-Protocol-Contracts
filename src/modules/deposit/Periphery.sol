@@ -44,7 +44,7 @@ contract Periphery is IPeriphery {
     mapping(address asset => AssetPolicy policy) private assetPolicy;
     mapping(address user => UserAccountInfo) private userAccountInfo;
 
-    uint256 public feeBps = 1500;
+    uint256 public feeBps = 0;
     address public feeRecipient;
 
     constructor(
@@ -110,16 +110,31 @@ contract Periphery is IPeriphery {
         }
     }
 
-    /// @dev forgive me for my sins but the vault is only meant to be used by the periphery for accounting
+    /// @dev two things must happen here.
+    /// 1. we need to calculate the profit/loss from the last update. Pay fee accordingly
+    /// 2. we need to update the vault's underlying assets to match the fund's valuation
     modifier update() {
         uint256 assetsInFund = this.totalAssets();
         uint256 assetsInVault = vault.totalAssets();
 
-        /// The idea here is that the vault should always have the same amount of assets as the fund
-        /// keep in mind that the vault assets are liquidity tokens meant to represent the assets in the fund
+        // we know that the difference between the assets in the fund and the vault is the profit/loss since last update
+        // we can calculate the performance fee from this
         if (assetsInFund > assetsInVault) {
-            unitOfAccount.mint(address(vault), assetsInFund - assetsInVault);
-        } else if (assetsInFund < assetsInVault) {
+            uint256 profit = assetsInFund - assetsInVault;
+            uint256 fee = profit.mulDiv(feeBps, BP_DIVISOR);
+
+            // we mint the profit to the periphery
+            unitOfAccount.mint(address(this), profit);
+
+            if (fee > 0) {
+                // we deposit the fee into the vault on behalf of the fee recipient
+                vault.deposit(fee, feeRecipient);
+            }
+
+            // we transfer the remaining profit to the vault to match the fund's valuation
+            unitOfAccount.transfer(address(vault), profit - fee);
+        } else {
+            // if the fund has lost money, we need to account for it
             unitOfAccount.burn(address(vault), assetsInVault - assetsInFund);
         }
 
