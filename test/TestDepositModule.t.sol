@@ -41,7 +41,7 @@ contract TestDepositModule is TestBaseFund, TestBaseProtocol {
 
     uint256 mock1Unit;
     uint256 mock2Unit;
-    uint256 periphery1Unit;
+    uint256 oneUnitOfAccount;
 
     function setUp() public override(TestBaseFund, TestBaseProtocol) {
         TestBaseFund.setUp();
@@ -96,7 +96,7 @@ contract TestDepositModule is TestBaseFund, TestBaseProtocol {
         assertTrue(fund.isModuleEnabled(address(periphery)), "Periphery not module");
 
         /// @notice this much match the vault implementation
-        periphery1Unit = 1 * 10 ** (periphery.decimals() + VAULT_DECIMAL_OFFSET);
+        oneUnitOfAccount = 1 * 10 ** (periphery.unitOfAccount().decimals() + VAULT_DECIMAL_OFFSET);
 
         mockToken1 = new MockERC20(18);
         vm.label(address(mockToken1), "MockToken1");
@@ -156,25 +156,21 @@ contract TestDepositModule is TestBaseFund, TestBaseProtocol {
         periphery.openAccount(bob, Role.USER);
         vm.stopPrank();
 
+        address unitOfAccount = address(periphery.unitOfAccount());
+
         MockPriceOracle mockPriceOracle = new MockPriceOracle(
-            address(mockToken1),
-            address(periphery),
-            1 * 10 ** VALUATION_DECIMALS,
-            VALUATION_DECIMALS
+            address(mockToken1), unitOfAccount, 1 * 10 ** VALUATION_DECIMALS, VALUATION_DECIMALS
         );
         vm.label(address(mockPriceOracle), "MockPriceOracle1");
         vm.prank(address(fund));
-        oracleRouter.govSetConfig(address(mockToken1), address(periphery), address(mockPriceOracle));
+        oracleRouter.govSetConfig(address(mockToken1), unitOfAccount, address(mockPriceOracle));
 
         mockPriceOracle = new MockPriceOracle(
-            address(mockToken2),
-            address(periphery),
-            2 * 10 ** VALUATION_DECIMALS,
-            VALUATION_DECIMALS
+            address(mockToken2), unitOfAccount, 2 * 10 ** VALUATION_DECIMALS, VALUATION_DECIMALS
         );
         vm.label(address(mockPriceOracle), "MockPriceOracle2");
         vm.prank(address(fund));
-        oracleRouter.govSetConfig(address(mockToken2), address(periphery), address(mockPriceOracle));
+        oracleRouter.govSetConfig(address(mockToken2), unitOfAccount, address(mockPriceOracle));
     }
 
     function _depositOrder(address user, uint256 userPK, address token, uint256 amount)
@@ -223,8 +219,10 @@ contract TestDepositModule is TestBaseFund, TestBaseProtocol {
     function test_deposit_withdraw() public {
         mockToken1.mint(alice, 100_000_000 * mock1Unit);
 
-        vm.prank(alice);
+        vm.startPrank(alice);
         mockToken1.approve(address(periphery), type(uint256).max);
+        periphery.vault().approve(address(periphery), type(uint256).max);
+        vm.stopPrank();
 
         vm.prank(relayer);
         periphery.deposit(_depositOrder(alice, alicePK, address(mockToken1), mock1Unit));
@@ -252,11 +250,15 @@ contract TestDepositModule is TestBaseFund, TestBaseProtocol {
         mockToken1.mint(alice, 10 * mock1Unit);
         mockToken1.mint(bob, 10 * mock1Unit);
 
-        vm.prank(alice);
+        vm.startPrank(alice);
         mockToken1.approve(address(periphery), type(uint256).max);
+        periphery.vault().approve(address(periphery), type(uint256).max);
+        vm.stopPrank();
 
-        vm.prank(bob);
+        vm.startPrank(bob);
         mockToken1.approve(address(periphery), type(uint256).max);
+        periphery.vault().approve(address(periphery), type(uint256).max);
+        vm.stopPrank();
 
         vm.startPrank(relayer);
         periphery.deposit(_depositOrder(alice, alicePK, address(mockToken1), 10 * mock1Unit));
@@ -282,11 +284,15 @@ contract TestDepositModule is TestBaseFund, TestBaseProtocol {
         mockToken1.mint(alice, 10 * mock1Unit);
         mockToken1.mint(bob, 10 * mock1Unit);
 
-        vm.prank(alice);
+        vm.startPrank(alice);
         mockToken1.approve(address(periphery), type(uint256).max);
+        periphery.vault().approve(address(periphery), type(uint256).max);
+        vm.stopPrank();
 
-        vm.prank(bob);
+        vm.startPrank(bob);
         mockToken1.approve(address(periphery), type(uint256).max);
+        periphery.vault().approve(address(periphery), type(uint256).max);
+        vm.stopPrank();
 
         vm.startPrank(relayer);
         periphery.deposit(_depositOrder(alice, alicePK, address(mockToken1), 10 * mock1Unit));

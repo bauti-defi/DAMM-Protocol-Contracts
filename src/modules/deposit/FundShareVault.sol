@@ -2,17 +2,16 @@
 pragma solidity ^0.8.0;
 
 import "@openzeppelin-contracts/token/ERC20/extensions/ERC4626.sol";
-import {IPeriphery} from "@src/interfaces/IPeriphery.sol";
 import {OnlyPeriphery_Error} from "./Errors.sol";
 
 contract FundShareVault is ERC4626 {
-    IPeriphery internal immutable periphery;
+    address internal immutable periphery;
 
-    constructor(address _periphery, string memory _name, string memory _symbol)
-        ERC4626(IERC20(_periphery))
+    constructor(address _unitOfAccount, string memory _name, string memory _symbol)
+        ERC4626(IERC20(_unitOfAccount))
         ERC20(_name, _symbol)
     {
-        periphery = IPeriphery(_periphery);
+        periphery = msg.sender;
     }
 
     modifier onlyPeriphery() {
@@ -20,19 +19,12 @@ contract FundShareVault is ERC4626 {
         _;
     }
 
-    // function totalAssets() public view override returns (uint256) {
-    //     return periphery.totalAssets();
-    // }
-
     function deposit(uint256 assets, address receiver)
         public
         override
         onlyPeriphery
         returns (uint256 shares)
     {
-        /// @dev give the periphery infinite approval on behalf of the receiver (depositor)
-        _approve(receiver, address(periphery), type(uint256).max);
-
         shares = super.deposit(assets, receiver);
     }
 
@@ -42,9 +34,6 @@ contract FundShareVault is ERC4626 {
         onlyPeriphery
         returns (uint256 assets)
     {
-        /// @dev give the periphery infinite approval on behalf of the receiver (depositor)
-        _approve(receiver, address(periphery), type(uint256).max);
-
         assets = super.mint(shares, receiver);
     }
 

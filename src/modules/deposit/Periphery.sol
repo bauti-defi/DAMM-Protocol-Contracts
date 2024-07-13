@@ -23,10 +23,11 @@ import "@euler-price-oracle/interfaces/IPriceOracle.sol";
 import {IPeriphery} from "@src/interfaces/IPeriphery.sol";
 import "./Events.sol";
 import "@src/libs/Constants.sol";
+import "./UnitOfAccount.sol";
 
 uint256 constant BP_DIVISOR = 10000;
 
-contract Periphery is ERC20, IPeriphery {
+contract Periphery is IPeriphery {
     using SafeTransferLib for ERC20;
     using MessageHashUtils for bytes;
     using Math for uint256;
@@ -35,7 +36,9 @@ contract Periphery is ERC20, IPeriphery {
 
     /// @dev should be a Euler Oracle Router
     IPriceOracle public immutable oracleRouter;
-
+    /// @dev common unit of account for assets and vault
+    UnitOfAccount public immutable unitOfAccount;
+    /// @dev used for yield accounting
     FundShareVault public immutable vault;
 
     mapping(address asset => AssetPolicy policy) private assetPolicy;
@@ -51,11 +54,14 @@ contract Periphery is ERC20, IPeriphery {
         address fund_,
         address oracleRouter_,
         address feeRecipient_
-    ) ERC20("Liquidity", "USD", _decimals) {
+    ) {
         fund = IFund(fund_);
         oracleRouter = IPriceOracle(oracleRouter_);
         feeRecipient = feeRecipient_;
-        vault = new FundShareVault(address(this), _vaultName, _vaultSymbol);
+
+        unitOfAccount = new UnitOfAccount("Liquidity", "UNIT", _decimals);
+        vault = new FundShareVault(address(unitOfAccount), _vaultName, _vaultSymbol);
+        unitOfAccount.approve(address(vault), type(uint256).max);
     }
 
     modifier onlyWhenFundIsFullyDivested() {
@@ -95,7 +101,8 @@ contract Periphery is ERC20, IPeriphery {
             }
 
             // calculate how much liquidity for this amount of asset
-            total += balance > 0 ? oracleRouter.getQuote(balance, assets[i], address(this)) : 0;
+            total +=
+                balance > 0 ? oracleRouter.getQuote(balance, assets[i], address(unitOfAccount)) : 0;
 
             unchecked {
                 ++i;
@@ -104,16 +111,16 @@ contract Periphery is ERC20, IPeriphery {
     }
 
     /// @dev forgive me for my sins but the vault is only meant to be used by the periphery for accounting
-    modifier balanceVault() {
+    modifier update() {
         uint256 assetsInFund = this.totalAssets();
         uint256 assetsInVault = vault.totalAssets();
 
         /// The idea here is that the vault should always have the same amount of assets as the fund
         /// keep in mind that the vault assets are liquidity tokens meant to represent the assets in the fund
         if (assetsInFund > assetsInVault) {
-            _mint(address(vault), assetsInFund - assetsInVault);
+            unitOfAccount.mint(address(vault), assetsInFund - assetsInVault);
         } else if (assetsInFund < assetsInVault) {
-            _burn(address(vault), assetsInVault - assetsInFund);
+            unitOfAccount.burn(address(vault), assetsInVault - assetsInFund);
         }
 
         _;
@@ -125,7 +132,7 @@ contract Periphery is ERC20, IPeriphery {
     function deposit(DepositOrder calldata order)
         public
         onlyActiveUser(order.intent.user)
-        balanceVault
+        update
         returns (uint256 shares)
     {
         require(
@@ -167,13 +174,14 @@ contract Periphery is ERC20, IPeriphery {
         }
 
         // calculate how much liquidity for this amount of deposited asset
-        uint256 liquidity = oracleRouter.getQuote(assetAmountIn, order.intent.asset, address(this));
+        uint256 liquidity =
+            oracleRouter.getQuote(assetAmountIn, order.intent.asset, address(unitOfAccount));
 
         // make sure the deposit is above the minimum
         require(liquidity > policy.minimumDeposit, InsufficientDeposit_Error);
 
         /// mint liquidity to periphery
-        _mint(address(this), liquidity);
+        unitOfAccount.mint(address(this), liquidity);
 
         /// mint shares to user using the liquidity that was just minted to periphery
         shares = vault.deposit(liquidity, order.intent.user);
@@ -215,7 +223,7 @@ contract Periphery is ERC20, IPeriphery {
     function withdraw(WithdrawOrder calldata order)
         public
         onlyActiveUser(order.intent.user)
-        balanceVault
+        update
         returns (uint256 assetAmountOut)
     {
         require(
@@ -254,10 +262,11 @@ contract Periphery is ERC20, IPeriphery {
         require(liquidity > policy.minimumWithdrawal, InsufficientWithdraw_Error);
 
         /// burn liquidity from periphery
-        _burn(address(this), liquidity);
+        unitOfAccount.burn(address(this), liquidity);
 
         // calculate how much asset for this amount of liquidity
-        assetAmountOut = oracleRouter.getQuote(liquidity, address(this), order.intent.asset);
+        assetAmountOut =
+            oracleRouter.getQuote(liquidity, address(unitOfAccount), order.intent.asset);
 
         /// make sure slippage is acceptable
         require(
@@ -356,28 +365,5 @@ contract Periphery is ERC20, IPeriphery {
         });
 
         emit AccountOpened(user, role);
-    }
-
-    /// @dev override to only allow vault to transfer shares
-    function transferFrom(address from, address to, uint256 amount)
-        public
-        virtual
-        override
-        returns (bool)
-    {
-        /// @notice only vault can transfer shares
-        if (msg.sender != address(vault)) return false;
-
-        balanceOf[from] -= amount;
-
-        // Cannot overflow because the sum of all user
-        // balances can't exceed the max uint256 value.
-        unchecked {
-            balanceOf[to] += amount;
-        }
-
-        emit Transfer(from, to, amount);
-
-        return true;
     }
 }
