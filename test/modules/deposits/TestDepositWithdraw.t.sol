@@ -23,7 +23,7 @@ import "@openzeppelin-contracts/utils/cryptography/MessageHashUtils.sol";
 uint8 constant VALUATION_DECIMALS = 18;
 uint256 constant VAULT_DECIMAL_OFFSET = 1;
 
-contract TestDepositModule is TestBaseFund, TestBaseProtocol {
+contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
     using MessageHashUtils for bytes;
 
     address internal fundAdmin;
@@ -38,6 +38,8 @@ contract TestDepositModule is TestBaseFund, TestBaseProtocol {
     address bob;
     uint256 internal bobPK;
     address relayer;
+    address feeRecipient;
+    uint256 internal feeRecipientPK;
 
     uint256 mock1Unit;
     uint256 mock2Unit;
@@ -46,6 +48,8 @@ contract TestDepositModule is TestBaseFund, TestBaseProtocol {
     function setUp() public override(TestBaseFund, TestBaseProtocol) {
         TestBaseFund.setUp();
         TestBaseProtocol.setUp();
+
+        (feeRecipient, feeRecipientPK) = makeAddrAndKey("FeeRecipient");
 
         relayer = makeAddr("Relayer");
 
@@ -87,7 +91,7 @@ contract TestDepositModule is TestBaseFund, TestBaseProtocol {
                         VALUATION_DECIMALS, // must be same as underlying oracles response denomination
                         payable(address(fund)),
                         address(oracleRouter),
-                        address(0)
+                        feeRecipient
                     )
                 )
             )
@@ -217,9 +221,19 @@ contract TestDepositModule is TestBaseFund, TestBaseProtocol {
     }
 
     function test_deposit_withdraw() public {
+        uint256 feeBps = 1000;
+
+        vm.prank(address(fund));
+        periphery.setFeeBps(feeBps);
+
         mockToken1.mint(alice, 100_000_000 * mock1Unit);
 
         vm.startPrank(alice);
+        mockToken1.approve(address(periphery), type(uint256).max);
+        periphery.vault().approve(address(periphery), type(uint256).max);
+        vm.stopPrank();
+
+        vm.startPrank(feeRecipient);
         mockToken1.approve(address(periphery), type(uint256).max);
         periphery.vault().approve(address(periphery), type(uint256).max);
         vm.stopPrank();
@@ -240,9 +254,18 @@ contract TestDepositModule is TestBaseFund, TestBaseProtocol {
         vm.prank(relayer);
         periphery.withdraw(_withdrawOrder(alice, alicePK, claimer, address(mockToken1), 0));
 
+        vm.prank(relayer);
+        periphery.withdraw(
+            _withdrawOrder(feeRecipient, feeRecipientPK, feeRecipient, address(mockToken1), 0)
+        );
+
         /// @notice you wont get exact amount out because of vault inflation attack protection
-        assertApproxEqRel(mockToken1.balanceOf(claimer), 12 * mock1Unit, 0.1e18);
-        assertApproxEqRel(mockToken1.balanceOf(address(fund)), 10, 1);
+        assertApproxEqRel(mockToken1.balanceOf(claimer), 11 * mock1Unit, 0.1e18);
+        assertApproxEqRel(mockToken1.balanceOf(feeRecipient), 1 * mock1Unit, 0.1e18);
+        assertEq(mockToken1.balanceOf(address(fund)), 9);
+
+        assertEq(periphery.vault().balanceOf(feeRecipient), 0);
+        assertEq(periphery.vault().balanceOf(alice), 0);
         assertEq(mockToken1.balanceOf(address(fund)), periphery.vault().totalAssets());
     }
 

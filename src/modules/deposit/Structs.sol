@@ -37,7 +37,8 @@ struct WithdrawOrder {
 enum Role {
     NONE, // default
     USER,
-    SUPER_USER
+    SUPER_USER,
+    FEE_RECIPIENT
 }
 
 enum AccountStatus {
@@ -62,7 +63,6 @@ struct AssetPolicy {
 
 struct UserAccountInfo {
     uint256 nonce;
-    uint256 despositedLiquidity;
     Role role;
     AccountStatus status;
 }

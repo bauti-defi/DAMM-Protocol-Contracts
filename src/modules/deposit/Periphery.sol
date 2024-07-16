@@ -25,7 +25,7 @@ import "./Events.sol";
 import "@src/libs/Constants.sol";
 import "./UnitOfAccount.sol";
 
-uint256 constant BP_DIVISOR = 10000;
+uint256 constant BP_DIVISOR = 10_000;
 
 contract Periphery is IPeriphery {
     using SafeTransferLib for ERC20;
@@ -57,7 +57,10 @@ contract Periphery is IPeriphery {
     ) {
         fund = IFund(fund_);
         oracleRouter = IPriceOracle(oracleRouter_);
+
+        require(feeRecipient_ != address(0), InvalidFeeRecipient_Error);
         feeRecipient = feeRecipient_;
+        _openAccount(feeRecipient, Role.FEE_RECIPIENT);
 
         unitOfAccount = new UnitOfAccount("Liquidity", "UNIT", _decimals);
         vault = new FundShareVault(address(unitOfAccount), _vaultName, _vaultSymbol);
@@ -126,22 +129,25 @@ contract Periphery is IPeriphery {
             // we mint the profit to the periphery
             unitOfAccount.mint(address(this), profit);
 
+            // we transfer the profit (deducting the fee) into the vault
+            // this will distribute the profit to the vault's shareholders
+            unitOfAccount.transfer(address(vault), profit - fee);
+
+            // if a fee has been accrued
             if (fee > 0) {
                 // we deposit the fee into the vault on behalf of the fee recipient
                 vault.deposit(fee, feeRecipient);
             }
-
-            // we transfer the remaining profit to the vault to match the fund's valuation
-            unitOfAccount.transfer(address(vault), profit - fee);
-        } else {
+        } else if (assetsInFund < assetsInVault) {
             // if the fund has lost money, we need to account for it
             unitOfAccount.burn(address(vault), assetsInVault - assetsInFund);
         }
 
         _;
 
-        /// invariant
+        /// invariants
         require(this.totalAssets() == vault.totalAssets(), AssetInvariant_Error);
+        require(unitOfAccount.totalSupply() == vault.totalAssets(), UnExpectedSupplyIncrease_Error);
     }
 
     function deposit(DepositOrder calldata order)
@@ -158,6 +164,7 @@ contract Periphery is IPeriphery {
             ),
             InvalidSignature_Error
         );
+        require(order.intent.user != feeRecipient, OnlyNotFeeRecipient_Error);
         require(
             order.intent.nonce == userAccountInfo[order.intent.user].nonce++, InvalidNonce_Error
         );
@@ -211,9 +218,6 @@ contract Periphery is IPeriphery {
 
         /// transfer asset from user to fund
         assetToken.safeTransferFrom(order.intent.user, address(fund), assetAmountIn);
-
-        // update user liquidity balance
-        userAccountInfo[order.intent.user].despositedLiquidity += liquidity;
 
         /// TODO: emit event
     }
@@ -304,10 +308,21 @@ contract Periphery is IPeriphery {
         /// TODO: emit event
     }
 
-    function setFeeRecipient(address recipient) external onlyFund {
+    function _setFeeRecipient(address recipient) private {
+        // pause the old fee recipient's account
+        _pauseAccount(feeRecipient);
+
+        // update the fee recipient
         feeRecipient = recipient;
 
+        // make sure the fee recipient has an account
+        _openAccount(recipient, Role.USER);
+
         emit FeeRecipientUpdated(recipient);
+    }
+
+    function setFeeRecipient(address recipient) external onlyFund {
+        _setFeeRecipient(recipient);
     }
 
     function setFeeBps(uint256 bps) external onlyFund {
@@ -345,12 +360,16 @@ contract Periphery is IPeriphery {
         return userAccountInfo[user];
     }
 
-    function pauseAccount(address user) public onlyFund {
+    function _pauseAccount(address user) private {
         require(userAccountInfo[user].status == AccountStatus.ACTIVE, AccountNotActive_Error);
 
         userAccountInfo[user].status = AccountStatus.PAUSED;
 
         emit AccountPaused(user);
+    }
+
+    function pauseAccount(address user) public onlyFund {
+        _pauseAccount(user);
     }
 
     function unpauseAccount(address user) public onlyFund {
@@ -369,16 +388,16 @@ contract Periphery is IPeriphery {
         emit AccountRoleChanged(user, role);
     }
 
-    function openAccount(address user, Role role) public onlyFund {
+    function _openAccount(address user, Role role) private {
         require(userAccountInfo[user].status == AccountStatus.NULL, AccountExists_Error);
 
-        userAccountInfo[user] = UserAccountInfo({
-            nonce: 0,
-            despositedLiquidity: 0,
-            role: role,
-            status: AccountStatus.ACTIVE
-        });
+        userAccountInfo[user] =
+            UserAccountInfo({nonce: 0, role: role, status: AccountStatus.ACTIVE});
 
         emit AccountOpened(user, role);
+    }
+
+    function openAccount(address user, Role role) public onlyFund {
+        _openAccount(user, role);
     }
 }

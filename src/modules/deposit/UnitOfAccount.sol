@@ -19,13 +19,11 @@ contract UnitOfAccount is ERC20 {
         _;
     }
 
-    function mint(address receiver, uint256 amount) public onlyPeriphery returns (bool) {
+    function mint(address receiver, uint256 amount) public onlyPeriphery {
         _mint(receiver, amount);
-        return true;
     }
 
-    function burn(address owner, uint256 amount) public onlyPeriphery returns (bool) {
+    function burn(address owner, uint256 amount) public onlyPeriphery {
         _burn(owner, amount);
-        return true;
     }
 }
