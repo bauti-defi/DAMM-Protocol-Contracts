@@ -35,21 +35,16 @@ struct WithdrawOrder {
 }
 
 enum Role {
-    NONE, // default
+    NONE,
+    /// default
     USER,
-    SUPER_USER,
-    FEE_RECIPIENT
+    SUPER_USER
 }
 
 enum AccountStatus {
     NULL,
     ACTIVE,
     PAUSED
-}
-
-struct Epoch {
-    uint256 id;
-    uint256 endTimestamp;
 }
 
 struct AssetPolicy {
@@ -65,13 +60,4 @@ struct UserAccountInfo {
     uint256 nonce;
     Role role;
     AccountStatus status;
-}
-
-/// @dev to avoid stack too deep
-struct InternalWithdraw {
-    address user;
-    address to;
-    address asset;
-    uint256 amount;
-    uint256 maxSharesIn;
 }

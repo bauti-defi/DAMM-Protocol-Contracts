@@ -177,6 +177,15 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
         oracleRouter.govSetConfig(address(mockToken2), unitOfAccount, address(mockPriceOracle));
     }
 
+    modifier approveAll(address user) {
+        vm.startPrank(user);
+        mockToken1.approve(address(periphery), type(uint256).max);
+        periphery.vault().approve(address(periphery), type(uint256).max);
+        vm.stopPrank();
+
+        _;
+    }
+
     function _depositOrder(address user, uint256 userPK, address token, uint256 amount)
         internal
         returns (DepositOrder memory)
@@ -198,7 +207,7 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
         return DepositOrder({intent: intent, signature: abi.encodePacked(r, s, v)});
     }
 
-    function _withdrawOrder(address user, uint256 userPK, address to, address asset, uint256 amount)
+    function _withdrawOrder(address user, uint256 userPK, address to, address asset, uint256 shares)
         internal
         returns (WithdrawOrder memory)
     {
@@ -207,7 +216,7 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
             to: to,
             asset: asset,
             chaindId: block.chainid,
-            shares: amount,
+            shares: shares,
             minAmountOut: 0,
             deadline: block.timestamp + 1000,
             relayerTip: 0,
@@ -220,23 +229,17 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
         return WithdrawOrder({intent: intent, signature: abi.encodePacked(r, s, v)});
     }
 
-    function test_deposit_withdraw() public {
+    function test_deposit_withdraw_all_WITH_FEE()
+        public
+        approveAll(alice)
+        approveAll(feeRecipient)
+    {
         uint256 feeBps = 1000;
 
         vm.prank(address(fund));
         periphery.setFeeBps(feeBps);
 
         mockToken1.mint(alice, 100_000_000 * mock1Unit);
-
-        vm.startPrank(alice);
-        mockToken1.approve(address(periphery), type(uint256).max);
-        periphery.vault().approve(address(periphery), type(uint256).max);
-        vm.stopPrank();
-
-        vm.startPrank(feeRecipient);
-        mockToken1.approve(address(periphery), type(uint256).max);
-        periphery.vault().approve(address(periphery), type(uint256).max);
-        vm.stopPrank();
 
         vm.prank(relayer);
         periphery.deposit(_depositOrder(alice, alicePK, address(mockToken1), mock1Unit));
@@ -254,10 +257,8 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
         vm.prank(relayer);
         periphery.withdraw(_withdrawOrder(alice, alicePK, claimer, address(mockToken1), 0));
 
-        vm.prank(relayer);
-        periphery.withdraw(
-            _withdrawOrder(feeRecipient, feeRecipientPK, feeRecipient, address(mockToken1), 0)
-        );
+        vm.prank(feeRecipient);
+        periphery.withdrawFees(address(mockToken1), 0, 0);
 
         /// @notice you wont get exact amount out because of vault inflation attack protection
         assertApproxEqRel(mockToken1.balanceOf(claimer), 11 * mock1Unit, 0.1e18);
@@ -269,19 +270,13 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
         assertEq(mockToken1.balanceOf(address(fund)), periphery.vault().totalAssets());
     }
 
-    function test_multi_user_profit() public {
+    function test_multi_user_withdraw_all_with_profit_NO_FEE()
+        public
+        approveAll(alice)
+        approveAll(bob)
+    {
         mockToken1.mint(alice, 10 * mock1Unit);
         mockToken1.mint(bob, 10 * mock1Unit);
-
-        vm.startPrank(alice);
-        mockToken1.approve(address(periphery), type(uint256).max);
-        periphery.vault().approve(address(periphery), type(uint256).max);
-        vm.stopPrank();
-
-        vm.startPrank(bob);
-        mockToken1.approve(address(periphery), type(uint256).max);
-        periphery.vault().approve(address(periphery), type(uint256).max);
-        vm.stopPrank();
 
         vm.startPrank(relayer);
         periphery.deposit(_depositOrder(alice, alicePK, address(mockToken1), 10 * mock1Unit));
@@ -303,19 +298,57 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
         assertEq(mockToken1.balanceOf(address(fund)), periphery.vault().totalAssets());
     }
 
-    function test_multi_user_loss() public {
+    function test_multi_user_withdraw_all_with_profit_WITH_FEE()
+        public
+        approveAll(alice)
+        approveAll(bob)
+        approveAll(feeRecipient)
+    {
+        uint256 feeBps = 1000;
+
+        vm.prank(address(fund));
+        periphery.setFeeBps(feeBps);
+
         mockToken1.mint(alice, 10 * mock1Unit);
         mockToken1.mint(bob, 10 * mock1Unit);
 
-        vm.startPrank(alice);
-        mockToken1.approve(address(periphery), type(uint256).max);
-        periphery.vault().approve(address(periphery), type(uint256).max);
+        vm.startPrank(relayer);
+        periphery.deposit(_depositOrder(alice, alicePK, address(mockToken1), 10 * mock1Unit));
+        periphery.deposit(_depositOrder(bob, bobPK, address(mockToken1), 0));
         vm.stopPrank();
 
-        vm.startPrank(bob);
-        mockToken1.approve(address(periphery), type(uint256).max);
-        periphery.vault().approve(address(periphery), type(uint256).max);
+        assertEq(mockToken1.balanceOf(address(fund)), 20 * mock1Unit);
+
+        /// simulate that the fund gains 100 units of mockToken1
+        mockToken1.mint(address(fund), 100 * mock1Unit);
+
+        assertEq(mockToken1.balanceOf(address(fund)), 120 * mock1Unit);
+
+        address claimer = makeAddr("Claimer");
+
+        vm.startPrank(relayer);
+        periphery.withdraw(_withdrawOrder(alice, alicePK, claimer, address(mockToken1), 0));
+        periphery.withdraw(_withdrawOrder(bob, bobPK, bob, address(mockToken1), 0));
         vm.stopPrank();
+
+        vm.prank(feeRecipient);
+        periphery.withdrawFees(address(mockToken1), 0, 0);
+
+        /// @notice you wont get exact amount out because of vault inflation attack protection
+        assertApproxEqRel(mockToken1.balanceOf(alice), 0, 0.1e18);
+        assertApproxEqRel(mockToken1.balanceOf(bob), 55 * mock1Unit, 0.1e18);
+        assertApproxEqRel(mockToken1.balanceOf(claimer), 55 * mock1Unit, 0.1e18);
+        assertApproxEqRel(mockToken1.balanceOf(feeRecipient), 10 * mock1Unit, 0.1e18);
+        assertEq(mockToken1.balanceOf(address(fund)), periphery.vault().totalAssets());
+    }
+
+    function test_multi_user_withdraw_all_with_loss_NO_FEE()
+        public
+        approveAll(alice)
+        approveAll(bob)
+    {
+        mockToken1.mint(alice, 10 * mock1Unit);
+        mockToken1.mint(bob, 10 * mock1Unit);
 
         vm.startPrank(relayer);
         periphery.deposit(_depositOrder(alice, alicePK, address(mockToken1), 10 * mock1Unit));
@@ -334,6 +367,48 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
         /// @notice you wont get exact amount out because of vault inflation attack protection
         assertApproxEqRel(mockToken1.balanceOf(alice), 5 * mock1Unit, 0.1e18);
         assertApproxEqRel(mockToken1.balanceOf(bob), 5 * mock1Unit, 0.1e18);
+        assertEq(mockToken1.balanceOf(address(fund)), periphery.vault().totalAssets());
+    }
+
+    function test_deposit_and_partial_withdraw_WITH_FEE()
+        public
+        approveAll(alice)
+        approveAll(feeRecipient)
+    {
+        uint256 feeBps = 1000;
+
+        vm.prank(address(fund));
+        periphery.setFeeBps(feeBps);
+
+        mockToken1.mint(alice, 20 * mock1Unit);
+
+        vm.prank(relayer);
+        periphery.deposit(_depositOrder(alice, alicePK, address(mockToken1), 10 * mock1Unit));
+
+        /// simulate that the fund gains 10 units of mockToken1
+        mockToken1.mint(address(fund), 10 * mock1Unit);
+
+        vm.prank(relayer);
+        periphery.deposit(_depositOrder(alice, alicePK, address(mockToken1), 10 * mock1Unit));
+
+        address claimer = makeAddr("Claimer");
+
+        assertEq(mockToken1.balanceOf(address(fund)), 30 * mock1Unit);
+
+        uint256 aliceBalance = periphery.vault().balanceOf(alice);
+
+        vm.prank(relayer);
+        periphery.withdraw(
+            _withdrawOrder(alice, alicePK, claimer, address(mockToken1), aliceBalance / 2)
+        );
+
+        vm.prank(feeRecipient);
+        periphery.withdrawFees(address(mockToken1), 0, 0);
+
+        /// @notice you wont get exact amount out because of vault inflation attack protection
+        assertApproxEqRel(mockToken1.balanceOf(claimer), 15 * mock1Unit, 0.1e18);
+        assertApproxEqRel(mockToken1.balanceOf(feeRecipient), 1 * mock1Unit, 0.1e18);
+        assertApproxEqRel(mockToken1.balanceOf(address(fund)), ((30 / 2) - 1) * mock1Unit, 0.1e18);
         assertEq(mockToken1.balanceOf(address(fund)), periphery.vault().totalAssets());
     }
 }

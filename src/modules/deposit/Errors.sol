@@ -27,7 +27,7 @@ string constant AccountEpochUpToDate_Error = "Account epoch is up to date";
 
 string constant OnlyFeeRecipient_Error = "Caller is not fee recipient";
 string constant OnlyFund_Error = "Caller is not fund";
-string constant OnlyUser_Error = "Caller is not registered user";
+string constant OnlyUser_Error = "User is not whitelisted";
 string constant OnlySuperUser_Error = "Caller is not super user";
 string constant OnlyPeriphery_Error = "Caller is not periphery";
 string constant OnlyNotFeeRecipient_Error = "Must not be fee recipient";

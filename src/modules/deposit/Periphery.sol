@@ -32,13 +32,13 @@ contract Periphery is IPeriphery {
     using MessageHashUtils for bytes;
     using Math for uint256;
 
+    /// @dev the DAMM fund the periphery is associated with
     IFund public immutable fund;
-
     /// @dev should be a Euler Oracle Router
     IPriceOracle public immutable oracleRouter;
     /// @dev common unit of account for assets and vault
     UnitOfAccount public immutable unitOfAccount;
-    /// @dev used for yield accounting
+    /// @dev used internally for yield accounting
     FundShareVault public immutable vault;
 
     mapping(address asset => AssetPolicy policy) private assetPolicy;
@@ -57,10 +57,7 @@ contract Periphery is IPeriphery {
     ) {
         fund = IFund(fund_);
         oracleRouter = IPriceOracle(oracleRouter_);
-
-        require(feeRecipient_ != address(0), InvalidFeeRecipient_Error);
-        feeRecipient = feeRecipient_;
-        _openAccount(feeRecipient, Role.FEE_RECIPIENT);
+        _setFeeRecipient(feeRecipient_);
 
         unitOfAccount = new UnitOfAccount("Liquidity", "UNIT", _decimals);
         vault = new FundShareVault(address(unitOfAccount), _vaultName, _vaultSymbol);
@@ -96,14 +93,14 @@ contract Periphery is IPeriphery {
         for (uint256 i = 0; i < assetLength;) {
             uint256 balance;
 
-            // native asset
+            /// native asset
             if (assets[i] == NATIVE_ASSET) {
                 balance = address(fund).balance;
             } else {
                 balance = ERC20(assets[i]).balanceOf(address(fund));
             }
 
-            // calculate how much liquidity for this amount of asset
+            /// calculate how much liquidity for this amount of asset
             total +=
                 balance > 0 ? oracleRouter.getQuote(balance, assets[i], address(unitOfAccount)) : 0;
 
@@ -120,26 +117,27 @@ contract Periphery is IPeriphery {
         uint256 assetsInFund = this.totalAssets();
         uint256 assetsInVault = vault.totalAssets();
 
-        // we know that the difference between the assets in the fund and the vault is the profit/loss since last update
-        // we can calculate the performance fee from this
+        /// we know that the difference between the assets in the fund and the vault is the profit/loss since last update
+        /// we can calculate the performance fee based on this difference
         if (assetsInFund > assetsInVault) {
             uint256 profit = assetsInFund - assetsInVault;
-            uint256 fee = profit.mulDiv(feeBps, BP_DIVISOR);
+            uint256 fee = feeBps > 0 ? profit.mulDiv(feeBps, BP_DIVISOR) : 0;
 
-            // we mint the profit to the periphery
+            /// we mint the profit to the periphery
             unitOfAccount.mint(address(this), profit);
 
-            // we transfer the profit (deducting the fee) into the vault
-            // this will distribute the profit to the vault's shareholders
+            /// we transfer the profit (deducting the fee) into the vault
+            /// this will distribute the profit to the vault's shareholders
             unitOfAccount.transfer(address(vault), profit - fee);
 
-            // if a fee has been accrued
+            /// if a positive fee has been accrued
             if (fee > 0) {
-                // we deposit the fee into the vault on behalf of the fee recipient
+                /// we deposit the fee into the vault on behalf of the fee recipient
                 vault.deposit(fee, feeRecipient);
             }
         } else if (assetsInFund < assetsInVault) {
-            // if the fund has lost money, we need to account for it
+            /// if the fund has lost value, we need to account for it
+            /// by burning the difference in the vault
             unitOfAccount.burn(address(vault), assetsInVault - assetsInFund);
         }
 
@@ -154,7 +152,7 @@ contract Periphery is IPeriphery {
         public
         onlyActiveUser(order.intent.user)
         update
-        returns (uint256 shares)
+        returns (uint256 sharesOut)
     {
         require(
             SignatureChecker.isValidSignatureNow(
@@ -182,36 +180,27 @@ contract Periphery is IPeriphery {
         uint256 assetAmountIn = order.intent.amount;
         ERC20 assetToken = ERC20(order.intent.asset);
 
-        // if amount is 0, then deposit the user's entire balance
+        /// if amount is 0, then deposit the user's entire balance
         if (assetAmountIn == 0) {
             assetAmountIn = assetToken.balanceOf(order.intent.user);
 
-            // make sure there is enough asset to cover the relayer tip
+            /// make sure there is enough asset to cover the relayer tip
             if (order.intent.relayerTip > 0) {
                 require(assetAmountIn > order.intent.relayerTip, InsufficientAmount_Error);
 
-                // deduct it from the amount to deposit
+                /// deduct it from the amount to deposit
                 assetAmountIn -= order.intent.relayerTip;
             }
         }
 
-        // calculate how much liquidity for this amount of deposited asset
+        /// calculate how much liquidity for this amount of deposited asset
         uint256 liquidity =
             oracleRouter.getQuote(assetAmountIn, order.intent.asset, address(unitOfAccount));
 
-        // make sure the deposit is above the minimum
+        /// make sure the deposit is above the minimum
         require(liquidity > policy.minimumDeposit, InsufficientDeposit_Error);
 
-        /// mint liquidity to periphery
-        unitOfAccount.mint(address(this), liquidity);
-
-        /// mint shares to user using the liquidity that was just minted to periphery
-        shares = vault.deposit(liquidity, order.intent.user);
-
-        // lets make sure slippage is acceptable
-        require(shares >= order.intent.minSharesOut, SlippageLimit_Error);
-
-        // pay the relayer if required
+        /// pay the relayer if required
         if (order.intent.relayerTip > 0) {
             assetToken.safeTransferFrom(order.intent.user, msg.sender, order.intent.relayerTip);
         }
@@ -219,26 +208,25 @@ contract Periphery is IPeriphery {
         /// transfer asset from user to fund
         assetToken.safeTransferFrom(order.intent.user, address(fund), assetAmountIn);
 
-        /// TODO: emit event
+        /// mint liquidity to periphery
+        unitOfAccount.mint(address(this), liquidity);
+
+        /// mint shares to user using the liquidity that was just minted to periphery
+        sharesOut = vault.deposit(liquidity, order.intent.user);
+
+        /// lets make sure slippage is acceptable
+        require(sharesOut >= order.intent.minSharesOut, SlippageLimit_Error);
+
+        emit Deposit(
+            order.intent.user,
+            order.intent.asset,
+            assetAmountIn,
+            sharesOut,
+            msg.sender,
+            order.intent.relayerTip
+        );
     }
 
-    function _transferAsset(address asset, address to, uint256 amount) private {
-        /// call fund to transfer asset out
-        (bool success, bytes memory returnData) = fund.execTransactionFromModuleReturnData(
-            asset,
-            0,
-            abi.encodeWithSignature("transfer(address,uint256)", to, amount),
-            Enum.Operation.Call
-        );
-
-        /// check transfer was successful
-        require(
-            success && (returnData.length == 0 || abi.decode(returnData, (bool))),
-            AssetTransfer_Error
-        );
-    }
-
-    // TODO: permit2 ?
     function withdraw(WithdrawOrder calldata order)
         public
         onlyActiveUser(order.intent.user)
@@ -259,66 +247,108 @@ contract Periphery is IPeriphery {
         require(order.intent.deadline >= block.timestamp, IntentExpired_Error);
         require(order.intent.chaindId == block.chainid, InvalidChain_Error);
 
-        AssetPolicy memory policy = assetPolicy[order.intent.asset];
-
-        require(policy.canWithdraw && policy.enabled, AssetUnavailable_Error);
-
-        if (policy.permissioned) {
-            require(userAccountInfo[order.intent.user].role == Role.SUPER_USER, OnlySuperUser_Error);
-        }
-
-        uint256 sharesToBurn = order.intent.shares;
-
-        // if shares to burn is 0, then burn all shares owned by user
-        if (sharesToBurn == 0) {
-            sharesToBurn = vault.balanceOf(order.intent.user);
-        }
-
-        // burn shares from vault in exchange for liquidity tokens
-        uint256 liquidity = vault.redeem(sharesToBurn, address(this), order.intent.user);
-
-        // make sure the withdrawal is above the minimum
-        require(liquidity > policy.minimumWithdrawal, InsufficientWithdraw_Error);
-
-        /// burn liquidity from periphery
-        unitOfAccount.burn(address(this), liquidity);
-
-        // calculate how much asset for this amount of liquidity
-        assetAmountOut =
-            oracleRouter.getQuote(liquidity, address(unitOfAccount), order.intent.asset);
-
-        /// make sure slippage is acceptable
-        require(
-            order.intent.minAmountOut == 0 || assetAmountOut >= order.intent.minAmountOut,
-            SlippageLimit_Error
+        /// withdraw liquidity from vault
+        assetAmountOut = _withdraw(
+            order.intent.asset, order.intent.shares, order.intent.user, order.intent.minAmountOut
         );
 
         /// pay the relayer if required
         if (order.intent.relayerTip > 0) {
             require(order.intent.relayerTip < assetAmountOut, InsufficientAmount_Error);
 
-            _transferAsset(order.intent.asset, msg.sender, order.intent.relayerTip);
+            _transferAssetFromFund(order.intent.asset, msg.sender, order.intent.relayerTip);
         }
 
         /// transfer asset from fund to receiver
-        _transferAsset(
+        _transferAssetFromFund(
             order.intent.asset, order.intent.to, assetAmountOut - order.intent.relayerTip
         );
 
-        /// TODO: emit event
+        emit Withdraw(
+            order.intent.user,
+            order.intent.to,
+            order.intent.asset,
+            order.intent.shares,
+            assetAmountOut,
+            msg.sender,
+            order.intent.relayerTip
+        );
+    }
+
+    function withdrawFees(address asset, uint256 shares, uint256 minAmountOut)
+        public
+        update
+        returns (uint256 assetAmountOut)
+    {
+        require(msg.sender == feeRecipient, OnlyFeeRecipient_Error);
+
+        /// withdraw liquidity from vault
+        assetAmountOut = _withdraw(asset, shares, feeRecipient, minAmountOut);
+
+        /// transfer asset from fund to feeRecipient
+        _transferAssetFromFund(asset, feeRecipient, assetAmountOut);
+
+        emit WithdrawFees(feeRecipient, asset, shares, assetAmountOut);
+    }
+
+    function _transferAssetFromFund(address asset, address to, uint256 amount) private {
+        /// call fund to transfer asset out
+        (bool success, bytes memory returnData) = fund.execTransactionFromModuleReturnData(
+            asset,
+            0,
+            abi.encodeWithSignature("transfer(address,uint256)", to, amount),
+            Enum.Operation.Call
+        );
+
+        /// check transfer was successful
+        require(
+            success && (returnData.length == 0 || abi.decode(returnData, (bool))),
+            AssetTransfer_Error
+        );
+    }
+
+    function _withdraw(address assetOut, uint256 sharesToBurn, address user, uint256 minAmountOut)
+        private
+        returns (uint256 assetAmountOut)
+    {
+        AssetPolicy memory policy = assetPolicy[assetOut];
+
+        require(policy.canWithdraw && policy.enabled, AssetUnavailable_Error);
+
+        if (policy.permissioned) {
+            require(userAccountInfo[user].role == Role.SUPER_USER, OnlySuperUser_Error);
+        }
+
+        /// if shares to burn is 0, then burn all shares owned by user
+        if (sharesToBurn == 0) {
+            sharesToBurn = vault.balanceOf(user);
+        }
+
+        /// burn vault shares in exchange for liquidity (unit of account) tokens
+        uint256 liquidity = vault.redeem(sharesToBurn, address(this), user);
+
+        /// make sure the withdrawal is above the minimum
+        require(liquidity > policy.minimumWithdrawal, InsufficientWithdraw_Error);
+
+        /// burn liquidity from periphery
+        unitOfAccount.burn(address(this), liquidity);
+
+        /// calculate how much asset for this amount of liquidity
+        assetAmountOut = oracleRouter.getQuote(liquidity, address(unitOfAccount), assetOut);
+
+        /// make sure slippage is acceptable
+        require(minAmountOut == 0 || assetAmountOut >= minAmountOut, SlippageLimit_Error);
     }
 
     function _setFeeRecipient(address recipient) private {
-        // pause the old fee recipient's account
-        _pauseAccount(feeRecipient);
+        require(recipient != address(0), InvalidFeeRecipient_Error);
 
-        // update the fee recipient
+        address previous = feeRecipient;
+
+        /// update the fee recipient
         feeRecipient = recipient;
 
-        // make sure the fee recipient has an account
-        _openAccount(recipient, Role.USER);
-
-        emit FeeRecipientUpdated(recipient);
+        emit FeeRecipientUpdated(recipient, previous);
     }
 
     function setFeeRecipient(address recipient) external onlyFund {

@@ -97,7 +97,7 @@ contract TestFundValuation is TestBaseProtocol, TestBaseGnosis, TokenMinter {
                         USD_DECIMALS, // must be same as underlying chainlink oracles. USD = 8
                         payable(address(fund)),
                         address(oracleRouter),
-                        address(0)
+                        makeAddr("FeeRecipient")
                     )
                 )
             )
@@ -131,40 +131,39 @@ contract TestFundValuation is TestBaseProtocol, TestBaseGnosis, TokenMinter {
         IFund(address(fund)).setAssetOfInterest(NATIVE_ASSET);
         vm.stopPrank();
 
+        address unitOfAccount = address(periphery.unitOfAccount());
+
         // setup USDC/USD oracle
         ChainlinkOracle chainlinkOracle =
-            new ChainlinkOracle(ARB_USDC, address(periphery), ARB_USDC_USD_FEED, 24 hours);
+            new ChainlinkOracle(ARB_USDC, unitOfAccount, ARB_USDC_USD_FEED, 24 hours);
         vm.label(address(chainlinkOracle), "ChainlinkOracle-USDC");
         vm.prank(address(fund));
-        oracleRouter.govSetConfig(ARB_USDC, address(periphery), address(chainlinkOracle));
+        oracleRouter.govSetConfig(ARB_USDC, unitOfAccount, address(chainlinkOracle));
 
         // setup USDT/USD oracle
-        chainlinkOracle =
-            new ChainlinkOracle(ARB_USDT, address(periphery), ARB_USDT_USD_FEED, 24 hours);
+        chainlinkOracle = new ChainlinkOracle(ARB_USDT, unitOfAccount, ARB_USDT_USD_FEED, 24 hours);
         vm.label(address(chainlinkOracle), "ChainlinkOracle-USDT");
         vm.prank(address(fund));
-        oracleRouter.govSetConfig(ARB_USDT, address(periphery), address(chainlinkOracle));
+        oracleRouter.govSetConfig(ARB_USDT, unitOfAccount, address(chainlinkOracle));
 
         // setup DAI/USD oracle
-        chainlinkOracle =
-            new ChainlinkOracle(ARB_DAI, address(periphery), ARB_DAI_USD_FEED, 24 hours);
+        chainlinkOracle = new ChainlinkOracle(ARB_DAI, unitOfAccount, ARB_DAI_USD_FEED, 24 hours);
         vm.label(address(chainlinkOracle), "ChainlinkOracle-DAI");
         vm.prank(address(fund));
-        oracleRouter.govSetConfig(ARB_DAI, address(periphery), address(chainlinkOracle));
+        oracleRouter.govSetConfig(ARB_DAI, unitOfAccount, address(chainlinkOracle));
 
         // setup USDCe/USD oracle
-        chainlinkOracle =
-            new ChainlinkOracle(ARB_USDCe, address(periphery), ARB_USDC_USD_FEED, 24 hours);
+        chainlinkOracle = new ChainlinkOracle(ARB_USDCe, unitOfAccount, ARB_USDC_USD_FEED, 24 hours);
         vm.label(address(chainlinkOracle), "ChainlinkOracle-USDCe");
         vm.prank(address(fund));
-        oracleRouter.govSetConfig(ARB_USDCe, address(periphery), address(chainlinkOracle));
+        oracleRouter.govSetConfig(ARB_USDCe, unitOfAccount, address(chainlinkOracle));
 
         // setup ETH/USD oracle
         chainlinkOracle =
-            new ChainlinkOracle(NATIVE_ASSET, address(periphery), ARB_ETH_USD_FEED, 24 hours);
+            new ChainlinkOracle(NATIVE_ASSET, unitOfAccount, ARB_ETH_USD_FEED, 24 hours);
         vm.label(address(chainlinkOracle), "ChainlinkOracle-ETH");
         vm.prank(address(fund));
-        oracleRouter.govSetConfig(NATIVE_ASSET, address(periphery), address(chainlinkOracle));
+        oracleRouter.govSetConfig(NATIVE_ASSET, unitOfAccount, address(chainlinkOracle));
     }
 
     function test_cannot_valuate_fund_with_open_positions() public {
