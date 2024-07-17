@@ -4,9 +4,6 @@ pragma solidity ^0.8.0;
 import "@src/modules/trading/Structs.sol";
 
 interface ITradingModule {
-    event Paused();
-    event Unpaused();
-
     function paused() external returns (bool);
     function fund() external returns (address);
 

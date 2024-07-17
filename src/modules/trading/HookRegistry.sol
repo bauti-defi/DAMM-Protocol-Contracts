@@ -1,18 +1,19 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.0;
 
-import {IHookRegistry} from "@src/interfaces/IHookRegistry.sol";
+import "@src/interfaces/IHookRegistry.sol";
 import {HookLib} from "./Hooks.sol";
 import {HookConfig, Hooks} from "./Structs.sol";
 import "./Errors.sol";
+import "./Events.sol";
 
 contract HookRegistry is IHookRegistry {
     using HookLib for HookConfig;
 
     address public immutable override fund;
 
-    // keccak256(abi.encode(operator, target, operation, selector)) => hooks
-    // bytes20 + bytes20 + bytes8 + bytes4 = 52 bytes
+    /// keccak256(abi.encode(operator, target, operation, selector)) => hooks
+    /// bytes20 + bytes20 + bytes8 + bytes4 = 52 bytes
     mapping(bytes32 hookPointer => Hooks) private hooks;
 
     modifier onlyFund() {

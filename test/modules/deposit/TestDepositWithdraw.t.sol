@@ -188,6 +188,7 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
 
     function _depositOrder(address user, uint256 userPK, address token, uint256 amount)
         internal
+        view
         returns (DepositOrder memory)
     {
         DepositIntent memory intent = DepositIntent({
@@ -209,6 +210,7 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
 
     function _withdrawOrder(address user, uint256 userPK, address to, address asset, uint256 shares)
         internal
+        view
         returns (WithdrawOrder memory)
     {
         WithdrawIntent memory intent = WithdrawIntent({

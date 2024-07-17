@@ -170,6 +170,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
 
     function _depositIntent(address user, address token, uint256 amount, uint256 nonce)
         internal
+        view
         returns (DepositIntent memory)
     {
         return DepositIntent({
@@ -186,6 +187,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
 
     function _signDepositIntent(DepositIntent memory intent, uint256 userPK)
         internal
+        pure
         returns (DepositOrder memory)
     {
         (uint8 v, bytes32 r, bytes32 s) =
@@ -196,6 +198,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
 
     function _withdrawIntent(address user, address to, address asset, uint256 shares, uint256 nonce)
         internal
+        view
         returns (WithdrawIntent memory)
     {
         return WithdrawIntent({
@@ -213,6 +216,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
 
     function _signWithdrawIntent(WithdrawIntent memory intent, uint256 userPK)
         internal
+        pure
         returns (WithdrawOrder memory)
     {
         (uint8 v, bytes32 r, bytes32 s) =

@@ -5,25 +5,17 @@ import "@solmate/tokens/ERC20.sol";
 import "@openzeppelin-contracts/utils/math/Math.sol";
 import "@openzeppelin-contracts/utils/cryptography/MessageHashUtils.sol";
 import "@openzeppelin-contracts/utils/cryptography/SignatureChecker.sol";
-import "./Errors.sol";
 import "@src/interfaces/IFund.sol";
 import "@solmate/utils/SafeTransferLib.sol";
-import {
-    DepositIntent,
-    WithdrawIntent,
-    WithdrawOrder,
-    DepositOrder,
-    Role,
-    AccountStatus,
-    AssetPolicy,
-    UserAccountInfo
-} from "./Structs.sol";
-import {FundShareVault} from "./FundShareVault.sol";
 import "@euler-price-oracle/interfaces/IPriceOracle.sol";
-import {IPeriphery} from "@src/interfaces/IPeriphery.sol";
-import "./Events.sol";
 import "@src/libs/Constants.sol";
+
+import "@src/interfaces/IPeriphery.sol";
 import "./UnitOfAccount.sol";
+import "./Structs.sol";
+import "./Errors.sol";
+import "./Events.sol";
+import {FundShareVault} from "./FundShareVault.sol";
 
 uint256 constant BP_DIVISOR = 10_000;
 

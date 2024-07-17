@@ -3,12 +3,14 @@ pragma solidity ^0.8.0;
 
 import {ISafe} from "@src/interfaces/ISafe.sol";
 import {Enum} from "@safe-contracts/common/Enum.sol";
-import {ITradingModule} from "@src/interfaces/ITradingModule.sol";
-import {IBeforeTransaction, IAfterTransaction} from "@src/interfaces/ITransactionHooks.sol";
 import {ReentrancyGuard} from "@openzeppelin-contracts/utils/ReentrancyGuard.sol";
+
+import "@src/interfaces/ITransactionHooks.sol";
+import "@src/interfaces/ITradingModule.sol";
 import "@src/interfaces/IHookRegistry.sol";
 import "./Structs.sol";
 import "./Errors.sol";
+import "./Events.sol";
 
 contract TradingModule is ITradingModule, ReentrancyGuard {
     address public immutable fund;
