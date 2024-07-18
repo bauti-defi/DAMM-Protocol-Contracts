@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.0;
 
+import "@src/interfaces/IFund.sol";
+import "@euler-price-oracle/interfaces/IPriceOracle.sol";
 import "@src/modules/deposit/Structs.sol";
 
 interface IPeriphery {
@@ -45,6 +47,8 @@ interface IPeriphery {
 
     event WithdrawFees(address indexed to, address asset, uint256 sharesIn, uint256 assetAmountOut);
 
+    function fund() external returns (IFund);
+    function oracleRouter() external returns (IPriceOracle);
     function paused() external returns (bool);
     function totalAssets() external view returns (uint256);
     function deposit(DepositOrder calldata order) external returns (uint256 sharesOut);

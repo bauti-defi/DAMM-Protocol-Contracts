@@ -5,9 +5,7 @@ import "@solmate/tokens/ERC20.sol";
 import "@openzeppelin-contracts/utils/math/Math.sol";
 import "@openzeppelin-contracts/utils/cryptography/MessageHashUtils.sol";
 import "@openzeppelin-contracts/utils/cryptography/SignatureChecker.sol";
-import "@src/interfaces/IFund.sol";
 import "@solmate/utils/SafeTransferLib.sol";
-import "@euler-price-oracle/interfaces/IPriceOracle.sol";
 import "@src/libs/Constants.sol";
 
 import "@src/libs/Errors.sol";

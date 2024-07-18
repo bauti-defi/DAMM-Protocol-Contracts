@@ -2,6 +2,7 @@
 pragma solidity ^0.8.0;
 
 import "@src/modules/transact/Structs.sol";
+import "@src/interfaces/IHookRegistry.sol";
 
 interface ITransactionModule {
     event Paused();
@@ -9,6 +10,7 @@ interface ITransactionModule {
 
     function paused() external returns (bool);
     function fund() external returns (address);
+    function hookRegistry() external returns (IHookRegistry);
 
     function execute(Transaction[] calldata transactions) external;
     function setMaxGasPriorityInBasisPoints(uint256 maxMinerTipInBasisPoints) external;

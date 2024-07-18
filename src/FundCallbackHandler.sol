@@ -7,27 +7,8 @@ import "@openzeppelin-contracts/utils/structs/EnumerableSet.sol";
 import {ISafe} from "@src/interfaces/ISafe.sol";
 import {IPortfolio} from "@src/interfaces/IPortfolio.sol";
 import {IOwnable} from "@src/interfaces/IOwnable.sol";
-
-event PositionOpened(address indexed by, bytes32 positionPointer);
-
-event PositionClosed(address indexed by, bytes32 positionPointer);
-
-event RolesGranted(address indexed module, uint256 roles);
-
-event AssetOfInterestSet(address indexed asset);
-
-event AssetOfInterestRemoved(address indexed asset);
-
-error NotModule();
-
-error NotAuthorized();
-
-error OnlyFund();
-
-uint256 constant NULL = 1 << 0;
-uint256 constant FUND = 1 << 1;
-uint256 constant POSITION_OPENER = 1 << 2;
-uint256 constant POSITION_CLOSER = 1 << 3;
+import "@src/libs/Errors.sol";
+import {POSITION_OPENER_ROLE, POSITION_CLOSER_ROLE} from "@src/libs/Constants.sol";
 
 /// @dev should only be truly global variables. nothing module specific.
 contract FundCallbackHandler is TokenCallbackHandler, HandlerContext, IPortfolio, IOwnable {
@@ -46,17 +27,17 @@ contract FundCallbackHandler is TokenCallbackHandler, HandlerContext, IPortfolio
     }
 
     modifier onlyModule() {
-        if (!ISafe(fund).isModuleEnabled(_msgSender())) revert NotModule();
+        if (!ISafe(fund).isModuleEnabled(_msgSender())) revert Errors.Fund_NotModule();
         _;
     }
 
     modifier withRole(uint256 roles) {
-        if (moduleRoles[_msgSender()] & roles != roles) revert NotAuthorized();
+        if (moduleRoles[_msgSender()] & roles != roles) revert Errors.Fund_NotAuthorized();
         _;
     }
 
     modifier onlyFund() {
-        if (_msgSender() != fund) revert OnlyFund();
+        if (_msgSender() != fund) revert Errors.OnlyFund();
         _;
     }
 
@@ -73,7 +54,7 @@ contract FundCallbackHandler is TokenCallbackHandler, HandlerContext, IPortfolio
     function onPositionOpened(bytes32 positionPointer)
         external
         onlyModule
-        withRole(POSITION_OPENER)
+        withRole(POSITION_OPENER_ROLE)
         returns (bool result)
     {
         result = openPositions.add(positionPointer);
@@ -84,7 +65,7 @@ contract FundCallbackHandler is TokenCallbackHandler, HandlerContext, IPortfolio
     function onPositionClosed(bytes32 positionPointer)
         external
         onlyModule
-        withRole(POSITION_CLOSER)
+        withRole(POSITION_CLOSER_ROLE)
         returns (bool result)
     {
         result = openPositions.remove(positionPointer);

@@ -69,4 +69,11 @@ library Errors {
     error ModuleLib_InsufficientBalance();
     error ModuleLib_EmptyBytecode();
     error ModuleLib_OnlyDelegateCall();
+
+    /// FundCallbackHandler errors
+    error Fund_NotModule();
+    error Fund_NotAuthorized();
+
+    /// FundFactory errors
+    error FundFactory_DeploymentLockViolation();
 }

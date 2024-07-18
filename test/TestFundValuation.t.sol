@@ -18,7 +18,6 @@ import {
 import {Periphery} from "@src/modules/deposit/Periphery.sol";
 import {AssetPolicy} from "@src/modules/deposit/Structs.sol";
 import {IFund} from "@src/interfaces/IFund.sol";
-import {POSITION_OPENER, POSITION_CLOSER, NULL} from "@src/FundCallbackHandler.sol";
 import "@src/interfaces/IOwnable.sol";
 import "@src/libs/Constants.sol";
 import "@src/libs/Errors.sol";
@@ -111,12 +110,12 @@ contract TestFundValuation is TestBaseProtocol, TestBaseGnosis, TokenMinter {
             fundAdmin,
             fundAdminPK,
             positionOpenerCloser,
-            POSITION_OPENER | POSITION_CLOSER
+            POSITION_OPENER_ROLE | POSITION_CLOSER_ROLE
         );
 
         assertTrue(fund.isModuleEnabled(positionOpenerCloser), "Position opener not module");
         assertTrue(
-            fund.hasAllRoles(positionOpenerCloser, POSITION_OPENER),
+            fund.hasAllRoles(positionOpenerCloser, POSITION_OPENER_ROLE),
             "Position opener not authorized"
         );
 

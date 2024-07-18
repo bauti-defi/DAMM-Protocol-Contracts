@@ -7,7 +7,6 @@ import {ReentrancyGuard} from "@openzeppelin-contracts/utils/ReentrancyGuard.sol
 import "@src/libs/Errors.sol";
 import "@src/interfaces/ITransactionHooks.sol";
 import "@src/interfaces/ITransactionModule.sol";
-import "@src/interfaces/IHookRegistry.sol";
 import "./Structs.sol";
 
 contract TransactionModule is ReentrancyGuard, ITransactionModule {

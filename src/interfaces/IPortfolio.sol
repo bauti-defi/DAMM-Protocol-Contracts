@@ -2,6 +2,14 @@
 pragma solidity ^0.8.0;
 
 interface IPortfolio {
+    event AssetOfInterestSet(address indexed asset);
+
+    event AssetOfInterestRemoved(address indexed asset);
+
+    event PositionOpened(address indexed by, bytes32 positionPointer);
+
+    event PositionClosed(address indexed by, bytes32 positionPointer);
+
     function onPositionOpened(bytes32 positionId) external returns (bool);
 
     function onPositionClosed(bytes32 positionId) external returns (bool);
