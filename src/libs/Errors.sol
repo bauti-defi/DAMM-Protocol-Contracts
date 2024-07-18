@@ -75,5 +75,5 @@ library Errors {
     error Fund_NotAuthorized();
 
     /// FundFactory errors
-    error FundFactory_DeploymentLockViolation();
+    error FundFactory_DeploymentLockViolated();
 }
