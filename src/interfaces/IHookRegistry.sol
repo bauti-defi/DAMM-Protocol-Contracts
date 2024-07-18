@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.0;
 
-import {Hooks, HookConfig} from "@src/modules/trading/Hooks.sol";
+import {Hooks, HookConfig} from "@src/modules/transact/Hooks.sol";
 
 interface IHookRegistry {
     error Hook_InvalidOperator();

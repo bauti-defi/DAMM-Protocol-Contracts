@@ -5,15 +5,15 @@ import {Test, console2} from "@forge-std/Test.sol";
 import {TestBaseProtocol} from "@test/base/TestBaseProtocol.sol";
 import {TestBaseGnosis} from "@test/base/TestBaseGnosis.sol";
 import {SafeL2} from "@safe-contracts/SafeL2.sol";
-import {TradingModule} from "@src/modules/trading/TradingModule.sol";
-import {ITradingModule} from "@src/interfaces/ITradingModule.sol";
+import {TransactionModule} from "@src/modules/transact/TransactionModule.sol";
+import {ITransactionModule} from "@src/interfaces/ITransactionModule.sol";
 import {Enum} from "@safe-contracts/common/Enum.sol";
 import {SafeUtils, SafeTransaction} from "@test/utils/SafeUtils.sol";
 import {IBeforeTransaction, IAfterTransaction} from "@src/interfaces/ITransactionHooks.sol";
 import "@src/libs/Errors.sol";
-import "@src/modules/trading/Hooks.sol";
-import "@src/modules/trading/HookRegistry.sol";
-import "@src/modules/trading/Structs.sol";
+import "@src/modules/transact/Hooks.sol";
+import "@src/modules/transact/HookRegistry.sol";
+import "@src/modules/transact/Structs.sol";
 
 contract MockTarget {
     uint256 public value;
@@ -88,14 +88,14 @@ contract RevertAfterHook is IAfterTransaction {
     }
 }
 
-contract TestTradingModule is Test, TestBaseGnosis, TestBaseProtocol {
+contract TestTransactionModule is Test, TestBaseGnosis, TestBaseProtocol {
     using SafeUtils for SafeL2;
 
     address internal fundAdmin;
     uint256 internal fundAdminPK;
     SafeL2 internal fund;
     HookRegistry internal hookRegistry;
-    TradingModule internal tradingModule;
+    TransactionModule internal transactionModule;
     MockTarget internal target;
     address internal revertBeforeHook;
     address internal revertAfterHook;
@@ -134,22 +134,22 @@ contract TestTradingModule is Test, TestBaseGnosis, TestBaseProtocol {
 
         vm.label(address(hookRegistry), "HookRegistry");
 
-        tradingModule = TradingModule(
+        transactionModule = TransactionModule(
             deployModule(
                 payable(address(fund)),
                 fundAdmin,
                 fundAdminPK,
-                bytes32("tradingModule"),
+                bytes32("transactionModule"),
                 0,
                 abi.encodePacked(
-                    type(TradingModule).creationCode,
+                    type(TransactionModule).creationCode,
                     abi.encode(address(fund), address(hookRegistry))
                 )
             )
         );
-        vm.label(address(tradingModule), "TradingModule");
+        vm.label(address(transactionModule), "TransactionModule");
 
-        assertEq(tradingModule.fund(), address(fund), "TradingModule fund not set");
+        assertEq(transactionModule.fund(), address(fund), "TransactionModule fund not set");
 
         target = new MockTarget();
         vm.label(address(target), "MockTarget");
@@ -253,10 +253,10 @@ contract TestTradingModule is Test, TestBaseGnosis, TestBaseProtocol {
     //     console2.logAddress(address(target));
     //     console2.logBytes4(calls[0].targetSelector);
     //     console2.logBytes(calls[0].data);
-    //     console2.logBytes4(TradingModule.execute.selector);
+    //     console2.logBytes4(TransactionModule.execute.selector);
     //     console2.log(makeAddr("testing"));
     //     console2.logBytes(abi.encode(calls));
-    //     console2.logBytes(abi.encodeWithSelector(TradingModule.execute.selector, calls));
+    //     console2.logBytes(abi.encodeWithSelector(TransactionModule.execute.selector, calls));
     // }
 
     function test_execute() public withHook(mock_hook()) {
@@ -269,7 +269,7 @@ contract TestTradingModule is Test, TestBaseGnosis, TestBaseProtocol {
         uint256 adjustedFundBalance = address(fund).balance - 530;
 
         vm.prank(operator);
-        tradingModule.execute(calls);
+        transactionModule.execute(calls);
 
         assertEq(target.value(), 530, "Target value not incremented");
         assertTrue(adjustedFundBalance > address(fund).balance, "gas was not refunded");
@@ -277,16 +277,16 @@ contract TestTradingModule is Test, TestBaseGnosis, TestBaseProtocol {
 
     function test_execute_reverts_if_gas_price_exceeds_limit() public withHook(mock_hook()) {
         vm.prank(address(fund));
-        tradingModule.setMaxGasPriorityInBasisPoints(500);
+        transactionModule.setMaxGasPriorityInBasisPoints(500);
 
         vm.txGasPrice(1000);
 
         Transaction[] memory calls = new Transaction[](1);
         calls[0] = incrementCall(10);
 
-        vm.expectRevert(Errors.TradingModule_GasLimitExceeded.selector);
+        vm.expectRevert(Errors.TransactionModule_GasLimitExceeded.selector);
         vm.prank(operator);
-        tradingModule.execute(calls);
+        transactionModule.execute(calls);
     }
 
     function test_execute_reverts() public withHook(mock_trigger_revert_hook()) {
@@ -296,7 +296,7 @@ contract TestTradingModule is Test, TestBaseGnosis, TestBaseProtocol {
         calls[0] = triggerRevertCall();
 
         vm.prank(operator);
-        tradingModule.execute(calls);
+        transactionModule.execute(calls);
     }
 
     function test_execute_with_full_hooks() public withHook(mock_custom_hook()) {
@@ -304,7 +304,7 @@ contract TestTradingModule is Test, TestBaseGnosis, TestBaseProtocol {
         calls[0] = emitMessageCall("hello world", 10);
 
         vm.prank(operator);
-        tradingModule.execute(calls);
+        transactionModule.execute(calls);
     }
 
     function test_only_operator_can_execute(address attacker) public withHook(mock_hook()) {
@@ -313,9 +313,9 @@ contract TestTradingModule is Test, TestBaseGnosis, TestBaseProtocol {
         Transaction[] memory calls = new Transaction[](1);
         calls[0] = incrementCall(10);
 
-        vm.expectRevert(Errors.TradingModule_HookNotDefined.selector);
+        vm.expectRevert(Errors.TransactionModule_HookNotDefined.selector);
         vm.prank(attacker);
-        tradingModule.execute(calls);
+        transactionModule.execute(calls);
     }
 
     function test_revert_before_hook() public withHook(mock_revert_before_hook()) {
@@ -324,7 +324,7 @@ contract TestTradingModule is Test, TestBaseGnosis, TestBaseProtocol {
 
         vm.expectRevert("RevertBeforeHook");
         vm.prank(operator);
-        tradingModule.execute(calls);
+        transactionModule.execute(calls);
     }
 
     function test_revert_after_hook() public withHook(mock_revert_after_hook()) {
@@ -333,6 +333,6 @@ contract TestTradingModule is Test, TestBaseGnosis, TestBaseProtocol {
 
         vm.expectRevert("RevertAfterHook");
         vm.prank(operator);
-        tradingModule.execute(calls);
+        transactionModule.execute(calls);
     }
 }

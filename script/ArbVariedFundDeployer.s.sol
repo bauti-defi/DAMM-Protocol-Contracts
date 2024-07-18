@@ -5,8 +5,8 @@ import {Script, console2, stdJson} from "forge-std/Script.sol";
 import {DeployConfigLoader} from "@script/DeployConfigLoader.sol";
 import {IERC20} from "@openzeppelin-contracts/token/ERC20/IERC20.sol";
 import "@src/libs/ModuleLib.sol";
-import "@src/modules/trading/HookRegistry.sol";
-import "@src/modules/trading/TradingModule.sol";
+import "@src/modules/transact/HookRegistry.sol";
+import "@src/modules/transact/TransactionModule.sol";
 import "@safe-contracts/Safe.sol";
 import "@src/hooks/uniswapV3/UniswapV3Hooks.sol";
 import "@src/hooks/aaveV3/AaveV3Hooks.sol";
@@ -71,7 +71,7 @@ contract ArbVariedFundDeployer is DeployConfigLoader {
         vm.label(CREATE_CALL, "CreateCall");
         vm.label(MODULE_LIB, "ModuleLib");
         vm.label(HOOK_REGISTRY, "HookRegistry");
-        vm.label(TRADING_MODULE, "TradingModule");
+        vm.label(TRADING_MODULE, "TransactionModule");
         vm.label(UNISWAP_V3_HOOKS, "UniswapV3Hooks");
         vm.label(AAVE_V3_HOOKS, "AaveV3Hooks");
         vm.label(FUND_ADMIN, "FundAdmin");
@@ -198,16 +198,16 @@ contract ArbVariedFundDeployer is DeployConfigLoader {
         console2.log("HookRegistry: ", address(hookRegistry));
     }
 
-    function deployTradingModule() public {
+    function deployTransactionModule() public {
         Safe safe = Safe(STABLE_FUND);
 
         bytes memory moduleCreationCode = abi.encodePacked(
-            type(TradingModule).creationCode, abi.encode(STABLE_FUND, HOOK_REGISTRY)
+            type(TransactionModule).creationCode, abi.encode(STABLE_FUND, HOOK_REGISTRY)
         );
 
         bytes memory transaction = abi.encodeWithSelector(
             ModuleLib.deployModule.selector,
-            keccak256("deployTradingModule.salt"),
+            keccak256("deployTransactionModule.salt"),
             0,
             moduleCreationCode
         );
@@ -230,11 +230,13 @@ contract ArbVariedFundDeployer is DeployConfigLoader {
             transactionSignature
         );
 
-        require(success, "Failed to deploy TradingModule");
+        require(success, "Failed to deploy TransactionModule");
         console2.log(
-            "TradingModule: ",
+            "TransactionModule: ",
             Create2.computeAddress(
-                keccak256("deployTradingModule.salt"), keccak256(moduleCreationCode), CREATE_CALL
+                keccak256("deployTransactionModule.salt"),
+                keccak256(moduleCreationCode),
+                CREATE_CALL
             )
         );
     }

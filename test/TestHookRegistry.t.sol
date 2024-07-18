@@ -7,8 +7,8 @@ import {TestBaseGnosis} from "@test/base/TestBaseGnosis.sol";
 import {SafeL2} from "@safe-contracts/SafeL2.sol";
 import {Enum} from "@safe-contracts/common/Enum.sol";
 import {SafeUtils, SafeTransaction} from "@test/utils/SafeUtils.sol";
-import "@src/modules/trading/Hooks.sol";
-import "@src/modules/trading/HookRegistry.sol";
+import "@src/modules/transact/Hooks.sol";
+import "@src/modules/transact/HookRegistry.sol";
 import "@src/libs/Errors.sol";
 
 contract TestHookRegistry is Test, TestBaseGnosis, TestBaseProtocol {
@@ -75,7 +75,7 @@ contract TestHookRegistry is Test, TestBaseGnosis, TestBaseProtocol {
     function test_set_hook() public {
         HookConfig memory config = mock_hook();
 
-        //create safe transaction as admin. this transaction will call the setHook() on the tradingModule
+        //create safe transaction as admin. this transaction will call the setHook() on the transactionModule
         bytes memory transaction = abi.encodeWithSelector(hookRegistry.setHooks.selector, config);
 
         bool success = fund.executeTrx(
@@ -111,7 +111,7 @@ contract TestHookRegistry is Test, TestBaseGnosis, TestBaseProtocol {
         vm.prank(address(fund));
         hookRegistry.setHooks(config);
 
-        //create safe transaction as admin. this transaction will call the removeHook() on the tradingModule
+        //create safe transaction as admin. this transaction will call the removeHook() on the transactionModule
         bytes memory transaction = abi.encodeWithSelector(hookRegistry.removeHooks.selector, config);
 
         bool success = fund.executeTrx(

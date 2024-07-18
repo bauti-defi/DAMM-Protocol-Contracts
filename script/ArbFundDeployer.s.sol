@@ -5,8 +5,8 @@ import {Script, console2, stdJson} from "forge-std/Script.sol";
 import {DeployConfigLoader} from "@script/DeployConfigLoader.sol";
 import {IERC20} from "@openzeppelin-contracts/token/ERC20/IERC20.sol";
 import "@src/libs/ModuleLib.sol";
-import "@src/modules/trading/HookRegistry.sol";
-import "@src/modules/trading/TradingModule.sol";
+import "@src/modules/transact/HookRegistry.sol";
+import "@src/modules/transact/TransactionModule.sol";
 import "@safe-contracts/Safe.sol";
 import "@src/hooks/uniswapV3/UniswapV3Hooks.sol";
 import "@src/hooks/aaveV3/AaveV3Hooks.sol";
@@ -42,7 +42,7 @@ contract ArbFundDeployer is DeployConfigLoader {
 
     address public constant MODULE_LIB = address(0xe30E57cf7D69cBdDD9713AAb109753b5fa1878A5);
     address public constant HOOK_REGISTRY = address(0xfAcC9bE6e79034C679B0A1E0de407B58Fb240E0c);
-    address public constant TRADING_MODULE = address(0x20580451fEc6B5dc824A2d6D4cC295c1Cf3f0d3E);
+    address public constant TRANSACTION_MODULE = address(0x20580451fEc6B5dc824A2d6D4cC295c1Cf3f0d3E);
 
     address constant OPERATOR = address(0x5ed25671f65d0ca26d79326BF571f8AeaF856f00);
 
@@ -52,7 +52,7 @@ contract ArbFundDeployer is DeployConfigLoader {
         vm.label(CREATE_CALL, "CreateCall");
         vm.label(MODULE_LIB, "ModuleLib");
         vm.label(HOOK_REGISTRY, "HookRegistry");
-        vm.label(TRADING_MODULE, "TradingModule");
+        vm.label(TRANSACTION_MODULE, "TransactionModule");
         vm.label(FUND_ADMIN, "FundAdmin");
     }
 
@@ -70,15 +70,16 @@ contract ArbFundDeployer is DeployConfigLoader {
         console2.log("HookRegistry: ", address(hookRegistry));
     }
 
-    function deployTradingModule() public {
+    function deployTransactionModule() public {
         Safe safe = Safe(DAMM_FUND);
 
-        bytes memory moduleCreationCode =
-            abi.encodePacked(type(TradingModule).creationCode, abi.encode(DAMM_FUND, HOOK_REGISTRY));
+        bytes memory moduleCreationCode = abi.encodePacked(
+            type(TransactionModule).creationCode, abi.encode(DAMM_FUND, HOOK_REGISTRY)
+        );
 
         bytes memory transaction = abi.encodeWithSelector(
             ModuleLib.deployModule.selector,
-            keccak256("deployTradingModule.salt"),
+            keccak256("deployTransactionModule.salt"),
             0,
             moduleCreationCode
         );
@@ -101,11 +102,13 @@ contract ArbFundDeployer is DeployConfigLoader {
             transactionSignature
         );
 
-        require(success, "Failed to deploy TradingModule");
+        require(success, "Failed to deploy TransactionModule");
         console2.log(
-            "TradingModule: ",
+            "TransactionModule: ",
             Create2.computeAddress(
-                keccak256("deployTradingModule.salt"), keccak256(moduleCreationCode), CREATE_CALL
+                keccak256("deployTransactionModule.salt"),
+                keccak256(moduleCreationCode),
+                CREATE_CALL
             )
         );
     }

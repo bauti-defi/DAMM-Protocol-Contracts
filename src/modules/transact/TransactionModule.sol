@@ -6,11 +6,11 @@ import {Enum} from "@safe-contracts/common/Enum.sol";
 import {ReentrancyGuard} from "@openzeppelin-contracts/utils/ReentrancyGuard.sol";
 import "@src/libs/Errors.sol";
 import "@src/interfaces/ITransactionHooks.sol";
-import "@src/interfaces/ITradingModule.sol";
+import "@src/interfaces/ITransactionModule.sol";
 import "@src/interfaces/IHookRegistry.sol";
 import "./Structs.sol";
 
-contract TradingModule is ReentrancyGuard, ITradingModule {
+contract TransactionModule is ReentrancyGuard, ITransactionModule {
     address public immutable fund;
     IHookRegistry public immutable hookRegistry;
     uint256 public maxGasPriorityInBasisPoints;
@@ -39,7 +39,7 @@ contract TradingModule is ReentrancyGuard, ITradingModule {
             maxGasPriorityInBasisPoints > 0 && tx.gasprice > block.basefee
                 && ((tx.gasprice - block.basefee) * 10000) / tx.gasprice >= maxGasPriorityInBasisPoints
         ) {
-            revert Errors.TradingModule_GasLimitExceeded();
+            revert Errors.TransactionModule_GasLimitExceeded();
         }
 
         _;
@@ -49,7 +49,7 @@ contract TradingModule is ReentrancyGuard, ITradingModule {
                 msg.sender, (gasAtStart - gasleft()) * tx.gasprice, "", Enum.Operation.Call
             )
         ) {
-            revert Errors.TradingModule_GasRefundFailed();
+            revert Errors.TransactionModule_GasRefundFailed();
         }
     }
 
@@ -107,7 +107,7 @@ contract TradingModule is ReentrancyGuard, ITradingModule {
         uint256 transactionCount = transactions.length;
 
         /// @notice min transaction length is 85 bytes (a single function selector with no calldata)
-        if (transactionCount == 0) revert Errors.TradingModule_InvalidTransactionLength();
+        if (transactionCount == 0) revert Errors.TransactionModule_InvalidTransactionLength();
 
         // lets iterate over the transactions. Each transaction will be verified and then executed through the safe.
         for (uint256 i = 0; i < transactionCount;) {
@@ -120,7 +120,7 @@ contract TradingModule is ReentrancyGuard, ITradingModule {
             );
 
             if (!hook.defined) {
-                revert Errors.TradingModule_HookNotDefined();
+                revert Errors.TransactionModule_HookNotDefined();
             }
 
             if (hook.beforeTrxHook != address(0)) {

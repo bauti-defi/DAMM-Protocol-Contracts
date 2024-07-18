@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.0;
 
-import "@src/modules/trading/Structs.sol";
+import "@src/modules/transact/Structs.sol";
 
-interface ITradingModule {
+interface ITransactionModule {
     event Paused();
     event Unpaused();
 

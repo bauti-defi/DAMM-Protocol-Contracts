@@ -8,15 +8,15 @@ import "@test/base/TestBaseGnosis.sol";
 import "@test/base/TestBaseProtocol.sol";
 import "@safe-contracts/SafeL2.sol";
 import "@safe-contracts/Safe.sol";
-import "@src/modules/trading/HookRegistry.sol";
-import "@src/modules/trading/TradingModule.sol";
+import "@src/modules/transact/HookRegistry.sol";
+import "@src/modules/transact/TransactionModule.sol";
 import "@test/utils/SafeUtils.sol";
 import "@test/forked/TokenMinter.sol";
 import "@src/hooks/uniswapV3/UniswapV3Hooks.sol";
-import {HookConfig} from "@src/modules/trading/Hooks.sol";
+import {HookConfig} from "@src/modules/transact/Hooks.sol";
 import {Enum} from "@safe-contracts/common/Enum.sol";
 import {IERC721} from "@openzeppelin-contracts/token/ERC721/IERC721.sol";
-import "@src/modules/trading/Structs.sol";
+import "@src/modules/transact/Structs.sol";
 
 contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, TokenMinter {
     using SafeUtils for SafeL2;
@@ -27,7 +27,7 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
     uint256 internal fundAdminPK;
     SafeL2 internal fund;
     HookRegistry internal hookRegistry;
-    TradingModule internal tradingModule;
+    TransactionModule internal transactionModule;
     UniswapV3Hooks internal uniswapV3Hooks;
 
     uint176 nextPositionId;
@@ -78,22 +78,22 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
 
         vm.label(address(hookRegistry), "HookRegistry");
 
-        tradingModule = TradingModule(
+        transactionModule = TransactionModule(
             deployModule(
                 payable(address(fund)),
                 fundAdmin,
                 fundAdminPK,
-                bytes32("tradingModule"),
+                bytes32("transactionModule"),
                 0,
                 abi.encodePacked(
-                    type(TradingModule).creationCode,
+                    type(TransactionModule).creationCode,
                     abi.encode(address(fund), address(hookRegistry))
                 )
             )
         );
-        vm.label(address(tradingModule), "TradingModule");
+        vm.label(address(transactionModule), "TransactionModule");
 
-        assertEq(tradingModule.fund(), address(fund), "TradingModule fund not set");
+        assertEq(transactionModule.fund(), address(fund), "TransactionModule fund not set");
 
         uniswapV3Hooks = UniswapV3Hooks(
             deployModule(
@@ -333,7 +333,7 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
         calls[0] = _mint_call();
 
         vm.prank(operator, operator);
-        tradingModule.execute(calls);
+        transactionModule.execute(calls);
 
         assertEq(
             IERC721(UNI_V3_POSITION_MANAGER_ADDRESS).balanceOf(address(fund)),
@@ -376,7 +376,7 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
 
         vm.prank(operator, operator);
         vm.expectRevert(UniswapV3Hooks_OnlyWhitelistedTokens.selector);
-        tradingModule.execute(calls);
+        transactionModule.execute(calls);
     }
 
     function test_cannot_mint_position_to_other(address attacker)
@@ -411,7 +411,7 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
 
         vm.prank(operator, operator);
         vm.expectRevert(UniswapV3Hooks_OnlyFund.selector);
-        tradingModule.execute(calls);
+        transactionModule.execute(calls);
     }
 
     function test_increase_liquidity()
@@ -424,7 +424,7 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
         calls[0] = _mint_call();
 
         vm.prank(operator, operator);
-        tradingModule.execute(calls);
+        transactionModule.execute(calls);
 
         assertEq(
             IERC721(UNI_V3_POSITION_MANAGER_ADDRESS).balanceOf(address(fund)),
@@ -442,7 +442,7 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
         calls[0] = _increase_liquidity_call(nextPositionId);
 
         vm.prank(operator, operator);
-        tradingModule.execute(calls);
+        transactionModule.execute(calls);
 
         assertEq(
             IERC721(UNI_V3_POSITION_MANAGER_ADDRESS).ownerOf(nextPositionId),
@@ -504,7 +504,7 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
 
         vm.prank(operator, operator);
         vm.expectRevert(UniswapV3Hooks_OnlyWhitelistedTokens.selector);
-        tradingModule.execute(increaseLiquidityCalls);
+        transactionModule.execute(increaseLiquidityCalls);
     }
 
     function test_cannot_increase_liquidity_of_position_that_is_not_owned_by_fund()
@@ -545,7 +545,7 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
 
         vm.prank(operator, operator);
         vm.expectRevert(UniswapV3Hooks_InvalidPosition.selector);
-        tradingModule.execute(calls);
+        transactionModule.execute(calls);
     }
 
     function test_decrease_liquidity()
@@ -558,7 +558,7 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
         calls[0] = _mint_call();
 
         vm.prank(operator, operator);
-        tradingModule.execute(calls);
+        transactionModule.execute(calls);
 
         assertEq(
             IERC721(UNI_V3_POSITION_MANAGER_ADDRESS).balanceOf(address(fund)),
@@ -575,7 +575,7 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
         calls[0] = _decrease_liquidity_call(nextPositionId);
 
         vm.prank(operator, operator);
-        tradingModule.execute(calls);
+        transactionModule.execute(calls);
 
         assertEq(
             IERC721(UNI_V3_POSITION_MANAGER_ADDRESS).ownerOf(nextPositionId),
@@ -620,7 +620,7 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
 
         vm.prank(operator, operator);
         vm.expectRevert(UniswapV3Hooks_OnlyWhitelistedTokens.selector);
-        tradingModule.execute(calls);
+        transactionModule.execute(calls);
     }
 
     function test_cannot_decrease_liquidity_of_position_that_is_not_owned_by_fund()
@@ -661,7 +661,7 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
 
         vm.prank(operator, operator);
         vm.expectRevert(UniswapV3Hooks_InvalidPosition.selector);
-        tradingModule.execute(calls);
+        transactionModule.execute(calls);
     }
 
     function test_collect_from_position()
@@ -674,19 +674,19 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
         calls[0] = _mint_call();
 
         vm.prank(operator, operator);
-        tradingModule.execute(calls);
+        transactionModule.execute(calls);
 
         uint256 token0Balance = USDC.balanceOf(address(fund));
         uint256 token1Balance = USDCe.balanceOf(address(fund));
         calls[0] = _decrease_liquidity_call(nextPositionId, 100);
 
         vm.prank(operator, operator);
-        tradingModule.execute(calls);
+        transactionModule.execute(calls);
 
         calls[0] = _collect_call(nextPositionId);
 
         vm.prank(operator, operator);
-        tradingModule.execute(calls);
+        transactionModule.execute(calls);
 
         assertEq(
             IERC721(UNI_V3_POSITION_MANAGER_ADDRESS).ownerOf(nextPositionId),
@@ -738,7 +738,7 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
 
         vm.prank(operator, operator);
         vm.expectRevert(UniswapV3Hooks_InvalidPosition.selector);
-        tradingModule.execute(calls);
+        transactionModule.execute(calls);
     }
 
     function test_exact_input_single_swap()
@@ -771,7 +771,7 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
         });
 
         vm.prank(operator, operator);
-        tradingModule.execute(calls);
+        transactionModule.execute(calls);
 
         assertTrue(USDC.balanceOf(address(fund)) < usdcBalance, "no tokens spent");
         assertTrue(USDCe.balanceOf(address(fund)) > bridgedBalance, "no tokens recieved");
@@ -803,7 +803,7 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
 
         vm.prank(operator, operator);
         vm.expectRevert(UniswapV3Hooks_OnlyWhitelistedTokens.selector);
-        tradingModule.execute(calls);
+        transactionModule.execute(calls);
     }
 
     function test_cannot_exact_input_single_swap_not_to_fund()
@@ -834,7 +834,7 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
 
         vm.prank(operator, operator);
         vm.expectRevert(UniswapV3Hooks_OnlyFund.selector);
-        tradingModule.execute(calls);
+        transactionModule.execute(calls);
     }
 
     function test_exact_output_single_swap()
@@ -868,7 +868,7 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
         });
 
         vm.prank(operator, operator);
-        tradingModule.execute(calls);
+        transactionModule.execute(calls);
 
         assertTrue(USDC.balanceOf(address(fund)) < usdcBalance, "no tokens spent");
         assertTrue(USDCe.balanceOf(address(fund)) > bridgedBalance, "no tokens recieved");
@@ -901,7 +901,7 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
 
         vm.prank(operator, operator);
         vm.expectRevert(UniswapV3Hooks_OnlyWhitelistedTokens.selector);
-        tradingModule.execute(calls);
+        transactionModule.execute(calls);
     }
 
     function test_cannot_exact_output_single_swap_not_to_fund()
@@ -933,7 +933,7 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
 
         vm.prank(operator, operator);
         vm.expectRevert(UniswapV3Hooks_OnlyFund.selector);
-        tradingModule.execute(calls);
+        transactionModule.execute(calls);
     }
 
     function test_enable_disable_asset() public {

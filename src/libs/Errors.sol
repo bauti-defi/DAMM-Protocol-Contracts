@@ -7,10 +7,10 @@ library Errors {
     error OnlyFund();
 
     /// Trading module errors
-    error TradingModule_HookNotDefined();
-    error TradingModule_InvalidTransactionLength();
-    error TradingModule_GasLimitExceeded();
-    error TradingModule_GasRefundFailed();
+    error TransactionModule_HookNotDefined();
+    error TransactionModule_InvalidTransactionLength();
+    error TransactionModule_GasLimitExceeded();
+    error TransactionModule_GasRefundFailed();
     error Trading_ModulePaused();
 
     /// Hook errors

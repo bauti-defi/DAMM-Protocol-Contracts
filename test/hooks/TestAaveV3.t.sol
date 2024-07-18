@@ -5,17 +5,17 @@ import {TestBaseGnosis} from "@test/base/TestBaseGnosis.sol";
 import {TestBaseProtocol} from "@test/base/TestBaseProtocol.sol";
 import {SafeL2} from "@safe-contracts/SafeL2.sol";
 import {Safe} from "@safe-contracts/Safe.sol";
-import {HookRegistry} from "@src/modules/trading/HookRegistry.sol";
-import {TradingModule} from "@src/modules/trading/TradingModule.sol";
+import {HookRegistry} from "@src/modules/transact/HookRegistry.sol";
+import {TransactionModule} from "@src/modules/transact/TransactionModule.sol";
 import {SafeUtils, SafeTransaction} from "@test/utils/SafeUtils.sol";
 import "@src/hooks/aaveV3/AaveV3Hooks.sol";
-import {HookConfig} from "@src/modules/trading/Hooks.sol";
+import {HookConfig} from "@src/modules/transact/Hooks.sol";
 import {BaseAaveV3} from "@test/forked/BaseAaveV3.sol";
 import {TokenMinter} from "@test/forked/TokenMinter.sol";
 import {IERC20} from "@openzeppelin-contracts/token/ERC20/IERC20.sol";
 import {Enum} from "@safe-contracts/common/Enum.sol";
 import {console2} from "@forge-std/Test.sol";
-import "@src/modules/trading/Structs.sol";
+import "@src/modules/transact/Structs.sol";
 
 contract TestAaveV3 is TestBaseGnosis, TestBaseProtocol, BaseAaveV3, TokenMinter {
     using SafeUtils for SafeL2;
@@ -28,7 +28,7 @@ contract TestAaveV3 is TestBaseGnosis, TestBaseProtocol, BaseAaveV3, TokenMinter
     uint256 internal fundAdminPK;
     SafeL2 internal fund;
     HookRegistry internal hookRegistry;
-    TradingModule internal tradingModule;
+    TransactionModule internal transactionModule;
     AaveV3Hooks internal aaveV3Hooks;
 
     address internal operator;
@@ -74,22 +74,22 @@ contract TestAaveV3 is TestBaseGnosis, TestBaseProtocol, BaseAaveV3, TokenMinter
 
         vm.label(address(hookRegistry), "HookRegistry");
 
-        tradingModule = TradingModule(
+        transactionModule = TransactionModule(
             deployModule(
                 payable(address(fund)),
                 fundAdmin,
                 fundAdminPK,
-                bytes32("tradingModule"),
+                bytes32("transactionModule"),
                 0,
                 abi.encodePacked(
-                    type(TradingModule).creationCode,
+                    type(TransactionModule).creationCode,
                     abi.encode(address(fund), address(hookRegistry))
                 )
             )
         );
-        vm.label(address(tradingModule), "TradingModule");
+        vm.label(address(transactionModule), "TransactionModule");
 
-        assertEq(tradingModule.fund(), address(fund), "TradingModule fund not set");
+        assertEq(transactionModule.fund(), address(fund), "TransactionModule fund not set");
 
         aaveV3Hooks = AaveV3Hooks(
             deployModule(
@@ -160,7 +160,7 @@ contract TestAaveV3 is TestBaseGnosis, TestBaseProtocol, BaseAaveV3, TokenMinter
         });
 
         vm.prank(operator, operator);
-        tradingModule.execute(calls);
+        transactionModule.execute(calls);
 
         assertEq(aUSDC.balanceOf(address(fund)), 1000);
         assertEq(USDC.balanceOf(address(fund)), BIG_NUMBER - 1000);
@@ -178,7 +178,7 @@ contract TestAaveV3 is TestBaseGnosis, TestBaseProtocol, BaseAaveV3, TokenMinter
 
         vm.prank(operator, operator);
         vm.expectRevert(AaveV3Hooks_OnlyWhitelistedTokens.selector);
-        tradingModule.execute(calls);
+        transactionModule.execute(calls);
 
         assertEq(aUSDC.balanceOf(address(fund)), 0);
         assertEq(USDC.balanceOf(address(fund)), BIG_NUMBER);
@@ -197,7 +197,7 @@ contract TestAaveV3 is TestBaseGnosis, TestBaseProtocol, BaseAaveV3, TokenMinter
         });
 
         vm.prank(operator, operator);
-        tradingModule.execute(calls);
+        transactionModule.execute(calls);
 
         assertEq(aUSDC.balanceOf(address(fund)), 1000);
         assertEq(USDC.balanceOf(address(fund)), BIG_NUMBER - 1000);
@@ -211,7 +211,7 @@ contract TestAaveV3 is TestBaseGnosis, TestBaseProtocol, BaseAaveV3, TokenMinter
         });
 
         vm.prank(operator, operator);
-        tradingModule.execute(calls);
+        transactionModule.execute(calls);
 
         assertEq(aUSDC.balanceOf(address(fund)), 0);
         assertEq(USDC.balanceOf(address(fund)), BIG_NUMBER);
@@ -229,7 +229,7 @@ contract TestAaveV3 is TestBaseGnosis, TestBaseProtocol, BaseAaveV3, TokenMinter
 
         vm.prank(operator, operator);
         vm.expectRevert(AaveV3Hooks_OnlyWhitelistedTokens.selector);
-        tradingModule.execute(calls);
+        transactionModule.execute(calls);
 
         assertEq(aUSDC.balanceOf(address(fund)), 0);
         assertEq(USDC.balanceOf(address(fund)), BIG_NUMBER);
