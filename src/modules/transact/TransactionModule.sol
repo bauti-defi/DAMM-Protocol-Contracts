@@ -21,7 +21,7 @@ contract TransactionModule is ReentrancyGuard, ITransactionModule {
     }
 
     modifier notPaused() {
-        if (paused) revert Errors.Trading_ModulePaused();
+        if (paused) revert Errors.Transaction_ModulePaused();
         _;
     }
 
@@ -38,7 +38,7 @@ contract TransactionModule is ReentrancyGuard, ITransactionModule {
             maxGasPriorityInBasisPoints > 0 && tx.gasprice > block.basefee
                 && ((tx.gasprice - block.basefee) * 10000) / tx.gasprice >= maxGasPriorityInBasisPoints
         ) {
-            revert Errors.TransactionModule_GasLimitExceeded();
+            revert Errors.Transaction_GasLimitExceeded();
         }
 
         _;
@@ -48,7 +48,7 @@ contract TransactionModule is ReentrancyGuard, ITransactionModule {
                 msg.sender, (gasAtStart - gasleft()) * tx.gasprice, "", Enum.Operation.Call
             )
         ) {
-            revert Errors.TransactionModule_GasRefundFailed();
+            revert Errors.Transaction_GasRefundFailed();
         }
     }
 
@@ -106,7 +106,7 @@ contract TransactionModule is ReentrancyGuard, ITransactionModule {
         uint256 transactionCount = transactions.length;
 
         /// @notice min transaction length is 85 bytes (a single function selector with no calldata)
-        if (transactionCount == 0) revert Errors.TransactionModule_InvalidTransactionLength();
+        if (transactionCount == 0) revert Errors.Transaction_InvalidTransactionLength();
 
         // lets iterate over the transactions. Each transaction will be verified and then executed through the safe.
         for (uint256 i = 0; i < transactionCount;) {
@@ -119,7 +119,7 @@ contract TransactionModule is ReentrancyGuard, ITransactionModule {
             );
 
             if (!hook.defined) {
-                revert Errors.TransactionModule_HookNotDefined();
+                revert Errors.Transaction_HookNotDefined();
             }
 
             if (hook.beforeTrxHook != address(0)) {

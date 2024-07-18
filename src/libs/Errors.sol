@@ -6,12 +6,12 @@ library Errors {
     /// Shared errors
     error OnlyFund();
 
-    /// Trading module errors
-    error TransactionModule_HookNotDefined();
-    error TransactionModule_InvalidTransactionLength();
-    error TransactionModule_GasLimitExceeded();
-    error TransactionModule_GasRefundFailed();
-    error Trading_ModulePaused();
+    /// Transaction module errors
+    error Transaction_HookNotDefined();
+    error Transaction_InvalidTransactionLength();
+    error Transaction_GasLimitExceeded();
+    error Transaction_GasRefundFailed();
+    error Transaction_ModulePaused();
 
     /// Hook errors
     error Hook_InvalidOperator();

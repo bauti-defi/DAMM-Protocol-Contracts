@@ -42,7 +42,7 @@ contract ArbVariedFundDeployer is DeployConfigLoader {
     address public constant MODULE_LIB = address(0xe30E57cf7D69cBdDD9713AAb109753b5fa1878A5);
 
     address public constant HOOK_REGISTRY = address(0x7dD9C90f9621eeF8859A82B55828A72eaCcb7ad9);
-    address public constant TRADING_MODULE = address(0x9588e15F13F8219D600d7EfF0a420375e539176a);
+    address public constant TRANSACTION_MODULE = address(0x9588e15F13F8219D600d7EfF0a420375e539176a);
     address public constant UNISWAP_V3_HOOKS = address(0x12B12BEe3226f1192C5cE0144BA608D211cdb629);
     address public constant AAVE_V3_HOOKS = address(0xeE3E6dc232aea030D69e2F53181d7D9E2aeC54b4);
 
@@ -71,7 +71,7 @@ contract ArbVariedFundDeployer is DeployConfigLoader {
         vm.label(CREATE_CALL, "CreateCall");
         vm.label(MODULE_LIB, "ModuleLib");
         vm.label(HOOK_REGISTRY, "HookRegistry");
-        vm.label(TRADING_MODULE, "TransactionModule");
+        vm.label(TRANSACTION_MODULE, "TransactionModule");
         vm.label(UNISWAP_V3_HOOKS, "UniswapV3Hooks");
         vm.label(AAVE_V3_HOOKS, "AaveV3Hooks");
         vm.label(FUND_ADMIN, "FundAdmin");

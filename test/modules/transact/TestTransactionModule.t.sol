@@ -284,7 +284,7 @@ contract TestTransactionModule is Test, TestBaseGnosis, TestBaseProtocol {
         Transaction[] memory calls = new Transaction[](1);
         calls[0] = incrementCall(10);
 
-        vm.expectRevert(Errors.TransactionModule_GasLimitExceeded.selector);
+        vm.expectRevert(Errors.Transaction_GasLimitExceeded.selector);
         vm.prank(operator);
         transactionModule.execute(calls);
     }
@@ -313,7 +313,7 @@ contract TestTransactionModule is Test, TestBaseGnosis, TestBaseProtocol {
         Transaction[] memory calls = new Transaction[](1);
         calls[0] = incrementCall(10);
 
-        vm.expectRevert(Errors.TransactionModule_HookNotDefined.selector);
+        vm.expectRevert(Errors.Transaction_HookNotDefined.selector);
         vm.prank(attacker);
         transactionModule.execute(calls);
     }
