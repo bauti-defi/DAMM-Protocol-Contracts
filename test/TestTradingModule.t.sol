@@ -10,9 +10,9 @@ import {ITradingModule} from "@src/interfaces/ITradingModule.sol";
 import {Enum} from "@safe-contracts/common/Enum.sol";
 import {SafeUtils, SafeTransaction} from "@test/utils/SafeUtils.sol";
 import {IBeforeTransaction, IAfterTransaction} from "@src/interfaces/ITransactionHooks.sol";
+import "@src/libs/Errors.sol";
 import "@src/modules/trading/Hooks.sol";
 import "@src/modules/trading/HookRegistry.sol";
-import "@src/modules/trading/Errors.sol";
 import "@src/modules/trading/Structs.sol";
 
 contract MockTarget {

@@ -3,16 +3,9 @@ pragma solidity ^0.8.0;
 
 import {IModuleLib} from "@src/interfaces/IModuleLib.sol";
 import {IFund} from "@src/interfaces/IFund.sol";
+import "@src/libs/Errors.sol";
 
 contract ModuleLib is IModuleLib {
-    error DeploymentFailed();
-    error ModuleSetupFailed();
-    error InsufficientBalance();
-    error EmptyBytecode();
-    error OnlyDelegateCall();
-
-    event ModuleDeployed(address safe, address module);
-
     address private immutable self;
 
     constructor() {
@@ -20,7 +13,7 @@ contract ModuleLib is IModuleLib {
     }
 
     modifier isDelegateCall() {
-        if (address(this) == self) revert OnlyDelegateCall();
+        if (address(this) == self) revert Errors.ModuleLib_OnlyDelegateCall();
         _;
     }
 
@@ -31,19 +24,21 @@ contract ModuleLib is IModuleLib {
         internal
         returns (address module)
     {
-        if (address(this).balance < value) revert InsufficientBalance();
+        if (address(this).balance < value) revert Errors.ModuleLib_InsufficientBalance();
 
-        if (creationCode.length == 0) revert EmptyBytecode();
+        if (creationCode.length == 0) revert Errors.ModuleLib_EmptyBytecode();
 
         // solhint-disable-next-line no-inline-assembly
         assembly {
             module := create2(value, add(0x20, creationCode), mload(creationCode), salt)
         }
-        if (module == address(0)) revert DeploymentFailed();
+        if (module == address(0)) revert Errors.ModuleLib_DeploymentFailed();
 
         // callback: add module to the safe. msg.sender == this because of delegatecall
         IFund(address(this)).enableModule(module);
-        if (!IFund(address(this)).isModuleEnabled(module)) revert ModuleSetupFailed();
+        if (!IFund(address(this)).isModuleEnabled(module)) {
+            revert Errors.ModuleLib_ModuleSetupFailed();
+        }
 
         emit ModuleDeployed(address(this), module);
     }

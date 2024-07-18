@@ -2,8 +2,7 @@
 pragma solidity ^0.8.0;
 
 import "@solmate/tokens/ERC20.sol";
-
-import {OnlyPeriphery_Error} from "./Errors.sol";
+import "@src/libs/Errors.sol";
 
 contract UnitOfAccount is ERC20 {
     address internal immutable periphery;
@@ -15,7 +14,7 @@ contract UnitOfAccount is ERC20 {
     }
 
     modifier onlyPeriphery() {
-        require(msg.sender == address(periphery), OnlyPeriphery_Error);
+        if (msg.sender != address(periphery)) revert Errors.Deposit_OnlyPeriphery();
         _;
     }
 

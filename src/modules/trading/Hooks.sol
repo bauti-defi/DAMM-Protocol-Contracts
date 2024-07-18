@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.0;
 
+import "@src/libs/Errors.sol";
 import "./Structs.sol";
-import "./Errors.sol";
 
 // cast sig "isOwner(address)"
 bytes4 constant IS_OWNER_SAFE_SELECTOR = 0x2f54bf6e;

@@ -18,10 +18,10 @@ import {
 import {Periphery} from "@src/modules/deposit/Periphery.sol";
 import {AssetPolicy} from "@src/modules/deposit/Structs.sol";
 import {IFund} from "@src/interfaces/IFund.sol";
-import {FundNotFullyDivested_Error} from "@src/modules/deposit/Errors.sol";
 import {POSITION_OPENER, POSITION_CLOSER, NULL} from "@src/FundCallbackHandler.sol";
 import "@src/interfaces/IOwnable.sol";
 import "@src/libs/Constants.sol";
+import "@src/libs/Errors.sol";
 
 // keccak256("fallback_manager.handler.address")
 bytes32 constant FALLBACK_HANDLER_STORAGE_SLOT =
@@ -179,7 +179,7 @@ contract TestFundValuation is TestBaseProtocol, TestBaseGnosis, TokenMinter {
         mintDAI(address(fund), 1000 * (10 ** 18));
         mintUSDCe(address(fund), 1000 * (10 ** 6));
 
-        vm.expectRevert();
+        vm.expectRevert(Errors.Deposit_FundNotFullyDivested.selector);
         periphery.totalAssets();
 
         assertEq(fund.hasOpenPositions(), true, "No open positions");

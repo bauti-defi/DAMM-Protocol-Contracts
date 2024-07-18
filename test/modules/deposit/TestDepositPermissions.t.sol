@@ -19,7 +19,7 @@ import {NATIVE_ASSET} from "@src/libs/Constants.sol";
 import {MockERC20} from "@test/mocks/MockERC20.sol";
 import {MockPriceOracle} from "@test/mocks/MockPriceOracle.sol";
 import "@openzeppelin-contracts/utils/cryptography/MessageHashUtils.sol";
-import "@src/modules/deposit/Errors.sol";
+import "@src/libs/Errors.sol";
 
 uint8 constant VALUATION_DECIMALS = 18;
 uint256 constant VAULT_DECIMAL_OFFSET = 1;
@@ -230,7 +230,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
             _signDepositIntent(_depositIntent(alice, address(mockToken1), mock1Unit, 0), alicePK);
 
         vm.prank(relayer);
-        vm.expectRevert(bytes(OnlyUser_Error));
+        vm.expectRevert(Errors.Deposit_OnlyUser.selector);
         periphery.deposit(dOrder);
 
         WithdrawOrder memory wOrder = _signWithdrawIntent(
@@ -238,7 +238,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         );
 
         vm.prank(relayer);
-        vm.expectRevert(bytes(OnlyUser_Error));
+        vm.expectRevert(Errors.Deposit_OnlyUser.selector);
         periphery.withdraw(wOrder);
     }
 
@@ -247,7 +247,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
             _signDepositIntent(_depositIntent(alice, address(mockToken1), mock1Unit, 1000), alicePK);
 
         vm.prank(relayer);
-        vm.expectRevert(bytes(InvalidNonce_Error));
+        vm.expectRevert(Errors.Deposit_InvalidNonce.selector);
         periphery.deposit(dOrder);
 
         WithdrawOrder memory wOrder = _signWithdrawIntent(
@@ -255,7 +255,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         );
 
         vm.prank(relayer);
-        vm.expectRevert(bytes(InvalidNonce_Error));
+        vm.expectRevert(Errors.Deposit_InvalidNonce.selector);
         periphery.withdraw(wOrder);
     }
 
@@ -267,7 +267,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         vm.warp(100000000);
 
         vm.prank(relayer);
-        vm.expectRevert(bytes(IntentExpired_Error));
+        vm.expectRevert(Errors.Deposit_IntentExpired.selector);
         periphery.deposit(dOrder);
 
         // reset timestamp to generate valid order
@@ -281,7 +281,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         vm.warp(100000000);
 
         vm.prank(relayer);
-        vm.expectRevert(bytes(IntentExpired_Error));
+        vm.expectRevert(Errors.Deposit_IntentExpired.selector);
         periphery.withdraw(wOrder);
     }
 
@@ -293,7 +293,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         DepositOrder memory dOrder = _signDepositIntent(dIntent, alicePK);
 
         vm.prank(relayer);
-        vm.expectRevert(bytes(InvalidChain_Error));
+        vm.expectRevert(Errors.Deposit_InvalidChain.selector);
         periphery.deposit(dOrder);
 
         WithdrawIntent memory wIntent =
@@ -304,7 +304,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         WithdrawOrder memory wOrder = _signWithdrawIntent(wIntent, alicePK);
 
         vm.prank(relayer);
-        vm.expectRevert(bytes(InvalidChain_Error));
+        vm.expectRevert(Errors.Deposit_InvalidChain.selector);
         periphery.withdraw(wOrder);
     }
 
@@ -331,7 +331,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         );
 
         vm.prank(relayer);
-        vm.expectRevert(bytes(OnlySuperUser_Error));
+        vm.expectRevert(Errors.Deposit_OnlySuperUser.selector);
         periphery.deposit(dOrder);
 
         dOrder =
@@ -350,7 +350,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
             _signWithdrawIntent(_withdrawIntent(alice, alice, address(mockToken2), 0, 0), alicePK);
 
         vm.prank(relayer);
-        vm.expectRevert(bytes(OnlySuperUser_Error));
+        vm.expectRevert(Errors.Deposit_OnlySuperUser.selector);
         periphery.withdraw(wOrder);
     }
 }

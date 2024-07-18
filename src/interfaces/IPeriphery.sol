@@ -4,6 +4,48 @@ pragma solidity ^0.8.0;
 import "@src/modules/deposit/Structs.sol";
 
 interface IPeriphery {
+    event Paused();
+
+    event Unpaused();
+
+    event AssetEnabled(address asset);
+
+    event AssetDisabled(address asset);
+
+    event AccountOpened(address indexed user, Role role);
+
+    event AccountRoleChanged(address indexed user, Role role);
+
+    event AccountPaused(address indexed user);
+
+    event AccountUnpaused(address indexed user);
+
+    event FeeRecipientUpdated(address newRecipient, address oldRecipient);
+
+    event PerformanceFeeUpdated(uint256 oldFee, uint256 newFee);
+
+    event Deposit(
+        address indexed user,
+        address asset,
+        uint256 assetAmountIn,
+        uint256 sharesOut,
+        address relayer,
+        uint256 relayerTip
+    );
+
+    event Withdraw(
+        address indexed user,
+        address to,
+        address asset,
+        uint256 sharesIn,
+        uint256 assetAmountOut,
+        address relayer,
+        uint256 relayerTip
+    );
+
+    event WithdrawFees(address indexed to, address asset, uint256 sharesIn, uint256 assetAmountOut);
+
+    function paused() external returns (bool);
     function totalAssets() external view returns (uint256);
     function deposit(DepositOrder calldata order) external returns (uint256 sharesOut);
     function withdraw(WithdrawOrder calldata order) external returns (uint256 assetAmountOut);

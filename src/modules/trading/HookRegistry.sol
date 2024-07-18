@@ -2,10 +2,9 @@
 pragma solidity ^0.8.0;
 
 import "@src/interfaces/IHookRegistry.sol";
+import "@src/libs/Errors.sol";
 import {HookLib} from "./Hooks.sol";
 import {HookConfig, Hooks} from "./Structs.sol";
-import "./Errors.sol";
-import "./Events.sol";
 
 contract HookRegistry is IHookRegistry {
     using HookLib for HookConfig;

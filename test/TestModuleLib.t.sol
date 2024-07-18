@@ -12,6 +12,7 @@ import {IOwnable} from "@src/interfaces/IOwnable.sol";
 import {TestBaseFund} from "@test/base/TestBaseFund.sol";
 import "@openzeppelin-contracts/utils/Create2.sol";
 import "@safe-contracts/libraries/CreateCall.sol";
+import "@src/libs/Errors.sol";
 
 contract MockModule {
     address internal owner;

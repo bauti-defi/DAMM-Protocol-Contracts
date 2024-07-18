@@ -10,14 +10,11 @@ import "@solmate/utils/SafeTransferLib.sol";
 import "@euler-price-oracle/interfaces/IPriceOracle.sol";
 import "@src/libs/Constants.sol";
 
+import "@src/libs/Errors.sol";
 import "@src/interfaces/IPeriphery.sol";
 import "./UnitOfAccount.sol";
 import "./Structs.sol";
-import "./Errors.sol";
-import "./Events.sol";
 import {FundShareVault} from "./FundShareVault.sol";
-
-uint256 constant BP_DIVISOR = 10_000;
 
 contract Periphery is IPeriphery {
     using SafeTransferLib for ERC20;
@@ -38,6 +35,7 @@ contract Periphery is IPeriphery {
 
     uint256 public feeBps = 0;
     address public feeRecipient;
+    bool public paused;
 
     constructor(
         string memory _vaultName,
@@ -57,18 +55,25 @@ contract Periphery is IPeriphery {
     }
 
     modifier onlyWhenFundIsFullyDivested() {
-        require(!fund.hasOpenPositions(), FundNotFullyDivested_Error);
+        if (fund.hasOpenPositions()) revert Errors.Deposit_FundNotFullyDivested();
         _;
     }
 
     modifier onlyFund() {
-        require(msg.sender == address(fund), OnlyFund_Error);
+        if (msg.sender != address(fund)) revert Errors.OnlyFund();
         _;
     }
 
     modifier onlyActiveUser(address user) {
-        require(userAccountInfo[user].role != Role.NONE, OnlyUser_Error);
-        require(userAccountInfo[user].status == AccountStatus.ACTIVE, AccountNotActive_Error);
+        if (userAccountInfo[user].role == Role.NONE) revert Errors.Deposit_OnlyUser();
+        if (userAccountInfo[user].status != AccountStatus.ACTIVE) {
+            revert Errors.Deposit_AccountNotActive();
+        }
+        _;
+    }
+
+    modifier notPaused() {
+        if (paused) revert Errors.Deposit_ModulePaused();
         _;
     }
 
@@ -136,37 +141,43 @@ contract Periphery is IPeriphery {
         _;
 
         /// invariants
-        require(this.totalAssets() == vault.totalAssets(), AssetInvariant_Error);
-        require(unitOfAccount.totalSupply() == vault.totalAssets(), UnExpectedSupplyIncrease_Error);
+        if (this.totalAssets() != vault.totalAssets()) {
+            revert Errors.Deposit_AssetInvariantViolated();
+        }
+        if (unitOfAccount.totalSupply() != vault.totalAssets()) {
+            revert Errors.Deposit_SupplyInvariantViolated();
+        }
     }
 
     function deposit(DepositOrder calldata order)
         public
+        notPaused
         onlyActiveUser(order.intent.user)
         update
         returns (uint256 sharesOut)
     {
-        require(
-            SignatureChecker.isValidSignatureNow(
+        if (
+            !SignatureChecker.isValidSignatureNow(
                 order.intent.user,
                 abi.encode(order.intent).toEthSignedMessageHash(),
                 order.signature
-            ),
-            InvalidSignature_Error
-        );
-        require(order.intent.user != feeRecipient, OnlyNotFeeRecipient_Error);
-        require(
-            order.intent.nonce == userAccountInfo[order.intent.user].nonce++, InvalidNonce_Error
-        );
-        require(order.intent.deadline >= block.timestamp, IntentExpired_Error);
-        require(order.intent.chaindId == block.chainid, InvalidChain_Error);
+            )
+        ) revert Errors.Deposit_InvalidSignature();
+        if (order.intent.nonce != userAccountInfo[order.intent.user].nonce++) {
+            revert Errors.Deposit_InvalidNonce();
+        }
+
+        if (order.intent.chaindId != block.chainid) revert Errors.Deposit_InvalidChain();
+        if (order.intent.deadline < block.timestamp) revert Errors.Deposit_IntentExpired();
 
         AssetPolicy memory policy = assetPolicy[order.intent.asset];
 
-        require(policy.canDeposit && policy.enabled, AssetUnavailable_Error);
+        if (!policy.canDeposit || !policy.enabled) {
+            revert Errors.Deposit_AssetUnavailable();
+        }
 
-        if (policy.permissioned) {
-            require(userAccountInfo[order.intent.user].role == Role.SUPER_USER, OnlySuperUser_Error);
+        if (policy.permissioned && userAccountInfo[order.intent.user].role != Role.SUPER_USER) {
+            revert Errors.Deposit_OnlySuperUser();
         }
 
         uint256 assetAmountIn = order.intent.amount;
@@ -178,7 +189,9 @@ contract Periphery is IPeriphery {
 
             /// make sure there is enough asset to cover the relayer tip
             if (order.intent.relayerTip > 0) {
-                require(assetAmountIn > order.intent.relayerTip, InsufficientAmount_Error);
+                if (assetAmountIn <= order.intent.relayerTip) {
+                    revert Errors.Deposit_InsufficientAmount();
+                }
 
                 /// deduct it from the amount to deposit
                 assetAmountIn -= order.intent.relayerTip;
@@ -190,7 +203,9 @@ contract Periphery is IPeriphery {
             oracleRouter.getQuote(assetAmountIn, order.intent.asset, address(unitOfAccount));
 
         /// make sure the deposit is above the minimum
-        require(liquidity > policy.minimumDeposit, InsufficientDeposit_Error);
+        if (liquidity < policy.minimumDeposit) {
+            revert Errors.Deposit_InsufficientDeposit();
+        }
 
         /// pay the relayer if required
         if (order.intent.relayerTip > 0) {
@@ -207,7 +222,9 @@ contract Periphery is IPeriphery {
         sharesOut = vault.deposit(liquidity, order.intent.user);
 
         /// lets make sure slippage is acceptable
-        require(sharesOut >= order.intent.minSharesOut, SlippageLimit_Error);
+        if (sharesOut < order.intent.minSharesOut) {
+            revert Errors.Deposit_SlippageLimitExceeded();
+        }
 
         emit Deposit(
             order.intent.user,
@@ -225,19 +242,19 @@ contract Periphery is IPeriphery {
         update
         returns (uint256 assetAmountOut)
     {
-        require(
-            SignatureChecker.isValidSignatureNow(
+        if (
+            !SignatureChecker.isValidSignatureNow(
                 order.intent.user,
                 abi.encode(order.intent).toEthSignedMessageHash(),
                 order.signature
-            ),
-            InvalidSignature_Error
-        );
-        require(
-            order.intent.nonce == userAccountInfo[order.intent.user].nonce++, InvalidNonce_Error
-        );
-        require(order.intent.deadline >= block.timestamp, IntentExpired_Error);
-        require(order.intent.chaindId == block.chainid, InvalidChain_Error);
+            )
+        ) revert Errors.Deposit_InvalidSignature();
+        if (order.intent.nonce != userAccountInfo[order.intent.user].nonce++) {
+            revert Errors.Deposit_InvalidNonce();
+        }
+
+        if (order.intent.chaindId != block.chainid) revert Errors.Deposit_InvalidChain();
+        if (order.intent.deadline < block.timestamp) revert Errors.Deposit_IntentExpired();
 
         /// withdraw liquidity from vault
         assetAmountOut = _withdraw(
@@ -246,7 +263,9 @@ contract Periphery is IPeriphery {
 
         /// pay the relayer if required
         if (order.intent.relayerTip > 0) {
-            require(order.intent.relayerTip < assetAmountOut, InsufficientAmount_Error);
+            if (order.intent.relayerTip >= assetAmountOut) {
+                revert Errors.Deposit_InsufficientAmount();
+            }
 
             _transferAssetFromFund(order.intent.asset, msg.sender, order.intent.relayerTip);
         }
@@ -272,7 +291,9 @@ contract Periphery is IPeriphery {
         update
         returns (uint256 assetAmountOut)
     {
-        require(msg.sender == feeRecipient, OnlyFeeRecipient_Error);
+        if (msg.sender != feeRecipient) {
+            revert Errors.Deposit_OnlyFeeRecipient();
+        }
 
         /// withdraw liquidity from vault
         assetAmountOut = _withdraw(asset, shares, feeRecipient, minAmountOut);
@@ -281,6 +302,45 @@ contract Periphery is IPeriphery {
         _transferAssetFromFund(asset, feeRecipient, assetAmountOut);
 
         emit WithdrawFees(feeRecipient, asset, shares, assetAmountOut);
+    }
+
+    function _withdraw(address assetOut, uint256 sharesToBurn, address user, uint256 minAmountOut)
+        private
+        returns (uint256 assetAmountOut)
+    {
+        AssetPolicy memory policy = assetPolicy[assetOut];
+
+        if (!policy.canWithdraw || !policy.enabled) {
+            revert Errors.Deposit_AssetUnavailable();
+        }
+
+        if (policy.permissioned && userAccountInfo[user].role != Role.SUPER_USER) {
+            revert Errors.Deposit_OnlySuperUser();
+        }
+
+        /// if shares to burn is 0, then burn all shares owned by user
+        if (sharesToBurn == 0) {
+            sharesToBurn = vault.balanceOf(user);
+        }
+
+        /// burn vault shares in exchange for liquidity (unit of account) tokens
+        uint256 liquidity = vault.redeem(sharesToBurn, address(this), user);
+
+        /// make sure the withdrawal is above the minimum
+        if (liquidity < policy.minimumWithdrawal) {
+            revert Errors.Deposit_InsufficientWithdrawal();
+        }
+
+        /// burn liquidity from periphery
+        unitOfAccount.burn(address(this), liquidity);
+
+        /// calculate how much asset for this amount of liquidity
+        assetAmountOut = oracleRouter.getQuote(liquidity, address(unitOfAccount), assetOut);
+
+        /// make sure slippage is acceptable
+        if (minAmountOut > 0 && assetAmountOut < minAmountOut) {
+            revert Errors.Deposit_SlippageLimitExceeded();
+        }
     }
 
     function _transferAssetFromFund(address asset, address to, uint256 amount) private {
@@ -293,47 +353,15 @@ contract Periphery is IPeriphery {
         );
 
         /// check transfer was successful
-        require(
-            success && (returnData.length == 0 || abi.decode(returnData, (bool))),
-            AssetTransfer_Error
-        );
-    }
-
-    function _withdraw(address assetOut, uint256 sharesToBurn, address user, uint256 minAmountOut)
-        private
-        returns (uint256 assetAmountOut)
-    {
-        AssetPolicy memory policy = assetPolicy[assetOut];
-
-        require(policy.canWithdraw && policy.enabled, AssetUnavailable_Error);
-
-        if (policy.permissioned) {
-            require(userAccountInfo[user].role == Role.SUPER_USER, OnlySuperUser_Error);
+        if (!success || (returnData.length > 0 && !abi.decode(returnData, (bool)))) {
+            revert Errors.Deposit_AssetTransferFailed();
         }
-
-        /// if shares to burn is 0, then burn all shares owned by user
-        if (sharesToBurn == 0) {
-            sharesToBurn = vault.balanceOf(user);
-        }
-
-        /// burn vault shares in exchange for liquidity (unit of account) tokens
-        uint256 liquidity = vault.redeem(sharesToBurn, address(this), user);
-
-        /// make sure the withdrawal is above the minimum
-        require(liquidity > policy.minimumWithdrawal, InsufficientWithdraw_Error);
-
-        /// burn liquidity from periphery
-        unitOfAccount.burn(address(this), liquidity);
-
-        /// calculate how much asset for this amount of liquidity
-        assetAmountOut = oracleRouter.getQuote(liquidity, address(unitOfAccount), assetOut);
-
-        /// make sure slippage is acceptable
-        require(minAmountOut == 0 || assetAmountOut >= minAmountOut, SlippageLimit_Error);
     }
 
     function _setFeeRecipient(address recipient) private {
-        require(recipient != address(0), InvalidFeeRecipient_Error);
+        if (recipient == address(0)) {
+            revert Errors.Deposit_InvalidFeeRecipient();
+        }
 
         address previous = feeRecipient;
 
@@ -343,28 +371,34 @@ contract Periphery is IPeriphery {
         emit FeeRecipientUpdated(recipient, previous);
     }
 
-    function setFeeRecipient(address recipient) external onlyFund {
+    function setFeeRecipient(address recipient) external notPaused onlyFund {
         _setFeeRecipient(recipient);
     }
 
-    function setFeeBps(uint256 bps) external onlyFund {
-        require(bps < BP_DIVISOR, InvalidPerformanceFee_Error);
+    function setFeeBps(uint256 bps) external notPaused onlyFund {
+        if (bps >= BP_DIVISOR) {
+            revert Errors.Deposit_InvalidPerformanceFee();
+        }
         uint256 oldFee = feeBps;
         feeBps = bps;
 
         emit PerformanceFeeUpdated(oldFee, bps);
     }
 
-    function enableAsset(address asset, AssetPolicy memory policy) external onlyFund {
-        require(fund.isAssetOfInterest(asset), AssetNotSupported_Error);
-        require(policy.enabled, InvalidAssetPolicy_Error);
+    function enableAsset(address asset, AssetPolicy memory policy) external notPaused onlyFund {
+        if (!fund.isAssetOfInterest(asset)) {
+            revert Errors.Deposit_AssetNotSupported();
+        }
+        if (!policy.enabled) {
+            revert Errors.Deposit_InvalidAssetPolicy();
+        }
 
         assetPolicy[asset] = policy;
 
         emit AssetEnabled(asset);
     }
 
-    function disableAsset(address asset) external onlyFund {
+    function disableAsset(address asset) external notPaused onlyFund {
         assetPolicy[asset].enabled = false;
 
         emit AssetDisabled(asset);
@@ -374,7 +408,7 @@ contract Periphery is IPeriphery {
         return assetPolicy[asset];
     }
 
-    function increaseNonce(uint256 increment) external onlyActiveUser(msg.sender) {
+    function increaseNonce(uint256 increment) external notPaused onlyActiveUser(msg.sender) {
         userAccountInfo[msg.sender].nonce += increment > 0 ? increment : 1;
     }
 
@@ -383,7 +417,9 @@ contract Periphery is IPeriphery {
     }
 
     function _pauseAccount(address user) private {
-        require(userAccountInfo[user].status == AccountStatus.ACTIVE, AccountNotActive_Error);
+        if (userAccountInfo[user].status != AccountStatus.ACTIVE) {
+            revert Errors.Deposit_AccountNotActive();
+        }
 
         userAccountInfo[user].status = AccountStatus.PAUSED;
 
@@ -395,7 +431,9 @@ contract Periphery is IPeriphery {
     }
 
     function unpauseAccount(address user) public onlyFund {
-        require(userAccountInfo[user].status == AccountStatus.PAUSED, AccountNotPaused_Error);
+        if (userAccountInfo[user].status != AccountStatus.PAUSED) {
+            revert Errors.Deposit_AccountNotPaused();
+        }
 
         userAccountInfo[user].status = AccountStatus.ACTIVE;
 
@@ -403,7 +441,9 @@ contract Periphery is IPeriphery {
     }
 
     function updateAccountRole(address user, Role role) public onlyFund {
-        require(userAccountInfo[user].status != AccountStatus.NULL, AccountNull_Error);
+        if (userAccountInfo[user].status == AccountStatus.NULL) {
+            revert Errors.Deposit_AccountNotActive();
+        }
 
         userAccountInfo[user].role = role;
 
@@ -411,7 +451,9 @@ contract Periphery is IPeriphery {
     }
 
     function _openAccount(address user, Role role) private {
-        require(userAccountInfo[user].status == AccountStatus.NULL, AccountExists_Error);
+        if (userAccountInfo[user].status != AccountStatus.NULL) {
+            revert Errors.Deposit_AccountExists();
+        }
 
         userAccountInfo[user] =
             UserAccountInfo({nonce: 0, role: role, status: AccountStatus.ACTIVE});
@@ -421,5 +463,17 @@ contract Periphery is IPeriphery {
 
     function openAccount(address user, Role role) public onlyFund {
         _openAccount(user, role);
+    }
+
+    function pause() external onlyFund {
+        paused = true;
+
+        emit Paused();
+    }
+
+    function unpause() external onlyFund {
+        paused = false;
+
+        emit Unpaused();
     }
 }

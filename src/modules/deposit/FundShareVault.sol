@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 
 import "@openzeppelin-contracts/token/ERC20/extensions/ERC4626.sol";
-import {OnlyPeriphery_Error} from "./Errors.sol";
+import "@src/libs/Errors.sol";
 
 contract FundShareVault is ERC4626 {
     address internal immutable periphery;
@@ -15,7 +15,7 @@ contract FundShareVault is ERC4626 {
     }
 
     modifier onlyPeriphery() {
-        require(msg.sender == address(periphery), OnlyPeriphery_Error);
+        if (msg.sender != address(periphery)) revert Errors.Deposit_OnlyPeriphery();
         _;
     }
 

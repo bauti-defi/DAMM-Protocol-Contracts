@@ -4,15 +4,13 @@ pragma solidity ^0.8.0;
 import {ISafe} from "@src/interfaces/ISafe.sol";
 import {Enum} from "@safe-contracts/common/Enum.sol";
 import {ReentrancyGuard} from "@openzeppelin-contracts/utils/ReentrancyGuard.sol";
-
+import "@src/libs/Errors.sol";
 import "@src/interfaces/ITransactionHooks.sol";
 import "@src/interfaces/ITradingModule.sol";
 import "@src/interfaces/IHookRegistry.sol";
 import "./Structs.sol";
-import "./Errors.sol";
-import "./Events.sol";
 
-contract TradingModule is ITradingModule, ReentrancyGuard {
+contract TradingModule is ReentrancyGuard, ITradingModule {
     address public immutable fund;
     IHookRegistry public immutable hookRegistry;
     uint256 public maxGasPriorityInBasisPoints;
@@ -24,7 +22,7 @@ contract TradingModule is ITradingModule, ReentrancyGuard {
     }
 
     modifier notPaused() {
-        if (paused) revert Errors.TradingModule_Paused();
+        if (paused) revert Errors.Trading_ModulePaused();
         _;
     }
 
