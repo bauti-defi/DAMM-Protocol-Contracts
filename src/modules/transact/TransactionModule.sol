@@ -25,15 +25,14 @@ contract TransactionModule is ReentrancyGuard, ITransactionModule {
         _;
     }
 
-    // TODO: calculate the gas overhead of the refunding logic so we can refund the correct amount of gas
-    // will never be able to refund 100% but we can get close
-    /// @dev the chain must be EIP1559 complient to support `basefee`
+    /// TODO: calculate the gas overhead of the refunding logic so we can refund the correct amount of gas
     modifier refundGasToCaller() {
         uint256 gasAtStart = gasleft();
 
-        // failsafe for caller not to be able to set a gas price that is too high
-        // the fund can update this limit in moments of emergency (e.g. high gas prices, network congestion, etc.)
-        // gasPriority = tx.gasprice - block.basefee
+        /// failsafe for caller not to be able to set a gas price that is too high
+        /// the fund can update this limit in moments of emergency (e.g. high gas prices, network congestion, etc.)
+        /// gasPriority = tx.gasprice - block.basefee
+        /// @dev the chain must be EIP1559 complient to support `basefee`
         if (
             maxGasPriorityInBasisPoints > 0 && tx.gasprice > block.basefee
                 && ((tx.gasprice - block.basefee) * 10000) / tx.gasprice >= maxGasPriorityInBasisPoints
@@ -44,6 +43,7 @@ contract TransactionModule is ReentrancyGuard, ITransactionModule {
         _;
 
         if (
+            /// the refund will not be exact but we can get close
             !ISafe(fund).execTransactionFromModule(
                 msg.sender, (gasAtStart - gasleft()) * tx.gasprice, "", Enum.Operation.Call
             )
@@ -75,9 +75,9 @@ contract TransactionModule is ReentrancyGuard, ITransactionModule {
 
         if (!success) {
             assembly {
-                // bubble up revert reason if length > 0
+                /// bubble up revert reason if length > 0
                 if gt(mload(returnData), 0) { revert(add(returnData, 0x20), mload(returnData)) }
-                // else revert with no reason
+                /// else revert with no reason
                 revert(0, 0)
             }
         }
@@ -108,9 +108,9 @@ contract TransactionModule is ReentrancyGuard, ITransactionModule {
         /// @notice min transaction length is 85 bytes (a single function selector with no calldata)
         if (transactionCount == 0) revert Errors.Transaction_InvalidTransactionLength();
 
-        // lets iterate over the transactions. Each transaction will be verified and then executed through the safe.
+        /// lets iterate over the transactions. Each transaction will be verified and then executed through the safe.
         for (uint256 i = 0; i < transactionCount;) {
-            // msg.sender is operator
+            /// msg.sender is operator
             Hooks memory hook = hookRegistry.getHooks(
                 msg.sender,
                 transactions[i].target,
@@ -124,8 +124,11 @@ contract TransactionModule is ReentrancyGuard, ITransactionModule {
 
             if (hook.beforeTrxHook != address(0)) {
                 _executeAndReturnDataOrRevert(
-                    hook.beforeTrxHook, // target
-                    0, // value
+                    /// target
+                    hook.beforeTrxHook,
+                    /// value
+                    0,
+                    /// data
                     abi.encodeWithSelector(
                         IBeforeTransaction.checkBeforeTransaction.selector,
                         transactions[i].target,
@@ -133,8 +136,9 @@ contract TransactionModule is ReentrancyGuard, ITransactionModule {
                         transactions[i].operation,
                         transactions[i].value,
                         transactions[i].data
-                    ), // data
-                    Enum.Operation.Call // operation
+                    ),
+                    /// operation
+                    Enum.Operation.Call
                 );
             }
 

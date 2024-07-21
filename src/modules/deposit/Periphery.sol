@@ -106,8 +106,9 @@ contract Periphery is IPeriphery {
     }
 
     /// @dev two things must happen here.
-    /// 1. we need to calculate the profit/loss from the last update. Pay fee accordingly
-    /// 2. we need to update the vault's underlying assets to match the fund's valuation
+    /// 1. calculate the profit/loss since the last time this function was called.
+    /// 2. strip protocol fee
+    /// 3. update vault's total assets to match the fund's total assets
     modifier update() {
         uint256 assetsInFund = this.totalAssets();
         uint256 assetsInVault = vault.totalAssets();
@@ -132,13 +133,14 @@ contract Periphery is IPeriphery {
             }
         } else if (assetsInFund < assetsInVault) {
             /// if the fund has lost value, we need to account for it
-            /// by burning the difference in the vault
+            /// so we decrease the vault's total assets to match the fund's total assets
+            /// by burning the loss
             unitOfAccount.burn(address(vault), assetsInVault - assetsInFund);
         }
 
         _;
 
-        /// invariants
+        /// invariants for 'some' peace of mind
         if (this.totalAssets() != vault.totalAssets()) {
             revert Errors.Deposit_AssetInvariantViolated();
         }
@@ -186,23 +188,12 @@ contract Periphery is IPeriphery {
             assetAmountIn = assetToken.balanceOf(order.intent.user);
 
             /// make sure there is enough asset to cover the relayer tip
-            if (order.intent.relayerTip > 0) {
-                if (assetAmountIn <= order.intent.relayerTip) {
-                    revert Errors.Deposit_InsufficientAmount();
-                }
-
-                /// deduct it from the amount to deposit
-                assetAmountIn -= order.intent.relayerTip;
+            if (order.intent.relayerTip > 0 && assetAmountIn <= order.intent.relayerTip) {
+                revert Errors.Deposit_InsufficientAmount();
             }
-        }
 
-        /// calculate how much liquidity for this amount of deposited asset
-        uint256 liquidity =
-            oracleRouter.getQuote(assetAmountIn, order.intent.asset, address(unitOfAccount));
-
-        /// make sure the deposit is above the minimum
-        if (liquidity < policy.minimumDeposit) {
-            revert Errors.Deposit_InsufficientDeposit();
+            /// deduct it from the amount to deposit
+            assetAmountIn -= order.intent.relayerTip;
         }
 
         /// pay the relayer if required
@@ -212,6 +203,15 @@ contract Periphery is IPeriphery {
 
         /// transfer asset from user to fund
         assetToken.safeTransferFrom(order.intent.user, address(fund), assetAmountIn);
+
+        /// calculate how much liquidity for this amount of deposited asset
+        uint256 liquidity =
+            oracleRouter.getQuote(assetAmountIn, order.intent.asset, address(unitOfAccount));
+
+        /// make sure the deposit is above the minimum
+        if (liquidity < policy.minimumDeposit) {
+            revert Errors.Deposit_InsufficientDeposit();
+        }
 
         /// mint liquidity to periphery
         unitOfAccount.mint(address(this), liquidity);
@@ -336,6 +336,7 @@ contract Periphery is IPeriphery {
         assetAmountOut = oracleRouter.getQuote(liquidity, address(unitOfAccount), assetOut);
 
         /// make sure slippage is acceptable
+        ///@notice if minAmountOut is 0, then slippage is not checked
         if (minAmountOut > 0 && assetAmountOut < minAmountOut) {
             revert Errors.Deposit_SlippageLimitExceeded();
         }

@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 
 interface IModuleLib {
-    event ModuleDeployed(address safe, address module);
+    event ModuleDeployed(address safe, address module, uint256 value, uint256 roles);
 
     function deployModule(bytes32 salt, uint256 value, bytes memory creationCode)
         external
