@@ -7,20 +7,16 @@ import {AggregatorV3Interface} from
 
 /// @dev This Oracle is a wrapper for any Chainlink oracle on L2.
 /// It uses the L2 sequencer feed to check that the sequencer is running.
-contract ChainlinkL2SequencerOracle is BaseAdapter {
+contract ChainlinkL2Oracle is BaseAdapter {
     string public constant name = "ChainlinkL2Oracle";
 
     address public immutable sequencerFeed;
     address public immutable chainlinkOracle;
-    uint256 public immutable l2SequencerUptimeGracePeriod;
+    uint256 public immutable gracePeriodDuration;
 
-    constructor(
-        address _sequencerFeed,
-        uint256 _l2SequencerUptimeGracePeriod,
-        address _chainlinkOracle
-    ) {
+    constructor(address _sequencerFeed, uint256 _gracePeriodDuration, address _chainlinkOracle) {
         sequencerFeed = _sequencerFeed;
-        l2SequencerUptimeGracePeriod = _l2SequencerUptimeGracePeriod;
+        gracePeriodDuration = _gracePeriodDuration;
         chainlinkOracle = _chainlinkOracle;
     }
 
@@ -37,12 +33,15 @@ contract ChainlinkL2SequencerOracle is BaseAdapter {
     {
         (, int256 answer, uint256 startedAt,,) =
             AggregatorV3Interface(sequencerFeed).latestRoundData();
-
+        /// @dev if 0 then sequencer is up, else it is down
         if (answer != 0) revert Errors.PriceOracle_InvalidAnswer();
-        if (block.timestamp - startedAt < l2SequencerUptimeGracePeriod) {
-            revert Errors.PriceOracle_TooStale(
-                block.timestamp - startedAt, l2SequencerUptimeGracePeriod
-            );
+
+        /// @notice use `startedAt` instead of `updatedAt`.
+        /// Make sure the grace period has passed after the
+        /// sequencer is back up.
+        uint256 timeSinceUp = block.timestamp - startedAt;
+        if (timeSinceUp <= gracePeriodDuration) {
+            revert Errors.PriceOracle_TooStale(timeSinceUp, gracePeriodDuration);
         }
 
         return IPriceOracle(chainlinkOracle).getQuote(inAmount, _base, _quote);
