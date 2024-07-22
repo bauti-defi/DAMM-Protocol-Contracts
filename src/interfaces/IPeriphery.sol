@@ -10,13 +10,13 @@ interface IPeriphery {
 
     event Unpaused();
 
-    event AssetEnabled(address asset);
+    event AssetEnabled(address asset, AssetPolicy policy);
 
     event AssetDisabled(address asset);
 
     event AccountOpened(address indexed user, Role role);
 
-    event AccountRoleChanged(address indexed user, Role role);
+    event AccountRoleChanged(address indexed user, Role oldRole, Role newRole);
 
     event AccountPaused(address indexed user);
 

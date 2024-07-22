@@ -48,6 +48,7 @@ library Errors {
     /// Account errors
     error Deposit_AccountNotPaused();
     error Deposit_AccountNotActive();
+    error Deposit_InvalidAccountRoleUpdate();
     error Deposit_AccountExists();
 
     /// Access control errors

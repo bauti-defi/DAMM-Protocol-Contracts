@@ -49,6 +49,8 @@ contract Periphery is IPeriphery {
 
         unitOfAccount = new UnitOfAccount("Liquidity", "UNIT", _decimals);
         vault = new FundShareVault(address(unitOfAccount), _vaultName, _vaultSymbol);
+
+        /// @notice infinite approval for the vault to manage periphery's balance
         unitOfAccount.approve(address(vault), type(uint256).max);
     }
 
@@ -113,10 +115,12 @@ contract Periphery is IPeriphery {
         uint256 assetsInFund = this.totalAssets();
         uint256 assetsInVault = vault.totalAssets();
 
-        /// we know that the difference between the assets in the fund and the vault is the profit/loss since last update
-        /// we can calculate the performance fee based on this difference
+        /// we know that the difference between the assets in the fund and the assets in the vault
+        /// is equal to the profit/loss since last update
         if (assetsInFund > assetsInVault) {
             uint256 profit = assetsInFund - assetsInVault;
+
+            /// the performance fee is a percentage of the profit if there is any
             uint256 fee = feeBps > 0 ? profit.mulDiv(feeBps, BP_DIVISOR) : 0;
 
             /// we mint the profit to the periphery
@@ -124,7 +128,9 @@ contract Periphery is IPeriphery {
 
             /// we transfer the profit (deducting the fee) into the vault
             /// this will distribute the profit to the vault's shareholders
-            unitOfAccount.transfer(address(vault), profit - fee);
+            if (!unitOfAccount.transfer(address(vault), profit - fee)) {
+                revert Errors.Deposit_AssetTransferFailed();
+            }
 
             /// if a positive fee has been accrued
             if (fee > 0) {
@@ -141,11 +147,13 @@ contract Periphery is IPeriphery {
         _;
 
         /// invariants for 'some' peace of mind
-        if (this.totalAssets() != vault.totalAssets()) {
-            revert Errors.Deposit_AssetInvariantViolated();
-        }
-        if (unitOfAccount.totalSupply() != vault.totalAssets()) {
+        assetsInFund = this.totalAssets();
+        assetsInVault = vault.totalAssets();
+        if (unitOfAccount.totalSupply() != assetsInVault) {
             revert Errors.Deposit_SupplyInvariantViolated();
+        }
+        if (assetsInFund != assetsInVault) {
+            revert Errors.Deposit_AssetInvariantViolated();
         }
     }
 
@@ -394,7 +402,7 @@ contract Periphery is IPeriphery {
 
         assetPolicy[asset] = policy;
 
-        emit AssetEnabled(asset);
+        emit AssetEnabled(asset, policy);
     }
 
     function disableAsset(address asset) external notPaused onlyFund {
@@ -436,6 +444,9 @@ contract Periphery is IPeriphery {
 
         userAccountInfo[user].status = AccountStatus.ACTIVE;
 
+        /// lets increment the nonce to prevent delayed replay attacks
+        userAccountInfo[user].nonce++;
+
         emit AccountUnpaused(user);
     }
 
@@ -443,10 +454,14 @@ contract Periphery is IPeriphery {
         if (userAccountInfo[user].status == AccountStatus.NULL) {
             revert Errors.Deposit_AccountNotActive();
         }
+        Role currentRole = userAccountInfo[user].role;
+        if (currentRole == role || role == Role.NONE) {
+            revert Errors.Deposit_InvalidAccountRoleUpdate();
+        }
 
         userAccountInfo[user].role = role;
 
-        emit AccountRoleChanged(user, role);
+        emit AccountRoleChanged(user, currentRole, role);
     }
 
     function _openAccount(address user, Role role) private {
