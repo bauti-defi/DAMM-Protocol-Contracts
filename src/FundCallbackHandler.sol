@@ -22,6 +22,10 @@ contract FundCallbackHandler is TokenCallbackHandler, HandlerContext, IPortfolio
 
     mapping(address module => uint256 role) private moduleRoles;
 
+    /// @notice Ordered time series of fund liquidation timestamps
+    /// can be used for external inference
+    uint256[] private fundLiquidationTimeSeries;
+
     constructor(address _fund) {
         fund = _fund;
     }
@@ -53,10 +57,12 @@ contract FundCallbackHandler is TokenCallbackHandler, HandlerContext, IPortfolio
 
     function onPositionOpened(bytes32 positionPointer)
         external
+        override
         onlyModule
         withRole(POSITION_OPENER_ROLE)
         returns (bool result)
     {
+        /// @notice returns false if position is already open
         result = openPositions.add(positionPointer);
 
         emit PositionOpened(_msgSender(), positionPointer);
@@ -64,41 +70,65 @@ contract FundCallbackHandler is TokenCallbackHandler, HandlerContext, IPortfolio
 
     function onPositionClosed(bytes32 positionPointer)
         external
+        override
         onlyModule
         withRole(POSITION_CLOSER_ROLE)
         returns (bool result)
     {
+        /// @notice returns false if position is already closed
         result = openPositions.remove(positionPointer);
 
-        emit PositionClosed(_msgSender(), positionPointer);
+        bool liquidated = openPositions.length() == 0;
+        if (liquidated && result) {
+            fundLiquidationTimeSeries.push(block.timestamp);
+        }
+
+        emit PositionClosed(_msgSender(), positionPointer, liquidated && result);
     }
 
-    function holdsPosition(bytes32 positionPointer) external view returns (bool) {
+    function holdsPosition(bytes32 positionPointer) external view override returns (bool) {
         return openPositions.contains(positionPointer);
     }
 
-    function hasOpenPositions() external view returns (bool) {
+    function hasOpenPositions() external view override returns (bool) {
         return openPositions.length() > 0;
     }
 
+    function getLatestLiquidationTimestamp() external view override returns (uint256) {
+        uint256 length = fundLiquidationTimeSeries.length;
+
+        if (length == 0) revert Errors.Fund_EmptyFundLiquidationTimeSeries();
+
+        return fundLiquidationTimeSeries[length - 1];
+    }
+
+    function getFundLiquidationTimeSeries() external view override returns (uint256[] memory) {
+        return fundLiquidationTimeSeries;
+    }
+
     /// @notice native asset = address(0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF)
-    function setAssetOfInterest(address _asset) external onlyFund returns (bool result) {
+    function setAssetOfInterest(address _asset) external override onlyFund returns (bool result) {
         result = assetsOfInterest.add(_asset);
 
         emit AssetOfInterestSet(_asset);
     }
 
-    function removeAssetOfInterest(address _asset) external onlyFund returns (bool result) {
+    function removeAssetOfInterest(address _asset)
+        external
+        override
+        onlyFund
+        returns (bool result)
+    {
         result = assetsOfInterest.remove(_asset);
 
         emit AssetOfInterestRemoved(_asset);
     }
 
-    function isAssetOfInterest(address asset) external view returns (bool) {
+    function isAssetOfInterest(address asset) external view override returns (bool) {
         return assetsOfInterest.contains(asset);
     }
 
-    function getAssetsOfInterest() external view returns (address[] memory) {
+    function getAssetsOfInterest() external view override returns (address[] memory) {
         return assetsOfInterest.values();
     }
 }

@@ -171,7 +171,7 @@ contract TestFundValuation is TestBaseProtocol, TestBaseGnosis, TokenMinter {
 
         // the caller must be an active module
         vm.prank(positionOpenerCloser);
-        fund.onPositionOpened(bytes32(uint256(1)));
+        assertTrue(fund.onPositionOpened(bytes32(uint256(1))));
 
         mintUSDC(address(fund), 1000 * (10 ** 6));
         mintUSDT(address(fund), 1000 * (10 ** 6));
@@ -185,9 +185,11 @@ contract TestFundValuation is TestBaseProtocol, TestBaseGnosis, TokenMinter {
 
         // close the position
         vm.prank(positionOpenerCloser);
-        fund.onPositionClosed(bytes32(uint256(1)));
+        assertTrue(fund.onPositionClosed(bytes32(uint256(1))));
 
         assertEq(fund.hasOpenPositions(), false, "No open positions");
+        assertEq(fund.getFundLiquidationTimeSeries().length, 1);
+        assertEq(fund.getLatestLiquidationTimestamp(), block.timestamp);
         assertTrue(periphery.totalAssets() > 0, "Total assets should not be 0");
     }
 
@@ -218,5 +220,41 @@ contract TestFundValuation is TestBaseProtocol, TestBaseGnosis, TokenMinter {
             0.1e18,
             "Total assets should be about same in USD"
         );
+    }
+
+    function test_fund_liquidation_time_series() public {
+        assertEq(fund.getFundLiquidationTimeSeries().length, 0);
+        vm.expectRevert(Errors.Fund_EmptyFundLiquidationTimeSeries.selector);
+        fund.getLatestLiquidationTimestamp();
+
+        // the caller must be an active module
+        vm.prank(positionOpenerCloser);
+        assertTrue(fund.onPositionOpened(bytes32(uint256(1))));
+
+        assertEq(fund.getFundLiquidationTimeSeries().length, 0);
+        vm.expectRevert(Errors.Fund_EmptyFundLiquidationTimeSeries.selector);
+        fund.getLatestLiquidationTimestamp();
+
+        assertEq(fund.hasOpenPositions(), true, "No open positions");
+
+        assertEq(fund.getFundLiquidationTimeSeries().length, 0);
+        vm.expectRevert(Errors.Fund_EmptyFundLiquidationTimeSeries.selector);
+        fund.getLatestLiquidationTimestamp();
+
+        // close the position
+        vm.prank(positionOpenerCloser);
+        assertTrue(fund.onPositionClosed(bytes32(uint256(1))));
+
+        assertEq(fund.hasOpenPositions(), false, "No open positions");
+        assertEq(fund.getFundLiquidationTimeSeries().length, 1);
+        assertEq(fund.getLatestLiquidationTimestamp(), block.timestamp);
+
+        // close the position that was already closed
+        vm.prank(positionOpenerCloser);
+        assertFalse(fund.onPositionClosed(bytes32(uint256(1))));
+
+        assertEq(fund.hasOpenPositions(), false, "No open positions");
+        assertEq(fund.getFundLiquidationTimeSeries().length, 1);
+        assertEq(fund.getLatestLiquidationTimestamp(), block.timestamp);
     }
 }

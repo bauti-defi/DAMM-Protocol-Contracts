@@ -8,7 +8,9 @@ interface IPortfolio {
 
     event PositionOpened(address indexed by, bytes32 positionPointer);
 
-    event PositionClosed(address indexed by, bytes32 positionPointer);
+    event PositionClosed(address indexed by, bytes32 positionPointer, bool fundLiquidated);
+
+    function fund() external view returns (address);
 
     function onPositionOpened(bytes32 positionId) external returns (bool);
 
@@ -17,6 +19,10 @@ interface IPortfolio {
     function hasOpenPositions() external view returns (bool);
 
     function holdsPosition(bytes32 positionPointer) external view returns (bool);
+
+    function getLatestLiquidationTimestamp() external view returns (uint256);
+
+    function getFundLiquidationTimeSeries() external view returns (uint256[] memory);
 
     function setAssetOfInterest(address _asset) external returns (bool);
 

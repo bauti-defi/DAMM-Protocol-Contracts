@@ -74,6 +74,7 @@ library Errors {
     /// FundCallbackHandler errors
     error Fund_NotModule();
     error Fund_NotAuthorized();
+    error Fund_EmptyFundLiquidationTimeSeries();
 
     /// FundFactory errors
     error FundFactory_DeploymentLockViolated();
