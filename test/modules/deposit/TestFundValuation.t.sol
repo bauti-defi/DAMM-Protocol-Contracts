@@ -9,6 +9,7 @@ import {MockERC20} from "@test/mocks/MockERC20.sol";
 import {TokenMinter} from "@test/forked/TokenMinter.sol";
 import {EulerRouter} from "@euler-price-oracle/EulerRouter.sol";
 import {ChainlinkOracle} from "@euler-price-oracle/adapter/chainlink/ChainlinkOracle.sol";
+import {FundValuationOracle} from "@src/modules/deposit/FundValuationOracle.sol";
 import {
     ARB_USDC_USD_FEED,
     ARB_USDT_USD_FEED,
@@ -35,6 +36,8 @@ contract TestFundValuation is TestBaseProtocol, TestBaseGnosis, TokenMinter {
     FundCallbackHandler internal callbackHandler;
     EulerRouter internal oracleRouter;
     Periphery internal periphery;
+    FundValuationOracle internal fundValuationOracle;
+    address internal unitOfAccount;
 
     address positionOpenerCloser;
 
@@ -130,7 +133,13 @@ contract TestFundValuation is TestBaseProtocol, TestBaseGnosis, TokenMinter {
         IFund(address(fund)).setAssetOfInterest(NATIVE_ASSET);
         vm.stopPrank();
 
-        address unitOfAccount = address(periphery.unitOfAccount());
+        unitOfAccount = address(periphery.unitOfAccount());
+
+        fundValuationOracle =
+            new FundValuationOracle(address(fund), unitOfAccount, address(oracleRouter));
+        vm.label(address(fundValuationOracle), "FundValuationOracle");
+        vm.prank(address(fund));
+        oracleRouter.govSetConfig(address(fund), unitOfAccount, address(fundValuationOracle));
 
         // setup USDC/USD oracle
         ChainlinkOracle chainlinkOracle =
@@ -166,7 +175,14 @@ contract TestFundValuation is TestBaseProtocol, TestBaseGnosis, TokenMinter {
     }
 
     function test_cannot_valuate_fund_with_open_positions() public {
-        assertEq(periphery.totalAssets(), 0, "Total assets should be 0");
+        assertEq(
+            fundValuationOracle.getQuote(0, address(fund), unitOfAccount),
+            0,
+            "Total assets should be 0"
+        );
+        assertEq(
+            oracleRouter.getQuote(0, address(fund), unitOfAccount), 0, "Total assets should be 0"
+        );
         assertEq(fund.hasOpenPositions(), false, "No open positions");
 
         // the caller must be an active module
@@ -178,8 +194,10 @@ contract TestFundValuation is TestBaseProtocol, TestBaseGnosis, TokenMinter {
         mintDAI(address(fund), 1000 * (10 ** 18));
         mintUSDCe(address(fund), 1000 * (10 ** 6));
 
-        vm.expectRevert(Errors.Deposit_FundNotFullyDivested.selector);
-        periphery.totalAssets();
+        vm.expectRevert(Errors.FundValuationOracle_FundNotFullyDivested.selector);
+        fundValuationOracle.getQuote(0, address(fund), unitOfAccount);
+        vm.expectRevert(Errors.FundValuationOracle_FundNotFullyDivested.selector);
+        oracleRouter.getQuote(0, address(fund), unitOfAccount);
 
         assertEq(fund.hasOpenPositions(), true, "No open positions");
 
@@ -190,7 +208,14 @@ contract TestFundValuation is TestBaseProtocol, TestBaseGnosis, TokenMinter {
         assertEq(fund.hasOpenPositions(), false, "No open positions");
         assertEq(fund.getFundLiquidationTimeSeries().length, 1);
         assertEq(fund.getLatestLiquidationTimestamp(), block.timestamp);
-        assertTrue(periphery.totalAssets() > 0, "Total assets should not be 0");
+        assertTrue(
+            fundValuationOracle.getQuote(0, address(fund), unitOfAccount) > 0,
+            "Total assets should not be 0"
+        );
+        assertTrue(
+            oracleRouter.getQuote(0, address(fund), unitOfAccount) > 0,
+            "Total assets should not be 0"
+        );
     }
 
     function test_valuate_fund_in_USD(uint256 a, uint256 b, uint256 c, uint256 d, uint256 e)
@@ -201,7 +226,14 @@ contract TestFundValuation is TestBaseProtocol, TestBaseGnosis, TokenMinter {
         vm.assume(c < 1e20 && c > 0);
         vm.assume(d < 1e20 && d > 0);
         vm.assume(e < 1e30 && e > 0);
-        assertEq(periphery.totalAssets(), 0, "Total assets should be 0");
+        assertEq(
+            fundValuationOracle.getQuote(0, address(fund), unitOfAccount),
+            0,
+            "Total assets should be 0"
+        );
+        assertEq(
+            oracleRouter.getQuote(0, address(fund), unitOfAccount), 0, "Total assets should be 0"
+        );
 
         // price at current block: 218796378
         uint256 eth_usd_price = 384782218166;
@@ -213,13 +245,38 @@ contract TestFundValuation is TestBaseProtocol, TestBaseGnosis, TokenMinter {
         mintUSDCe(address(fund), d * (10 ** 6));
         deal(address(fund), e);
 
+        uint256 finalAmount = (a + b + c + d) * (10 ** USD_DECIMALS) + e * eth_usd_price / 1 ether;
+
         // total assets in USD
         assertApproxEqRel(
-            periphery.totalAssets(),
-            (a + b + c + d) * (10 ** USD_DECIMALS) + e * eth_usd_price / 1 ether,
+            fundValuationOracle.getQuote(0, address(fund), unitOfAccount),
+            finalAmount,
             0.1e18,
             "Total assets should be about same in USD"
         );
+        assertApproxEqRel(
+            oracleRouter.getQuote(0, address(fund), unitOfAccount),
+            finalAmount,
+            0.1e18,
+            "Total assets should be about same in USD"
+        );
+    }
+
+    function test_fund_valuation_not_supported() public {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Errors.FundValuationOracle_NotSupported.selector, unitOfAccount, address(fund)
+            )
+        );
+        fundValuationOracle.getQuote(0, unitOfAccount, address(fund));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Errors.FundValuationOracle_NotSupported.selector, unitOfAccount, address(fund)
+            )
+        );
+        oracleRouter.getQuote(0, unitOfAccount, address(fund));
+        vm.expectRevert();
+        oracleRouter.getQuote(100, unitOfAccount, address(0));
     }
 
     function test_fund_liquidation_time_series() public {

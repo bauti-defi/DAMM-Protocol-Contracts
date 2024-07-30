@@ -55,7 +55,7 @@ contract Periphery is IPeriphery {
     }
 
     modifier onlyWhenFundIsFullyDivested() {
-        if (fund.hasOpenPositions()) revert Errors.Deposit_FundNotFullyDivested();
+        if (fund.hasOpenPositions()) revert Errors.FundValuationOracle_FundNotFullyDivested();
         _;
     }
 
@@ -77,42 +77,12 @@ contract Periphery is IPeriphery {
         _;
     }
 
-    function totalAssets()
-        external
-        view
-        override
-        onlyWhenFundIsFullyDivested
-        returns (uint256 total)
-    {
-        address[] memory assets = fund.getAssetsOfInterest();
-        uint256 assetLength = assets.length;
-
-        for (uint256 i = 0; i < assetLength;) {
-            uint256 balance;
-
-            /// native asset
-            if (assets[i] == NATIVE_ASSET) {
-                balance = address(fund).balance;
-            } else {
-                balance = ERC20(assets[i]).balanceOf(address(fund));
-            }
-
-            /// calculate how much liquidity for this amount of asset
-            total +=
-                balance > 0 ? oracleRouter.getQuote(balance, assets[i], address(unitOfAccount)) : 0;
-
-            unchecked {
-                ++i;
-            }
-        }
-    }
-
     /// @dev two things must happen here.
     /// 1. calculate the profit/loss since the last time this function was called.
     /// 2. strip protocol fee
     /// 3. update vault's total assets to match the fund's total assets
     modifier update() {
-        uint256 assetsInFund = this.totalAssets();
+        uint256 assetsInFund = oracleRouter.getQuote(0, address(fund), address(unitOfAccount));
         uint256 assetsInVault = vault.totalAssets();
 
         /// we know that the difference between the assets in the fund and the assets in the vault
@@ -147,7 +117,7 @@ contract Periphery is IPeriphery {
         _;
 
         /// invariants for 'some' peace of mind
-        assetsInFund = this.totalAssets();
+        assetsInFund = oracleRouter.getQuote(0, address(fund), address(unitOfAccount));
         assetsInVault = vault.totalAssets();
         if (unitOfAccount.totalSupply() != assetsInVault) {
             revert Errors.Deposit_SupplyInvariantViolated();

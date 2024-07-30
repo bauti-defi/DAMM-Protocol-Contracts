@@ -50,7 +50,6 @@ interface IPeriphery {
     function fund() external returns (IFund);
     function oracleRouter() external returns (IPriceOracle);
     function paused() external returns (bool);
-    function totalAssets() external view returns (uint256);
     function deposit(DepositOrder calldata order) external returns (uint256 sharesOut);
     function withdraw(WithdrawOrder calldata order) external returns (uint256 assetAmountOut);
     function withdrawFees(address asset, uint256 shares, uint256 minAmountOut)

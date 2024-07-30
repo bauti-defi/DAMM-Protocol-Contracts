@@ -34,7 +34,6 @@ library Errors {
 
     /// Supply invariant errors
     error Deposit_SupplyInvariantViolated();
-    error Deposit_FundNotFullyDivested();
     error Deposit_AssetInvariantViolated();
 
     /// Asset policy errors
@@ -78,4 +77,8 @@ library Errors {
 
     /// FundFactory errors
     error FundFactory_DeploymentLockViolated();
+
+    /// FundValuationOracle
+    error FundValuationOracle_NotSupported(address base, address quote);
+    error FundValuationOracle_FundNotFullyDivested();
 }
