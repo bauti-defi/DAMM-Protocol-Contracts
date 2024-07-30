@@ -15,7 +15,7 @@ interface ISafeProxyFactory {
 
 /// @dev Factory contract for deploying funds
 contract FundFactory is IFundFactory {
-    /// @dev variable order is important for delegate call back in to work
+    /// @dev variable declaration order is important for delegate call back in to work
     bool private deploying;
     uint256 private nonce;
 

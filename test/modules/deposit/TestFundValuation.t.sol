@@ -207,7 +207,7 @@ contract TestFundValuation is TestBaseProtocol, TestBaseGnosis, TokenMinter {
 
         assertEq(fund.hasOpenPositions(), false, "No open positions");
         assertEq(fund.getFundLiquidationTimeSeries().length, 1);
-        assertEq(fund.getLatestLiquidationTimestamp(), block.timestamp);
+        assertEq(fund.getLatestLiquidationBlock(), block.number);
         assertTrue(
             fundValuationOracle.getQuote(0, address(fund), unitOfAccount) > 0,
             "Total assets should not be 0"
@@ -282,7 +282,7 @@ contract TestFundValuation is TestBaseProtocol, TestBaseGnosis, TokenMinter {
     function test_fund_liquidation_time_series() public {
         assertEq(fund.getFundLiquidationTimeSeries().length, 0);
         vm.expectRevert(Errors.Fund_EmptyFundLiquidationTimeSeries.selector);
-        fund.getLatestLiquidationTimestamp();
+        fund.getLatestLiquidationBlock();
 
         // the caller must be an active module
         vm.prank(positionOpenerCloser);
@@ -290,13 +290,13 @@ contract TestFundValuation is TestBaseProtocol, TestBaseGnosis, TokenMinter {
 
         assertEq(fund.getFundLiquidationTimeSeries().length, 0);
         vm.expectRevert(Errors.Fund_EmptyFundLiquidationTimeSeries.selector);
-        fund.getLatestLiquidationTimestamp();
+        fund.getLatestLiquidationBlock();
 
         assertEq(fund.hasOpenPositions(), true, "No open positions");
 
         assertEq(fund.getFundLiquidationTimeSeries().length, 0);
         vm.expectRevert(Errors.Fund_EmptyFundLiquidationTimeSeries.selector);
-        fund.getLatestLiquidationTimestamp();
+        fund.getLatestLiquidationBlock();
 
         // close the position
         vm.prank(positionOpenerCloser);
@@ -304,7 +304,7 @@ contract TestFundValuation is TestBaseProtocol, TestBaseGnosis, TokenMinter {
 
         assertEq(fund.hasOpenPositions(), false, "No open positions");
         assertEq(fund.getFundLiquidationTimeSeries().length, 1);
-        assertEq(fund.getLatestLiquidationTimestamp(), block.timestamp);
+        assertEq(fund.getLatestLiquidationBlock(), block.number);
 
         // close the position that was already closed
         vm.prank(positionOpenerCloser);
@@ -312,6 +312,6 @@ contract TestFundValuation is TestBaseProtocol, TestBaseGnosis, TokenMinter {
 
         assertEq(fund.hasOpenPositions(), false, "No open positions");
         assertEq(fund.getFundLiquidationTimeSeries().length, 1);
-        assertEq(fund.getLatestLiquidationTimestamp(), block.timestamp);
+        assertEq(fund.getLatestLiquidationBlock(), block.number);
     }
 }

@@ -22,7 +22,7 @@ contract FundCallbackHandler is TokenCallbackHandler, HandlerContext, IPortfolio
 
     mapping(address module => uint256 role) private moduleRoles;
 
-    /// @notice Ordered time series of fund liquidation timestamps
+    /// @dev Ordered time series of blocks the fund was liquidated at
     /// can be used for external inference
     uint256[] private fundLiquidationTimeSeries;
 
@@ -80,7 +80,7 @@ contract FundCallbackHandler is TokenCallbackHandler, HandlerContext, IPortfolio
 
         bool liquidated = openPositions.length() == 0;
         if (liquidated && result) {
-            fundLiquidationTimeSeries.push(block.timestamp);
+            fundLiquidationTimeSeries.push(block.number);
         }
 
         emit PositionClosed(_msgSender(), positionPointer, liquidated && result);
@@ -94,7 +94,7 @@ contract FundCallbackHandler is TokenCallbackHandler, HandlerContext, IPortfolio
         return openPositions.length() > 0;
     }
 
-    function getLatestLiquidationTimestamp() external view override returns (uint256) {
+    function getLatestLiquidationBlock() external view override returns (uint256) {
         uint256 length = fundLiquidationTimeSeries.length;
 
         if (length == 0) revert Errors.Fund_EmptyFundLiquidationTimeSeries();
