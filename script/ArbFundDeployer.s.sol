@@ -40,7 +40,7 @@ contract ArbFundDeployer is DeployConfigLoader {
 
     address public constant CREATE_CALL = address(0x9b35Af71d77eaf8d7e40252370304687390A1A52);
 
-    address public constant MODULE_LIB = address(0xe30E57cf7D69cBdDD9713AAb109753b5fa1878A5);
+    address public constant MODULE_LIB = address(0xC813E2752C387Fd716df7e99d0ED099b718600bF);
     address public constant HOOK_REGISTRY = address(0xfAcC9bE6e79034C679B0A1E0de407B58Fb240E0c);
     address public constant TRANSACTION_MODULE = address(0x20580451fEc6B5dc824A2d6D4cC295c1Cf3f0d3E);
 

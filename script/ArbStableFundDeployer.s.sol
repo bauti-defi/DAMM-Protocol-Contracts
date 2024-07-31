@@ -35,14 +35,15 @@ interface IMultiSend {
 
 contract ArbStableFundDeployer is DeployConfigLoader {
     address payable public constant STABLE_FUND =
-        payable(address(0x3EE817Afa79D0ff24b25681eC4f3E4A89c939503));
+        payable(address(0x9274bb146d9dCb9EeD4e635e14BfceCEE670dF4A));
     address public constant FUND_ADMIN = address(0x5822B262EDdA82d2C6A436b598Ff96fA9AB894c4);
 
     address public constant CREATE_CALL = address(0x9b35Af71d77eaf8d7e40252370304687390A1A52);
 
-    address public constant MODULE_LIB = address(0xe30E57cf7D69cBdDD9713AAb109753b5fa1878A5);
-    address public constant HOOK_REGISTRY = address(0x7046272cBFc5B964582dEa710AAFD3452a015ae6);
-    address public constant TRANSACTION_MODULE = address(0x19e7Fb1677Be3A3328983a56C9707Fd8D4F84433);
+    address public constant MODULE_LIB = address(0xC813E2752C387Fd716df7e99d0ED099b718600bF);
+    address public constant HOOK_REGISTRY = address(0xA60A15d81269F9bde655e5644CC316cFD0C1e401);
+    address public constant TRANSACTION_MODULE = address(0xd26B47577eD29BE251587d59d09E2aBd521b88b6);
+
     address public constant UNISWAP_V3_HOOKS = address(0x2DD5BBd44A33F66F36Ac83A192A97eA0465FB8e1);
     address public constant AAVE_V3_HOOKS = address(0x00f483B7F75e1AF71363B01053D594a29Fc0f21d);
 
@@ -67,7 +68,7 @@ contract ArbStableFundDeployer is DeployConfigLoader {
         vm.label(FUND_ADMIN, "FundAdmin");
     }
 
-    function stablecoins() public pure returns (address[] memory coins) {
+    function tokens() public pure returns (address[] memory coins) {
         coins = new address[](4);
         coins[0] = ARB_USDCe;
         coins[1] = ARB_USDT;
@@ -256,9 +257,9 @@ contract ArbStableFundDeployer is DeployConfigLoader {
 
         _multisendCall(payload);
 
-        for (uint256 i = 0; i < stablecoins().length; i++) {
+        for (uint256 i = 0; i < tokens().length; i++) {
             require(
-                IHookGetters(UNISWAP_V3_HOOKS).assetWhitelist(stablecoins()[i]),
+                IHookGetters(UNISWAP_V3_HOOKS).assetWhitelist(tokens()[i]),
                 "Failed to enable uniswap v3 asset"
             );
         }
@@ -274,9 +275,9 @@ contract ArbStableFundDeployer is DeployConfigLoader {
 
         _multisendCall(payload);
 
-        for (uint256 i = 0; i < stablecoins().length; i++) {
+        for (uint256 i = 0; i < tokens().length; i++) {
             require(
-                IHookGetters(AAVE_V3_HOOKS).assetWhitelist(stablecoins()[i]),
+                IHookGetters(AAVE_V3_HOOKS).assetWhitelist(tokens()[i]),
                 "Failed to enable aave v3 asset"
             );
         }
@@ -575,9 +576,9 @@ contract ArbStableFundDeployer is DeployConfigLoader {
 
         _multisendCall(approvals);
 
-        for (uint256 i = 0; i < stablecoins().length; i++) {
+        for (uint256 i = 0; i < tokens().length; i++) {
             require(
-                IERC20(stablecoins()[i]).allowance(STABLE_FUND, chainConfig.aave.pool)
+                IERC20(tokens()[i]).allowance(STABLE_FUND, chainConfig.aave.pool)
                     == type(uint256).max,
                 "Failed to approve tokent to aave"
             );
@@ -598,14 +599,14 @@ contract ArbStableFundDeployer is DeployConfigLoader {
 
         _multisendCall(approvals);
 
-        for (uint256 i = 0; i < stablecoins().length; i++) {
+        for (uint256 i = 0; i < tokens().length; i++) {
             require(
-                IERC20(stablecoins()[i]).allowance(STABLE_FUND, chainConfig.uniswap.router)
+                IERC20(tokens()[i]).allowance(STABLE_FUND, chainConfig.uniswap.router)
                     == type(uint256).max,
                 "Failed to approve token to uniswap router"
             );
             require(
-                IERC20(stablecoins()[i]).allowance(STABLE_FUND, chainConfig.uniswap.positionManager)
+                IERC20(tokens()[i]).allowance(STABLE_FUND, chainConfig.uniswap.positionManager)
                     == type(uint256).max,
                 "Failed to approve toke to uniswap position manager"
             );

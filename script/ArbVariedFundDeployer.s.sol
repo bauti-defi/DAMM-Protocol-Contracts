@@ -12,6 +12,7 @@ import "@src/hooks/uniswapV3/UniswapV3Hooks.sol";
 import "@src/hooks/aaveV3/AaveV3Hooks.sol";
 import "@safe-contracts/libraries/CreateCall.sol";
 import "@openzeppelin-contracts/utils/Create2.sol";
+import "@src/FundFactory.sol";
 
 interface IHookGetters {
     function assetWhitelist(address) external view returns (bool);
@@ -34,17 +35,18 @@ interface IMultiSend {
 }
 
 contract ArbVariedFundDeployer is DeployConfigLoader {
-    address payable public constant STABLE_FUND =
-        payable(address(0xE924F6f7F099D34afb6621E3D7E228A6fBe963E9));
+    address payable public constant FUND =
+        payable(address(0x797756ecbe287bB8Ce06d492776c004C38494F2F));
     address public constant FUND_ADMIN = address(0x5822B262EDdA82d2C6A436b598Ff96fA9AB894c4);
 
+    address public constant FUND_FACTORY = address(0xd461a570c2254DeE800b89aEb3582C25f89e8f4C);
     address public constant CREATE_CALL = address(0x9b35Af71d77eaf8d7e40252370304687390A1A52);
-    address public constant MODULE_LIB = address(0xe30E57cf7D69cBdDD9713AAb109753b5fa1878A5);
+    address public constant MODULE_LIB = address(0xC813E2752C387Fd716df7e99d0ED099b718600bF);
 
-    address public constant HOOK_REGISTRY = address(0x7dD9C90f9621eeF8859A82B55828A72eaCcb7ad9);
-    address public constant TRANSACTION_MODULE = address(0x9588e15F13F8219D600d7EfF0a420375e539176a);
-    address public constant UNISWAP_V3_HOOKS = address(0x12B12BEe3226f1192C5cE0144BA608D211cdb629);
-    address public constant AAVE_V3_HOOKS = address(0xeE3E6dc232aea030D69e2F53181d7D9E2aeC54b4);
+    address public constant HOOK_REGISTRY = address(0x9f40069F90485D1283c1C602A935EAE1512Fc96C);
+    address public constant TRANSACTION_MODULE = address(0xc9f44eCC78590c93ce477C96f4BBF973aB64fABb);
+    address public constant UNISWAP_V3_HOOKS = address(0xEAB79Fd28BA7f43870C92C2Eb0b243a41990E118);
+    address public constant AAVE_V3_HOOKS = address(0xa67B2BC559D9E6cFc34c09c97A8462cFFc6b9eDd);
 
     // tokens deployed on arbitrum
     address constant ARB_USDCe = address(0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8);
@@ -103,7 +105,7 @@ contract ArbVariedFundDeployer is DeployConfigLoader {
         );
 
         vm.broadcast(FUND_ADMIN);
-        bool success = Safe(STABLE_FUND).execTransaction(
+        bool success = Safe(FUND).execTransaction(
             MULTISEND_CALL,
             0,
             transaction,
@@ -191,19 +193,46 @@ contract ArbVariedFundDeployer is DeployConfigLoader {
         console2.log("ModuleLib: ", address(moduleLib));
     }
 
+    function deployFundFactory() public {
+        vm.broadcast(FUND_ADMIN);
+        FundFactory factory = new FundFactory();
+
+        console2.log("FundFactory: ", address(factory));
+    }
+
+    function deployFund() public {
+        FundFactory factory = FundFactory(FUND_FACTORY);
+
+        address[] memory admins = new address[](1);
+        admins[0] = FUND_ADMIN;
+
+        uint256 threshold = 1;
+
+        vm.broadcast(FUND_ADMIN);
+        address fund = address(
+            factory.deployFund(
+                chainConfig.gnosis.safeProxyFactory,
+                chainConfig.gnosis.safeSingleton,
+                admins,
+                threshold
+            )
+        );
+
+        console2.log("Fund: ", fund);
+    }
+
     function deployHookRegistry() public {
         vm.broadcast(FUND_ADMIN);
-        HookRegistry hookRegistry = new HookRegistry(STABLE_FUND);
+        HookRegistry hookRegistry = new HookRegistry(FUND);
 
         console2.log("HookRegistry: ", address(hookRegistry));
     }
 
     function deployTransactionModule() public {
-        Safe safe = Safe(STABLE_FUND);
+        Safe safe = Safe(FUND);
 
-        bytes memory moduleCreationCode = abi.encodePacked(
-            type(TransactionModule).creationCode, abi.encode(STABLE_FUND, HOOK_REGISTRY)
-        );
+        bytes memory moduleCreationCode =
+            abi.encodePacked(type(TransactionModule).creationCode, abi.encode(FUND, HOOK_REGISTRY));
 
         bytes memory transaction = abi.encodeWithSelector(
             ModuleLib.deployModule.selector,
@@ -244,7 +273,7 @@ contract ArbVariedFundDeployer is DeployConfigLoader {
     function deployUniswapV3Hooks() public {
         vm.broadcast(FUND_ADMIN);
         UniswapV3Hooks uniswapV3Hooks = new UniswapV3Hooks(
-            STABLE_FUND, chainConfig.uniswap.positionManager, chainConfig.uniswap.router
+            FUND, chainConfig.uniswap.positionManager, chainConfig.uniswap.router
         );
 
         console2.log("UniswapV3Hooks: ", address(uniswapV3Hooks));
@@ -252,7 +281,7 @@ contract ArbVariedFundDeployer is DeployConfigLoader {
 
     function deployAaveV3Hooks() public {
         vm.broadcast(FUND_ADMIN);
-        AaveV3Hooks aaveV3Hooks = new AaveV3Hooks(STABLE_FUND, chainConfig.aave.pool);
+        AaveV3Hooks aaveV3Hooks = new AaveV3Hooks(FUND, chainConfig.aave.pool);
 
         console2.log("AaveV3Hooks: ", address(aaveV3Hooks));
     }
@@ -594,8 +623,7 @@ contract ArbVariedFundDeployer is DeployConfigLoader {
 
         for (uint256 i = 0; i < tokens().length; i++) {
             require(
-                IERC20(tokens()[i]).allowance(STABLE_FUND, chainConfig.aave.pool)
-                    == type(uint256).max,
+                IERC20(tokens()[i]).allowance(FUND, chainConfig.aave.pool) == type(uint256).max,
                 "Failed to approve tokent to aave"
             );
         }
@@ -614,8 +642,7 @@ contract ArbVariedFundDeployer is DeployConfigLoader {
 
         for (uint256 i = 0; i < tokens().length; i++) {
             require(
-                IERC20(tokens()[i]).allowance(STABLE_FUND, chainConfig.uniswap.router)
-                    == type(uint256).max,
+                IERC20(tokens()[i]).allowance(FUND, chainConfig.uniswap.router) == type(uint256).max,
                 "Failed to approve token to uniswap router"
             );
         }
@@ -635,7 +662,7 @@ contract ArbVariedFundDeployer is DeployConfigLoader {
 
         for (uint256 i = 0; i < tokens().length; i++) {
             require(
-                IERC20(tokens()[i]).allowance(STABLE_FUND, chainConfig.uniswap.positionManager)
+                IERC20(tokens()[i]).allowance(FUND, chainConfig.uniswap.positionManager)
                     == type(uint256).max,
                 "Failed to approve toke to uniswap position manager"
             );
