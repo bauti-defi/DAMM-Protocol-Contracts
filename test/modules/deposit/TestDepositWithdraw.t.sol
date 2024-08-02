@@ -5,7 +5,7 @@ import {TestBaseFund} from "@test/base/TestBaseFund.sol";
 import {TestBaseProtocol} from "@test/base/TestBaseProtocol.sol";
 import {EulerRouter} from "@euler-price-oracle/EulerRouter.sol";
 import {Periphery} from "@src/modules/deposit/Periphery.sol";
-import {FundValuationOracle} from "@src/modules/deposit/FundValuationOracle.sol";
+import {FundValuationOracle} from "@src/oracles/FundValuationOracle.sol";
 import {
     DepositIntent,
     WithdrawIntent,
@@ -163,8 +163,7 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
 
         address unitOfAccount = address(periphery.unitOfAccount());
 
-        FundValuationOracle valuationOracle =
-            new FundValuationOracle(address(fund), unitOfAccount, address(oracleRouter));
+        FundValuationOracle valuationOracle = new FundValuationOracle(address(oracleRouter));
         vm.label(address(valuationOracle), "FundValuationOracle");
         vm.prank(address(fund));
         oracleRouter.govSetConfig(address(fund), unitOfAccount, address(valuationOracle));

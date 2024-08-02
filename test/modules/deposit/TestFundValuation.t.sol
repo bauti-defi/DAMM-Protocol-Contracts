@@ -9,7 +9,7 @@ import {MockERC20} from "@test/mocks/MockERC20.sol";
 import {TokenMinter} from "@test/forked/TokenMinter.sol";
 import {EulerRouter} from "@euler-price-oracle/EulerRouter.sol";
 import {ChainlinkOracle} from "@euler-price-oracle/adapter/chainlink/ChainlinkOracle.sol";
-import {FundValuationOracle} from "@src/modules/deposit/FundValuationOracle.sol";
+import {FundValuationOracle} from "@src/oracles/FundValuationOracle.sol";
 import {
     ARB_USDC_USD_FEED,
     ARB_USDT_USD_FEED,
@@ -135,8 +135,7 @@ contract TestFundValuation is TestBaseProtocol, TestBaseGnosis, TokenMinter {
 
         unitOfAccount = address(periphery.unitOfAccount());
 
-        fundValuationOracle =
-            new FundValuationOracle(address(fund), unitOfAccount, address(oracleRouter));
+        fundValuationOracle = new FundValuationOracle(address(oracleRouter));
         vm.label(address(fundValuationOracle), "FundValuationOracle");
         vm.prank(address(fund));
         oracleRouter.govSetConfig(address(fund), unitOfAccount, address(fundValuationOracle));
@@ -263,20 +262,8 @@ contract TestFundValuation is TestBaseProtocol, TestBaseGnosis, TokenMinter {
     }
 
     function test_fund_valuation_not_supported() public {
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                Errors.FundValuationOracle_NotSupported.selector, unitOfAccount, address(fund)
-            )
-        );
-        fundValuationOracle.getQuote(0, unitOfAccount, address(fund));
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                Errors.FundValuationOracle_NotSupported.selector, unitOfAccount, address(fund)
-            )
-        );
-        oracleRouter.getQuote(0, unitOfAccount, address(fund));
         vm.expectRevert();
-        oracleRouter.getQuote(100, unitOfAccount, address(0));
+        oracleRouter.getQuote(100, unitOfAccount, address(fund));
     }
 
     function test_fund_liquidation_time_series() public {

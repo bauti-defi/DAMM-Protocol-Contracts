@@ -14,15 +14,7 @@ contract FundValuationOracle is BaseAdapter {
     /// @dev should be a Euler Oracle Router
     IPriceOracle public immutable oracleRouter;
 
-    /// @dev this is the fund that we are valuing
-    IFund public immutable fund;
-
-    /// @dev this is the unit of account token for the fund
-    address public immutable unitOfAccount;
-
-    constructor(address _fund, address _unitOfAccount, address _oracleRouter) {
-        fund = IFund(_fund);
-        unitOfAccount = _unitOfAccount;
+    constructor(address _oracleRouter) {
         oracleRouter = IPriceOracle(_oracleRouter);
     }
 
@@ -33,9 +25,9 @@ contract FundValuationOracle is BaseAdapter {
         override
         returns (uint256 total)
     {
-        if (quote != unitOfAccount || base != address(fund)) {
-            revert Errors.FundValuationOracle_NotSupported(base, quote);
-        }
+        /// TODO: validate base as the a fund
+        IFund fund = IFund(base);
+
         if (fund.hasOpenPositions()) revert Errors.FundValuationOracle_FundNotFullyDivested();
 
         address[] memory assets = fund.getAssetsOfInterest();
