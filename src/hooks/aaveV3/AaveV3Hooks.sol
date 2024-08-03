@@ -11,6 +11,7 @@ error AaveV3Hooks_OnlyWhitelistedTokens();
 error AaveV3Hooks_InvalidAsset();
 error AaveV3Hooks_PositionApertureFailed();
 error AaveV3Hooks_PositionClosureFailed();
+error AaveV3Hooks_FundMustBeRecipient();
 
 event AaveV3Hooks_AssetEnabled(address asset);
 
@@ -62,7 +63,7 @@ contract AaveV3Hooks is BaseHook, IBeforeTransaction, IAfterTransaction {
             revert AaveV3Hooks_OnlyWhitelistedTokens();
         }
         if (onBehalfOf != address(fund)) {
-            revert Errors.OnlyFund();
+            revert AaveV3Hooks_FundMustBeRecipient();
         }
     }
 

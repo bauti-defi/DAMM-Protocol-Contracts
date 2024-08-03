@@ -166,6 +166,28 @@ contract TestAaveV3 is TestBaseGnosis, TestBaseProtocol, BaseAaveV3, TokenMinter
         assertEq(USDC.balanceOf(address(fund)), BIG_NUMBER - 1000);
     }
 
+    function test_cannot_supply_to_recipient_that_is_not_fund()
+        public
+        withAllowance(USDC)
+        enableAsset(address(ARB_USDC))
+    {
+        Transaction[] memory calls = new Transaction[](1);
+        calls[0] = Transaction({
+            target: address(aaveV3Pool),
+            value: 0,
+            targetSelector: aaveV3Pool.supply.selector,
+            data: abi.encode(address(ARB_USDC), 1000, makeAddr("Not Fund"), uint16(0)),
+            operation: uint8(Enum.Operation.Call)
+        });
+
+        vm.prank(operator, operator);
+        vm.expectRevert(AaveV3Hooks_FundMustBeRecipient.selector);
+        transactionModule.execute(calls);
+
+        assertEq(aUSDC.balanceOf(address(fund)), 0);
+        assertEq(USDC.balanceOf(address(fund)), BIG_NUMBER);
+    }
+
     function test_cannot_supply_unauthorized_asset() public withAllowance(USDT) {
         Transaction[] memory calls = new Transaction[](1);
         calls[0] = Transaction({
@@ -229,6 +251,28 @@ contract TestAaveV3 is TestBaseGnosis, TestBaseProtocol, BaseAaveV3, TokenMinter
 
         vm.prank(operator, operator);
         vm.expectRevert(AaveV3Hooks_OnlyWhitelistedTokens.selector);
+        transactionModule.execute(calls);
+
+        assertEq(aUSDC.balanceOf(address(fund)), 0);
+        assertEq(USDC.balanceOf(address(fund)), BIG_NUMBER);
+    }
+
+    function test_cannot_withdraw_to_recipient_that_is_not_fund()
+        public
+        withAllowance(USDC)
+        enableAsset(address(ARB_USDC))
+    {
+        Transaction[] memory calls = new Transaction[](1);
+        calls[0] = Transaction({
+            target: address(aaveV3Pool),
+            value: 0,
+            targetSelector: aaveV3Pool.withdraw.selector,
+            data: abi.encode(address(ARB_USDC), 1000, makeAddr("Not Fund")),
+            operation: uint8(Enum.Operation.Call)
+        });
+
+        vm.prank(operator, operator);
+        vm.expectRevert(AaveV3Hooks_FundMustBeRecipient.selector);
         transactionModule.execute(calls);
 
         assertEq(aUSDC.balanceOf(address(fund)), 0);
