@@ -35,17 +35,18 @@ interface IMultiSend {
 
 contract ArbStableFundDeployer is DeployConfigLoader {
     address payable public constant STABLE_FUND =
-        payable(address(0x9274bb146d9dCb9EeD4e635e14BfceCEE670dF4A));
+        payable(address(0x40d1bAf72AFa1bbDF4b5aBD9E9C9a875C6fc663a));
     address public constant FUND_ADMIN = address(0x5822B262EDdA82d2C6A436b598Ff96fA9AB894c4);
 
+    address public constant FUND_FACTORY = address(0xd461a570c2254DeE800b89aEb3582C25f89e8f4C);
     address public constant CREATE_CALL = address(0x9b35Af71d77eaf8d7e40252370304687390A1A52);
-
     address public constant MODULE_LIB = address(0xC813E2752C387Fd716df7e99d0ED099b718600bF);
-    address public constant HOOK_REGISTRY = address(0xA60A15d81269F9bde655e5644CC316cFD0C1e401);
-    address public constant TRANSACTION_MODULE = address(0xd26B47577eD29BE251587d59d09E2aBd521b88b6);
 
-    address public constant UNISWAP_V3_HOOKS = address(0x2DD5BBd44A33F66F36Ac83A192A97eA0465FB8e1);
-    address public constant AAVE_V3_HOOKS = address(0x00f483B7F75e1AF71363B01053D594a29Fc0f21d);
+    address public constant HOOK_REGISTRY = address(0x5db2A2C966763D001d66d46d08179fD8c852bA03);
+    address public constant TRANSACTION_MODULE = address(0x167597e20A40e611c791fca6965E14Fe80255fd6);
+
+    address public constant UNISWAP_V3_HOOKS = address(0xFE8600C2036cd5F64E9308446478963eBE6a6951);
+    address public constant AAVE_V3_HOOKS = address(0x042137A9AD5D5665AF388ce4299e62F2C61cCd96);
 
     // stablecoins deployed on arbitrum
     address constant ARB_USDCe = 0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8;
@@ -54,7 +55,7 @@ contract ArbStableFundDeployer is DeployConfigLoader {
     address constant ARB_DAI = 0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1;
     address public constant MULTISEND_CALL = address(0x9641d764fc13c8B624c04430C7356C1C7C8102e2);
 
-    address constant OPERATOR = address(0x5ed25671f65d0ca26d79326BF571f8AeaF856f00);
+    address constant OPERATOR = address(0x56463df79e2425d41d63f40AfB5E79Fd5F6001Bf);
 
     function setUp() public override {
         super.setUp();
@@ -611,5 +612,10 @@ contract ArbStableFundDeployer is DeployConfigLoader {
                 "Failed to approve toke to uniswap position manager"
             );
         }
+    }
+
+    function approveAll() public {
+        approveAave();
+        approveUniswap();
     }
 }

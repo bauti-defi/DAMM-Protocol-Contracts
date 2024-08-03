@@ -36,17 +36,17 @@ interface IMultiSend {
 
 contract ArbVariedFundDeployer is DeployConfigLoader {
     address payable public constant FUND =
-        payable(address(0x797756ecbe287bB8Ce06d492776c004C38494F2F));
+        payable(address(0x8c9dcFE0B57561bDBd03e6f15f0e6466eC526cd2));
     address public constant FUND_ADMIN = address(0x5822B262EDdA82d2C6A436b598Ff96fA9AB894c4);
 
     address public constant FUND_FACTORY = address(0xd461a570c2254DeE800b89aEb3582C25f89e8f4C);
     address public constant CREATE_CALL = address(0x9b35Af71d77eaf8d7e40252370304687390A1A52);
     address public constant MODULE_LIB = address(0xC813E2752C387Fd716df7e99d0ED099b718600bF);
 
-    address public constant HOOK_REGISTRY = address(0x9f40069F90485D1283c1C602A935EAE1512Fc96C);
-    address public constant TRANSACTION_MODULE = address(0xc9f44eCC78590c93ce477C96f4BBF973aB64fABb);
-    address public constant UNISWAP_V3_HOOKS = address(0xEAB79Fd28BA7f43870C92C2Eb0b243a41990E118);
-    address public constant AAVE_V3_HOOKS = address(0xa67B2BC559D9E6cFc34c09c97A8462cFFc6b9eDd);
+    address public constant HOOK_REGISTRY = address(0xB891Ca2C442014D38E336464F9dBc9229C8ab6aD);
+    address public constant TRANSACTION_MODULE = address(0x8223d1F6eab60cB29fCf61eE3Ae418Be34B5Cb92);
+    address public constant UNISWAP_V3_HOOKS = address(0x7A0ec072cF5E47cbA02dc58F31555C1dd2b4ff4C);
+    address public constant AAVE_V3_HOOKS = address(0xcdf29924909cE3C2689827E5f906aa4a83CAb648);
 
     // tokens deployed on arbitrum
     address constant ARB_USDCe = address(0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8);
@@ -65,7 +65,7 @@ contract ArbVariedFundDeployer is DeployConfigLoader {
 
     address public constant MULTISEND_CALL = address(0x9641d764fc13c8B624c04430C7356C1C7C8102e2);
 
-    address constant OPERATOR = address(0x5ed25671f65d0ca26d79326BF571f8AeaF856f00);
+    address constant OPERATOR = address(0x8cCF048cEd9882c1857Bfc3cf767117600C3eb3F);
 
     function setUp() public override {
         super.setUp();
