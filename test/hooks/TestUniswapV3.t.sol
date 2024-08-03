@@ -410,7 +410,7 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
         });
 
         vm.prank(operator, operator);
-        vm.expectRevert(UniswapV3Hooks_OnlyFund.selector);
+        vm.expectRevert(Errors.OnlyFund.selector);
         transactionModule.execute(calls);
     }
 
@@ -833,7 +833,7 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
         });
 
         vm.prank(operator, operator);
-        vm.expectRevert(UniswapV3Hooks_OnlyFund.selector);
+        vm.expectRevert(Errors.OnlyFund.selector);
         transactionModule.execute(calls);
     }
 
@@ -932,7 +932,7 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
         });
 
         vm.prank(operator, operator);
-        vm.expectRevert(UniswapV3Hooks_OnlyFund.selector);
+        vm.expectRevert(Errors.OnlyFund.selector);
         transactionModule.execute(calls);
     }
 
@@ -973,7 +973,7 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
     function test_only_fund_can_enable_asset(address attacker) public {
         vm.assume(attacker != address(fund));
 
-        vm.expectRevert(UniswapV3Hooks_OnlyFund.selector);
+        vm.expectRevert(Errors.OnlyFund.selector);
         vm.prank(attacker);
         uniswapV3Hooks.enableAsset(address(ARB_USDC));
     }

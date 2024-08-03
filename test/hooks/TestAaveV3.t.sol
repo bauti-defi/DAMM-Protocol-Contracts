@@ -271,7 +271,7 @@ contract TestAaveV3 is TestBaseGnosis, TestBaseProtocol, BaseAaveV3, TokenMinter
     function test_only_fund_can_enable_asset(address attacker) public {
         vm.assume(attacker != address(fund));
 
-        vm.expectRevert(AaveV3Hooks_OnlyFund.selector);
+        vm.expectRevert(Errors.OnlyFund.selector);
         vm.prank(attacker);
         aaveV3Hooks.enableAsset(address(ARB_USDC));
     }

@@ -1,37 +1,35 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.0;
 
-import {IBeforeTransaction, IAfterTransaction} from "@src/interfaces/ITransactionHooks.sol";
+import {IBeforeTransaction} from "@src/interfaces/ITransactionHooks.sol";
 import {INonfungiblePositionManager} from "@src/interfaces/external/INonfungiblePositionManager.sol";
 import {IUniswapRouter} from "@src/interfaces/external/IUniswapRouter.sol";
 import {IERC721} from "@openzeppelin-contracts/token/ERC721/IERC721.sol";
+import "@src/hooks/BaseHook.sol";
 
-error UniswapV3Hooks_OnlyFund();
 error UniswapV3Hooks_OnlyWhitelistedTokens();
 error UniswapV3Hooks_InvalidPosition();
-error UniswapV3Hooks_InvalidTargetAddress();
-error UniswapV3Hooks_InvalidTargetSelector();
 error UniswapV3Hooks_InvalidAsset();
 
 event UniswapV3Hooks_AssetEnabled(address asset);
 
 event UniswapV3Hooks_AssetDisabled(address asset);
 
-contract UniswapV3Hooks is IBeforeTransaction, IAfterTransaction {
-    address public immutable fund;
+contract UniswapV3Hooks is BaseHook, IBeforeTransaction {
     INonfungiblePositionManager public immutable uniswapV3PositionManager;
     IUniswapRouter public immutable uniswapV3Router;
 
     mapping(address asset => bool whitelisted) public assetWhitelist;
 
-    constructor(address _fund, address _uniswapV3PositionManager, address _uniswapV3Router) {
-        fund = _fund;
+    constructor(address _fund, address _uniswapV3PositionManager, address _uniswapV3Router)
+        BaseHook(_fund)
+    {
         uniswapV3PositionManager = INonfungiblePositionManager(_uniswapV3PositionManager);
         uniswapV3Router = IUniswapRouter(_uniswapV3Router);
     }
 
     function _checkPosition(uint256 tokenId) internal view {
-        if (IERC721(address(uniswapV3PositionManager)).ownerOf(tokenId) != fund) {
+        if (IERC721(address(uniswapV3PositionManager)).ownerOf(tokenId) != address(fund)) {
             revert UniswapV3Hooks_InvalidPosition();
         }
 
@@ -41,11 +39,6 @@ contract UniswapV3Hooks is IBeforeTransaction, IAfterTransaction {
         if (!assetWhitelist[token0] || !assetWhitelist[token1]) {
             revert UniswapV3Hooks_OnlyWhitelistedTokens();
         }
-    }
-
-    modifier onlyFund() {
-        if (msg.sender != fund) revert UniswapV3Hooks_OnlyFund();
-        _;
     }
 
     function checkBeforeTransaction(
@@ -78,7 +71,7 @@ contract UniswapV3Hooks is IBeforeTransaction, IAfterTransaction {
                     recipient := calldataload(add(data.offset, 0x120))
                 }
 
-                if (recipient != fund) revert UniswapV3Hooks_OnlyFund();
+                if (recipient != address(fund)) revert Errors.OnlyFund();
                 if (!assetWhitelist[token0] || !assetWhitelist[token1]) {
                     revert UniswapV3Hooks_OnlyWhitelistedTokens();
                 }
@@ -107,7 +100,7 @@ contract UniswapV3Hooks is IBeforeTransaction, IAfterTransaction {
 
                 _checkPosition(tokenId);
             } else {
-                revert UniswapV3Hooks_InvalidTargetSelector();
+                revert Errors.Hook_InvalidTargetSelector();
             }
         } else if (target == address(uniswapV3Router)) {
             if (
@@ -133,25 +126,16 @@ contract UniswapV3Hooks is IBeforeTransaction, IAfterTransaction {
                     revert UniswapV3Hooks_OnlyWhitelistedTokens();
                 }
 
-                if (recipient != fund) {
-                    revert UniswapV3Hooks_OnlyFund();
+                if (recipient != address(fund)) {
+                    revert Errors.OnlyFund();
                 }
             } else {
-                revert UniswapV3Hooks_InvalidTargetSelector();
+                revert Errors.Hook_InvalidTargetSelector();
             }
         } else {
-            revert UniswapV3Hooks_InvalidTargetAddress();
+            revert Errors.Hook_InvalidTargetAddress();
         }
     }
-
-    function checkAfterTransaction(
-        address target,
-        bytes4 selector,
-        uint8,
-        uint256,
-        bytes calldata,
-        bytes calldata
-    ) external override onlyFund {}
 
     function enableAsset(address asset) external onlyFund {
         if (

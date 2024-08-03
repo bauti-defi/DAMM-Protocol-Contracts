@@ -18,7 +18,9 @@ library Errors {
     error Hook_InvalidTargetAddress();
     error Hook_InvalidBeforeHookAddress();
     error Hook_InvalidAfterHookAddress();
+    error Hook_InvalidValue();
     error Hook_InvalidOperation();
+    error Hook_InvalidTargetSelector();
 
     /// Signature errors
     error Deposit_InvalidSignature();
@@ -79,6 +81,5 @@ library Errors {
     error FundFactory_DeploymentLockViolated();
 
     /// FundValuationOracle
-    error FundValuationOracle_NotSupported(address base, address quote);
     error FundValuationOracle_FundNotFullyDivested();
 }

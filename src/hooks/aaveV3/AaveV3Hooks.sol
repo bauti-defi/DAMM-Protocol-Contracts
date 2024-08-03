@@ -4,8 +4,8 @@ pragma solidity ^0.8.0;
 import {IBeforeTransaction, IAfterTransaction} from "@src/interfaces/ITransactionHooks.sol";
 import {IPortfolio} from "@src/interfaces/IPortfolio.sol";
 import {IPool} from "@aave-v3-core/interfaces/IPool.sol";
+import "@src/hooks/BaseHook.sol";
 
-error AaveV3Hooks_OnlyFund();
 error AaveV3Hooks_OnlyWhitelistedTokens();
 error AaveV3Hooks_InvalidTarget();
 error AaveV3Hooks_InvalidAsset();
@@ -17,27 +17,18 @@ event AaveV3Hooks_AssetEnabled(address asset);
 
 event AaveV3Hooks_AssetDisabled(address asset);
 
-contract AaveV3Hooks is IBeforeTransaction, IAfterTransaction {
+contract AaveV3Hooks is BaseHook, IBeforeTransaction, IAfterTransaction {
     bytes32 constant POSITION_POINTER = keccak256("aave.v3.hooks");
 
     bytes4 constant L1_WITHDRAW_SELECTOR = IPool.withdraw.selector;
     bytes4 constant L1_SUPPLY_SELECTOR = IPool.supply.selector;
 
-    IPortfolio public immutable fund;
     IPool public immutable aaveV3Pool;
 
     mapping(address asset => bool whitelisted) public assetWhitelist;
 
-    constructor(address _fund, address _aaveV3Pool) {
-        fund = IPortfolio(_fund);
+    constructor(address _fund, address _aaveV3Pool) BaseHook(_fund) {
         aaveV3Pool = IPool(_aaveV3Pool);
-    }
-
-    modifier onlyFund() {
-        if (msg.sender != address(fund)) {
-            revert AaveV3Hooks_OnlyFund();
-        }
-        _;
     }
 
     function checkBeforeTransaction(
@@ -72,7 +63,7 @@ contract AaveV3Hooks is IBeforeTransaction, IAfterTransaction {
             revert AaveV3Hooks_OnlyWhitelistedTokens();
         }
         if (onBehalfOf != address(fund)) {
-            revert AaveV3Hooks_OnlyFund();
+            revert Errors.OnlyFund();
         }
     }
 
