@@ -7,6 +7,7 @@ import "@src/interfaces/IFund.sol";
 import {IERC20} from "@openzeppelin-contracts/interfaces/IERC20.sol";
 import {NATIVE_ASSET} from "@src/libs/constants.sol";
 import "@src/libs/Errors.sol";
+import {IMotherFund} from "@src/interfaces/IMotherFund.sol";
 
 contract FundValuationOracle is BaseAdapter {
     string public constant override name = "FundValuationOracle";
@@ -22,6 +23,7 @@ contract FundValuationOracle is BaseAdapter {
     function _getQuote(uint256, address base, address quote)
         internal
         view
+        virtual
         override
         returns (uint256 total)
     {

@@ -7,11 +7,18 @@ import "@openzeppelin-contracts/utils/structs/EnumerableSet.sol";
 import {ISafe} from "@src/interfaces/ISafe.sol";
 import {IPortfolio} from "@src/interfaces/IPortfolio.sol";
 import {IOwnable} from "@src/interfaces/IOwnable.sol";
+import {IMotherFund} from "@src/interfaces/IMotherFund.sol";
 import "@src/libs/Errors.sol";
 import {POSITION_OPENER_ROLE, POSITION_CLOSER_ROLE} from "@src/libs/Constants.sol";
 
 /// @dev should only be truly global variables. nothing module specific.
-contract FundCallbackHandler is TokenCallbackHandler, HandlerContext, IPortfolio, IOwnable {
+contract FundCallbackHandler is
+    TokenCallbackHandler,
+    HandlerContext,
+    IPortfolio,
+    IMotherFund,
+    IOwnable
+{
     using EnumerableSet for EnumerableSet.Bytes32Set;
     using EnumerableSet for EnumerableSet.AddressSet;
 
@@ -19,6 +26,7 @@ contract FundCallbackHandler is TokenCallbackHandler, HandlerContext, IPortfolio
 
     EnumerableSet.Bytes32Set private openPositions;
     EnumerableSet.AddressSet private assetsOfInterest;
+    EnumerableSet.AddressSet private childFunds;
 
     mapping(address module => uint256 role) private moduleRoles;
 
@@ -130,5 +138,21 @@ contract FundCallbackHandler is TokenCallbackHandler, HandlerContext, IPortfolio
 
     function getAssetsOfInterest() external view override returns (address[] memory) {
         return assetsOfInterest.values();
+    }
+
+    function getChildFunds() external view override returns (address[] memory) {
+        return childFunds.values();
+    }
+
+    function addChildFund(address _childFund) external override returns (bool) {
+        return childFunds.add(_childFund);
+    }
+
+    function removeChildFund(address _childFund) external override returns (bool) {
+        return childFunds.remove(_childFund);
+    }
+
+    function isChildFund(address _childFund) external view override returns (bool) {
+        return childFunds.contains(_childFund);
     }
 }
