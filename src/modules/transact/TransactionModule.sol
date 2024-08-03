@@ -107,14 +107,14 @@ contract TransactionModule is ReentrancyGuard, ITransactionModule {
     {
         uint256 transactionCount = transactions.length;
 
-        /// @notice min transaction length is 85 bytes (a single function selector with no calldata)
+        /// @notice there must be at least one transaction
         if (transactionCount == 0) revert Errors.Transaction_InvalidTransactionLength();
 
         /// lets iterate over the transactions. Each transaction will be verified and then executed through the safe.
         for (uint256 i = 0; i < transactionCount;) {
             /// msg.sender is operator
             Hooks memory hook = hookRegistry.getHooks(
-                msg.sender,
+                msg.sender, // operator
                 transactions[i].target,
                 transactions[i].operation,
                 transactions[i].targetSelector
