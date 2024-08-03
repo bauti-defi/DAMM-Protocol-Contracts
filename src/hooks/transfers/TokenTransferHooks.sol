@@ -59,10 +59,10 @@ event TokenTransferHooks_TransferDisabled(
     address token, address recipient, address sender, bytes4 selector
 );
 
-bytes4 constant NATIVE_ETH_TRANSFER_SELECTOR = bytes4(0);
-
 contract TokenTransferHooks is BaseHook, IBeforeTransaction {
     using TransferWhitelistLib for mapping(bytes32 => bool);
+
+    bytes4 private constant NATIVE_ETH_TRANSFER_SELECTOR = bytes4(0);
 
     /// @dev pointer = keccak256(abi.encode(token, recipient, sender, selector))
     mapping(bytes32 pointer => bool enabled) private transferWhitelist;

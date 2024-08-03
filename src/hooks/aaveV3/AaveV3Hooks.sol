@@ -7,11 +7,9 @@ import {IPool} from "@aave-v3-core/interfaces/IPool.sol";
 import "@src/hooks/BaseHook.sol";
 
 error AaveV3Hooks_OnlyWhitelistedTokens();
-error AaveV3Hooks_InvalidTarget();
 error AaveV3Hooks_InvalidAsset();
 error AaveV3Hooks_PositionApertureFailed();
 error AaveV3Hooks_PositionClosureFailed();
-error AaveV3Hooks_InvalidTargetSelector();
 
 event AaveV3Hooks_AssetEnabled(address asset);
 
@@ -39,7 +37,7 @@ contract AaveV3Hooks is BaseHook, IBeforeTransaction, IAfterTransaction {
         bytes calldata data
     ) external view override onlyFund {
         if (target != address(aaveV3Pool)) {
-            revert AaveV3Hooks_InvalidTarget();
+            revert Errors.Hook_InvalidTargetAddress();
         }
 
         address asset;
@@ -56,7 +54,7 @@ contract AaveV3Hooks is BaseHook, IBeforeTransaction, IAfterTransaction {
                 onBehalfOf := calldataload(add(data.offset, 0x40))
             }
         } else {
-            revert AaveV3Hooks_InvalidTargetSelector();
+            revert Errors.Hook_InvalidTargetSelector();
         }
 
         if (!assetWhitelist[asset]) {
@@ -76,7 +74,7 @@ contract AaveV3Hooks is BaseHook, IBeforeTransaction, IAfterTransaction {
         bytes calldata
     ) external override onlyFund {
         if (target != address(aaveV3Pool)) {
-            revert AaveV3Hooks_InvalidTarget();
+            revert Errors.Hook_InvalidTargetAddress();
         }
 
         if (selector == L1_SUPPLY_SELECTOR) {
