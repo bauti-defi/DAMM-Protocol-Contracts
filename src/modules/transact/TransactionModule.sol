@@ -8,6 +8,7 @@ import "@src/libs/Errors.sol";
 import "@src/interfaces/ITransactionHooks.sol";
 import "@src/interfaces/ITransactionModule.sol";
 import "./Structs.sol";
+import {BP_DIVISOR} from "@src/libs/Constants.sol";
 
 contract TransactionModule is ReentrancyGuard, ITransactionModule {
     address public immutable fund;
@@ -35,7 +36,8 @@ contract TransactionModule is ReentrancyGuard, ITransactionModule {
         /// @dev the chain must be EIP1559 complient to support `basefee`
         if (
             maxGasPriorityInBasisPoints > 0 && tx.gasprice > block.basefee
-                && ((tx.gasprice - block.basefee) * 10000) / tx.gasprice >= maxGasPriorityInBasisPoints
+                && ((tx.gasprice - block.basefee) * BP_DIVISOR) / tx.gasprice
+                    >= maxGasPriorityInBasisPoints
         ) {
             revert Errors.Transaction_GasLimitExceeded();
         }
