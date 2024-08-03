@@ -17,4 +17,11 @@ abstract contract BaseHook {
         }
         _;
     }
+
+    modifier expectOperation(uint8 given, uint8 expected) {
+        if (given != expected) {
+            revert Errors.Hook_InvalidOperation();
+        }
+        _;
+    }
 }

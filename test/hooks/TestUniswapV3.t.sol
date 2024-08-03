@@ -410,7 +410,7 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
         });
 
         vm.prank(operator, operator);
-        vm.expectRevert(Errors.OnlyFund.selector);
+        vm.expectRevert(UniswapV3Hooks_FundMustBeRecipient.selector);
         transactionModule.execute(calls);
     }
 
@@ -833,7 +833,7 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
         });
 
         vm.prank(operator, operator);
-        vm.expectRevert(Errors.OnlyFund.selector);
+        vm.expectRevert(UniswapV3Hooks_FundMustBeRecipient.selector);
         transactionModule.execute(calls);
     }
 
@@ -932,7 +932,7 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
         });
 
         vm.prank(operator, operator);
-        vm.expectRevert(Errors.OnlyFund.selector);
+        vm.expectRevert(UniswapV3Hooks_FundMustBeRecipient.selector);
         transactionModule.execute(calls);
     }
 

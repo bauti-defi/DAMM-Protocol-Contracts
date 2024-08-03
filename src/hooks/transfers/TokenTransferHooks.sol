@@ -75,12 +75,7 @@ contract TokenTransferHooks is BaseHook, IBeforeTransaction {
         uint8 operation,
         uint256 value,
         bytes calldata data
-    ) external view override onlyFund {
-        /// delegate call is not allowed
-        if (operation != 0) {
-            revert Errors.Hook_InvalidOperation();
-        }
-
+    ) external view override onlyFund expectOperation(operation, CALL) {
         if (selector == IERC20.transfer.selector) {
             /// decode the recipient and amount from the data
             (address recipient, uint256 _amount) = abi.decode(data, (address, uint256));

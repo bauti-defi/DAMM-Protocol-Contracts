@@ -6,10 +6,12 @@ import {INonfungiblePositionManager} from "@src/interfaces/external/INonfungible
 import {IUniswapRouter} from "@src/interfaces/external/IUniswapRouter.sol";
 import {IERC721} from "@openzeppelin-contracts/token/ERC721/IERC721.sol";
 import "@src/hooks/BaseHook.sol";
+import "@src/libs/Constants.sol";
 
 error UniswapV3Hooks_OnlyWhitelistedTokens();
 error UniswapV3Hooks_InvalidPosition();
 error UniswapV3Hooks_InvalidAsset();
+error UniswapV3Hooks_FundMustBeRecipient();
 
 event UniswapV3Hooks_AssetEnabled(address asset);
 
@@ -44,10 +46,10 @@ contract UniswapV3Hooks is BaseHook, IBeforeTransaction {
     function checkBeforeTransaction(
         address target,
         bytes4 selector,
-        uint8,
+        uint8 operation,
         uint256,
         bytes calldata data
-    ) external view override onlyFund {
+    ) external view override onlyFund expectOperation(operation, CALL) {
         if (target == address(uniswapV3PositionManager)) {
             if (selector == INonfungiblePositionManager.mint.selector) {
                 address token0;
@@ -71,7 +73,7 @@ contract UniswapV3Hooks is BaseHook, IBeforeTransaction {
                     recipient := calldataload(add(data.offset, 0x120))
                 }
 
-                if (recipient != address(fund)) revert Errors.OnlyFund();
+                if (recipient != address(fund)) revert UniswapV3Hooks_FundMustBeRecipient();
                 if (!assetWhitelist[token0] || !assetWhitelist[token1]) {
                     revert UniswapV3Hooks_OnlyWhitelistedTokens();
                 }
@@ -127,7 +129,7 @@ contract UniswapV3Hooks is BaseHook, IBeforeTransaction {
                 }
 
                 if (recipient != address(fund)) {
-                    revert Errors.OnlyFund();
+                    revert UniswapV3Hooks_FundMustBeRecipient();
                 }
             } else {
                 revert Errors.Hook_InvalidTargetSelector();

@@ -5,6 +5,7 @@ import {IBeforeTransaction, IAfterTransaction} from "@src/interfaces/ITransactio
 import {IPortfolio} from "@src/interfaces/IPortfolio.sol";
 import {IPool} from "@aave-v3-core/interfaces/IPool.sol";
 import "@src/hooks/BaseHook.sol";
+import "@src/libs/Constants.sol";
 
 error AaveV3Hooks_OnlyWhitelistedTokens();
 error AaveV3Hooks_InvalidAsset();
@@ -32,10 +33,10 @@ contract AaveV3Hooks is BaseHook, IBeforeTransaction, IAfterTransaction {
     function checkBeforeTransaction(
         address target,
         bytes4 selector,
-        uint8,
+        uint8 operation,
         uint256,
         bytes calldata data
-    ) external view override onlyFund {
+    ) external view override onlyFund expectOperation(operation, CALL) {
         if (target != address(aaveV3Pool)) {
             revert Errors.Hook_InvalidTargetAddress();
         }
@@ -68,11 +69,11 @@ contract AaveV3Hooks is BaseHook, IBeforeTransaction, IAfterTransaction {
     function checkAfterTransaction(
         address target,
         bytes4 selector,
-        uint8,
+        uint8 operation,
         uint256,
         bytes calldata,
         bytes calldata
-    ) external override onlyFund {
+    ) external override onlyFund expectOperation(operation, CALL) {
         if (target != address(aaveV3Pool)) {
             revert Errors.Hook_InvalidTargetAddress();
         }
