@@ -144,11 +144,11 @@ contract FundCallbackHandler is
         return childFunds.values();
     }
 
-    function addChildFund(address _childFund) external override returns (bool) {
+    function addChildFund(address _childFund) external override onlyFund returns (bool) {
         return childFunds.add(_childFund);
     }
 
-    function removeChildFund(address _childFund) external override returns (bool) {
+    function removeChildFund(address _childFund) external override onlyFund returns (bool) {
         return childFunds.remove(_childFund);
     }
 
