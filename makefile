@@ -56,5 +56,17 @@ approve-aave-v3:
 approve-all:
 	DEPLOYMENT_CHAIN=arb forge script script/$(SCRIPT).s.sol:$(SCRIPT) --broadcast --rpc-url ${ARBI_RPC_URL} --sig "approveAll()" --optimizer-runs 10000 -vvvv -l --mnemonic-indexes 1
 
+deploy-token-transfer-hooks:
+	DEPLOYMENT_CHAIN=arb forge script script/$(SCRIPT).s.sol:$(SCRIPT) --broadcast --rpc-url ${ARBI_RPC_URL} --sig "deployTokenTransferHooks()" --optimizer-runs 10000000 -vvvv -l --mnemonic-indexes 1
+
+set-token-transfer-hooks:
+	DEPLOYMENT_CHAIN=arb forge script script/$(SCRIPT).s.sol:$(SCRIPT) --broadcast --rpc-url ${ARBI_RPC_URL} --sig "setTokenTransferHooks()" --optimizer-runs 10000 -vvvv -l --mnemonic-indexes 1
+
+configure-token-transfer-assets:
+	DEPLOYMENT_CHAIN=arb forge script script/$(SCRIPT).s.sol:$(SCRIPT) --broadcast --rpc-url ${ARBI_RPC_URL} --sig "configureTokenTransferAssets()" --optimizer-runs 10000 -vvvv -l --mnemonic-indexes 1
+
+approve-mother:
+	DEPLOYMENT_CHAIN=arb forge script script/$(SCRIPT).s.sol:$(SCRIPT) --broadcast --rpc-url ${ARBI_RPC_URL} --sig "approveMother()" --optimizer-runs 10000 -vvvv -l --mnemonic-indexes 1
+
 verify:
 	DEPLOYMENT_CHAIN=arb forge script script/$(SCRIPT).s.sol:$(SCRIPT) --broadcast --rpc-url ${ARBI_RPC_URL} --sig "verify()" --optimizer-runs 10000 -vvvv -l --mnemonic-indexes 1
