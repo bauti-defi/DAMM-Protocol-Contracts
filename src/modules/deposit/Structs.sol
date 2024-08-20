@@ -2,17 +2,22 @@
 pragma solidity ^0.8.0;
 
 struct DepositIntent {
+    DepositOrder order;
     address user;
-    address asset;
     uint256 chaindId;
-    uint256 amount;
-    uint256 deadline;
-    uint256 minSharesOut;
     uint256 relayerTip;
     uint256 nonce;
 }
 
 struct DepositOrder {
+    address recipient;
+    address asset;
+    uint256 amount;
+    uint256 deadline;
+    uint256 minSharesOut;
+}
+
+struct SignedDepositOrder {
     DepositIntent intent;
     bytes signature;
 }
@@ -57,7 +62,6 @@ struct AssetPolicy {
 }
 
 struct UserAccountInfo {
-    uint256 nonce;
     Role role;
     AccountStatus status;
 }

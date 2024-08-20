@@ -30,10 +30,13 @@ contract Periphery is IPeriphery {
 
     mapping(address asset => AssetPolicy policy) private assetPolicy;
     mapping(address user => UserAccountInfo) private userAccountInfo;
+    mapping(address user => uint256 nonce) private userNonce;
 
     uint256 public feeBps = 0;
     address public feeRecipient;
     bool public paused;
+    /// @dev if users must be whitelisted or not
+    bool public immutable whitelist;
 
     constructor(
         string memory _vaultName,
@@ -41,11 +44,13 @@ contract Periphery is IPeriphery {
         uint8 _decimals,
         address fund_,
         address oracleRouter_,
-        address feeRecipient_
+        address feeRecipient_,
+        bool _whitelist
     ) {
         fund = IFund(fund_);
         oracleRouter = IPriceOracle(oracleRouter_);
         _setFeeRecipient(feeRecipient_);
+        whitelist = _whitelist;
 
         unitOfAccount = new UnitOfAccount("Liquidity", "UNIT", _decimals);
         vault = new FundShareVault(address(unitOfAccount), _vaultName, _vaultSymbol);
@@ -64,10 +69,12 @@ contract Periphery is IPeriphery {
         _;
     }
 
-    modifier onlyActiveUser(address user) {
-        if (userAccountInfo[user].role == Role.NONE) revert Errors.Deposit_OnlyUser();
-        if (userAccountInfo[user].status != AccountStatus.ACTIVE) {
-            revert Errors.Deposit_AccountNotActive();
+    modifier isAllowed(address user) {
+        if (whitelist) {
+            if (userAccountInfo[user].role == Role.NONE) revert Errors.Deposit_OnlyUser();
+            if (userAccountInfo[user].status != AccountStatus.ACTIVE) {
+                revert Errors.Deposit_AccountNotActive();
+            }
         }
         _;
     }
@@ -130,7 +137,60 @@ contract Periphery is IPeriphery {
     function deposit(DepositOrder calldata order)
         public
         notPaused
-        onlyActiveUser(order.intent.user)
+        isAllowed(msg.sender)
+        update
+        returns (uint256 sharesOut)
+    {
+        if (order.deadline < block.timestamp) revert Errors.Deposit_IntentExpired();
+
+        AssetPolicy memory policy = assetPolicy[order.asset];
+
+        if (!policy.canDeposit || !policy.enabled) {
+            revert Errors.Deposit_AssetUnavailable();
+        }
+
+        if (policy.permissioned && userAccountInfo[msg.sender].role != Role.SUPER_USER) {
+            revert Errors.Deposit_OnlySuperUser();
+        }
+
+        uint256 assetAmountIn = order.amount;
+        ERC20 assetToken = ERC20(order.asset);
+
+        /// if amount is 0, then deposit the user's entire balance
+        if (assetAmountIn == 0) {
+            assetAmountIn = assetToken.balanceOf(msg.sender);
+        }
+
+        /// transfer asset from user to fund
+        assetToken.safeTransferFrom(msg.sender, address(fund), assetAmountIn);
+
+        /// calculate how much liquidity for this amount of deposited asset
+        uint256 liquidity =
+            oracleRouter.getQuote(assetAmountIn, order.asset, address(unitOfAccount));
+
+        /// make sure the deposit is above the minimum
+        if (liquidity < policy.minimumDeposit) {
+            revert Errors.Deposit_InsufficientDeposit();
+        }
+
+        /// mint liquidity to periphery
+        unitOfAccount.mint(address(this), liquidity);
+
+        /// mint shares to user using the liquidity that was just minted to periphery
+        sharesOut = vault.deposit(liquidity, order.recipient);
+
+        /// lets make sure slippage is acceptable
+        if (sharesOut < order.minSharesOut) {
+            revert Errors.Deposit_SlippageLimitExceeded();
+        }
+
+        /// TODO: emit event
+    }
+
+    function deposit(SignedDepositOrder calldata order)
+        public
+        notPaused
+        isAllowed(order.intent.user)
         update
         returns (uint256 sharesOut)
     {
@@ -141,14 +201,14 @@ contract Periphery is IPeriphery {
                 order.signature
             )
         ) revert Errors.Deposit_InvalidSignature();
-        if (order.intent.nonce != userAccountInfo[order.intent.user].nonce++) {
+        if (order.intent.nonce != userNonce[order.intent.user]++) {
             revert Errors.Deposit_InvalidNonce();
         }
 
         if (order.intent.chaindId != block.chainid) revert Errors.Deposit_InvalidChain();
-        if (order.intent.deadline < block.timestamp) revert Errors.Deposit_IntentExpired();
+        if (order.intent.order.deadline < block.timestamp) revert Errors.Deposit_IntentExpired();
 
-        AssetPolicy memory policy = assetPolicy[order.intent.asset];
+        AssetPolicy memory policy = assetPolicy[order.intent.order.asset];
 
         if (!policy.canDeposit || !policy.enabled) {
             revert Errors.Deposit_AssetUnavailable();
@@ -158,8 +218,8 @@ contract Periphery is IPeriphery {
             revert Errors.Deposit_OnlySuperUser();
         }
 
-        uint256 assetAmountIn = order.intent.amount;
-        ERC20 assetToken = ERC20(order.intent.asset);
+        uint256 assetAmountIn = order.intent.order.amount;
+        ERC20 assetToken = ERC20(order.intent.order.asset);
 
         /// if amount is 0, then deposit the user's entire balance
         if (assetAmountIn == 0) {
@@ -184,7 +244,7 @@ contract Periphery is IPeriphery {
 
         /// calculate how much liquidity for this amount of deposited asset
         uint256 liquidity =
-            oracleRouter.getQuote(assetAmountIn, order.intent.asset, address(unitOfAccount));
+            oracleRouter.getQuote(assetAmountIn, order.intent.order.asset, address(unitOfAccount));
 
         /// make sure the deposit is above the minimum
         if (liquidity < policy.minimumDeposit) {
@@ -195,16 +255,16 @@ contract Periphery is IPeriphery {
         unitOfAccount.mint(address(this), liquidity);
 
         /// mint shares to user using the liquidity that was just minted to periphery
-        sharesOut = vault.deposit(liquidity, order.intent.user);
+        sharesOut = vault.deposit(liquidity, order.intent.order.recipient);
 
         /// lets make sure slippage is acceptable
-        if (sharesOut < order.intent.minSharesOut) {
+        if (sharesOut < order.intent.order.minSharesOut) {
             revert Errors.Deposit_SlippageLimitExceeded();
         }
 
         emit Deposit(
             order.intent.user,
-            order.intent.asset,
+            order.intent.order.asset,
             assetAmountIn,
             sharesOut,
             msg.sender,
@@ -214,7 +274,7 @@ contract Periphery is IPeriphery {
 
     function withdraw(WithdrawOrder calldata order)
         public
-        onlyActiveUser(order.intent.user)
+        isAllowed(order.intent.user)
         update
         returns (uint256 assetAmountOut)
     {
@@ -225,7 +285,7 @@ contract Periphery is IPeriphery {
                 order.signature
             )
         ) revert Errors.Deposit_InvalidSignature();
-        if (order.intent.nonce != userAccountInfo[order.intent.user].nonce++) {
+        if (order.intent.nonce != userNonce[order.intent.user]++) {
             revert Errors.Deposit_InvalidNonce();
         }
 
@@ -385,8 +445,8 @@ contract Periphery is IPeriphery {
         return assetPolicy[asset];
     }
 
-    function increaseNonce(uint256 increment) external notPaused onlyActiveUser(msg.sender) {
-        userAccountInfo[msg.sender].nonce += increment > 0 ? increment : 1;
+    function increaseNonce(uint256 increment) external notPaused isAllowed(msg.sender) {
+        userNonce[msg.sender] += increment > 0 ? increment : 1;
     }
 
     function getUserAccountInfo(address user) external view returns (UserAccountInfo memory) {
@@ -415,7 +475,7 @@ contract Periphery is IPeriphery {
         userAccountInfo[user].status = AccountStatus.ACTIVE;
 
         /// lets increment the nonce to prevent delayed replay attacks
-        userAccountInfo[user].nonce++;
+        userNonce[user]++;
 
         emit AccountUnpaused(user);
     }
@@ -439,14 +499,17 @@ contract Periphery is IPeriphery {
             revert Errors.Deposit_AccountExists();
         }
 
-        userAccountInfo[user] =
-            UserAccountInfo({nonce: 0, role: role, status: AccountStatus.ACTIVE});
+        userAccountInfo[user] = UserAccountInfo({role: role, status: AccountStatus.ACTIVE});
 
         emit AccountOpened(user, role);
     }
 
     function openAccount(address user, Role role) public onlyFund {
         _openAccount(user, role);
+    }
+
+    function getUserNonce(address user) external view returns (uint256) {
+        return userNonce[user];
     }
 
     function pause() external onlyFund {

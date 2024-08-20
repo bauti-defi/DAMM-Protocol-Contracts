@@ -6,16 +6,7 @@ import {TestBaseProtocol} from "@test/base/TestBaseProtocol.sol";
 import {EulerRouter} from "@euler-price-oracle/EulerRouter.sol";
 import {Periphery} from "@src/modules/deposit/Periphery.sol";
 import {FundValuationOracle} from "@src/oracles/FundValuationOracle.sol";
-import {
-    DepositIntent,
-    WithdrawIntent,
-    WithdrawOrder,
-    DepositOrder,
-    Role,
-    AccountStatus,
-    AssetPolicy,
-    UserAccountInfo
-} from "@src/modules/deposit/Structs.sol";
+import "@src/modules/deposit/Structs.sol";
 import {NATIVE_ASSET} from "@src/libs/Constants.sol";
 import {MockERC20} from "@test/mocks/MockERC20.sol";
 import {MockPriceOracle} from "@test/mocks/MockPriceOracle.sol";
@@ -92,11 +83,13 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
                         VALUATION_DECIMALS, // must be same as underlying oracles response denomination
                         payable(address(fund)),
                         address(oracleRouter),
-                        feeRecipient
+                        feeRecipient,
+                        false
                     )
                 )
             )
         );
+        /// @notice not whitelisted
 
         assertTrue(fund.isModuleEnabled(address(periphery)), "Periphery not module");
 
@@ -155,12 +148,6 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
         );
         vm.stopPrank();
 
-        // also enable the accounts to periphery
-        vm.startPrank(address(fund));
-        periphery.openAccount(alice, Role.USER);
-        periphery.openAccount(bob, Role.USER);
-        vm.stopPrank();
-
         address unitOfAccount = address(periphery.unitOfAccount());
 
         FundValuationOracle valuationOracle = new FundValuationOracle(address(oracleRouter));
@@ -195,23 +182,26 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
     function _depositOrder(address user, uint256 userPK, address token, uint256 amount)
         internal
         view
-        returns (DepositOrder memory)
+        returns (SignedDepositOrder memory)
     {
         DepositIntent memory intent = DepositIntent({
+            order: DepositOrder({
+                recipient: user,
+                asset: token,
+                amount: amount,
+                deadline: block.timestamp + 1000,
+                minSharesOut: 0
+            }),
             user: user,
-            asset: token,
-            amount: amount,
             chaindId: block.chainid,
-            deadline: block.timestamp + 1000,
-            minSharesOut: 0,
             relayerTip: 0,
-            nonce: periphery.getUserAccountInfo(user).nonce
+            nonce: periphery.getUserNonce(user)
         });
 
         (uint8 v, bytes32 r, bytes32 s) =
             vm.sign(userPK, abi.encode(intent).toEthSignedMessageHash());
 
-        return DepositOrder({intent: intent, signature: abi.encodePacked(r, s, v)});
+        return SignedDepositOrder({intent: intent, signature: abi.encodePacked(r, s, v)});
     }
 
     function _withdrawOrder(address user, uint256 userPK, address to, address asset, uint256 shares)
@@ -228,7 +218,7 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
             minAmountOut: 0,
             deadline: block.timestamp + 1000,
             relayerTip: 0,
-            nonce: periphery.getUserAccountInfo(user).nonce
+            nonce: periphery.getUserNonce(user)
         });
 
         (uint8 v, bytes32 r, bytes32 s) =

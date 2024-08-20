@@ -6,16 +6,7 @@ import {TestBaseProtocol} from "@test/base/TestBaseProtocol.sol";
 import {EulerRouter} from "@euler-price-oracle/EulerRouter.sol";
 import {Periphery} from "@src/modules/deposit/Periphery.sol";
 import {FundValuationOracle} from "@src/oracles/FundValuationOracle.sol";
-import {
-    DepositIntent,
-    WithdrawIntent,
-    WithdrawOrder,
-    DepositOrder,
-    Role,
-    AccountStatus,
-    AssetPolicy,
-    UserAccountInfo
-} from "@src/modules/deposit/Structs.sol";
+import "@src/modules/deposit/Structs.sol";
 import {NATIVE_ASSET} from "@src/libs/Constants.sol";
 import {MockERC20} from "@test/mocks/MockERC20.sol";
 import {MockPriceOracle} from "@test/mocks/MockPriceOracle.sol";
@@ -93,7 +84,8 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
                         VALUATION_DECIMALS, // must be same as underlying oracles response denomination
                         payable(address(fund)),
                         address(oracleRouter),
-                        feeRecipient
+                        feeRecipient,
+                        true
                     )
                 )
             )
@@ -180,12 +172,15 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         returns (DepositIntent memory)
     {
         return DepositIntent({
+            order: DepositOrder({
+                recipient: user,
+                asset: token,
+                amount: amount,
+                deadline: block.timestamp + 1000,
+                minSharesOut: 0
+            }),
             user: user,
-            asset: token,
-            amount: amount,
             chaindId: block.chainid,
-            deadline: block.timestamp + 1000,
-            minSharesOut: 0,
             relayerTip: 0,
             nonce: nonce
         });
@@ -194,12 +189,12 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
     function _signDepositIntent(DepositIntent memory intent, uint256 userPK)
         internal
         pure
-        returns (DepositOrder memory)
+        returns (SignedDepositOrder memory)
     {
         (uint8 v, bytes32 r, bytes32 s) =
             vm.sign(userPK, abi.encode(intent).toEthSignedMessageHash());
 
-        return DepositOrder({intent: intent, signature: abi.encodePacked(r, s, v)});
+        return SignedDepositOrder({intent: intent, signature: abi.encodePacked(r, s, v)});
     }
 
     function _withdrawIntent(address user, address to, address asset, uint256 shares, uint256 nonce)
@@ -232,7 +227,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
     }
 
     function test_only_enabled_account_can_deposit_withdraw() public {
-        DepositOrder memory dOrder =
+        SignedDepositOrder memory dOrder =
             _signDepositIntent(_depositIntent(alice, address(mockToken1), mock1Unit, 0), alicePK);
 
         vm.prank(relayer);
@@ -249,7 +244,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
     }
 
     function test_order_must_have_valid_nonce() public whitelistUser(alice, Role.USER) {
-        DepositOrder memory dOrder =
+        SignedDepositOrder memory dOrder =
             _signDepositIntent(_depositIntent(alice, address(mockToken1), mock1Unit, 1000), alicePK);
 
         vm.prank(relayer);
@@ -266,7 +261,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
     }
 
     function test_order_must_be_within_deadline() public whitelistUser(alice, Role.USER) {
-        DepositOrder memory dOrder =
+        SignedDepositOrder memory dOrder =
             _signDepositIntent(_depositIntent(alice, address(mockToken1), mock1Unit, 0), alicePK);
 
         // increase timestamp
@@ -296,7 +291,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
 
         dIntent.chaindId = 1000;
 
-        DepositOrder memory dOrder = _signDepositIntent(dIntent, alicePK);
+        SignedDepositOrder memory dOrder = _signDepositIntent(dIntent, alicePK);
 
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_InvalidChain.selector);
@@ -332,7 +327,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         periphery.vault().approve(address(periphery), type(uint256).max);
         vm.stopPrank();
 
-        DepositOrder memory dOrder = _signDepositIntent(
+        SignedDepositOrder memory dOrder = _signDepositIntent(
             _depositIntent(alice, address(mockToken2), 1 * mock2Unit, 0), alicePK
         );
 
