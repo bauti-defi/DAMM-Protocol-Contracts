@@ -32,6 +32,7 @@ contract Periphery is IPeriphery {
     mapping(address user => UserAccountInfo) private userAccountInfo;
     mapping(address user => uint256 nonce) private userNonce;
 
+    uint256 public highWaterMarkPrice;
     uint256 public feeBps = 0;
     address public feeRecipient;
     bool public paused;
@@ -97,8 +98,21 @@ contract Periphery is IPeriphery {
         if (assetsInFund > assetsInVault) {
             uint256 profit = assetsInFund - assetsInVault;
 
-            /// the performance fee is a percentage of the profit if there is any
-            uint256 fee = feeBps > 0 ? profit.mulDiv(feeBps, BP_DIVISOR) : 0;
+            uint256 circulatingVaultSupply = vault.totalSupply();
+            uint256 currentSharePrice = 0;
+            if (circulatingVaultSupply > 0) {
+                currentSharePrice = assetsInFund / circulatingVaultSupply;
+            }
+
+            uint256 fee;
+            if (currentSharePrice > highWaterMarkPrice) {
+                /// update the high water mark price
+                highWaterMarkPrice = currentSharePrice;
+
+                /// the performance fee is a percentage of the profit
+                /// but only if the current share price is greater than the high water mark price
+                uint256 fee = feeBps > 0 ? profit.mulDiv(feeBps, BP_DIVISOR) : 0;
+            }
 
             /// we mint the profit to the periphery
             unitOfAccount.mint(address(this), profit);
@@ -446,7 +460,7 @@ contract Periphery is IPeriphery {
     }
 
     function increaseNonce(uint256 increment) external notPaused isAllowed(msg.sender) {
-        userNonce[msg.sender] += increment > 0 ? increment : 1;
+        userNonce[msg.sender] += increment > 1 ? increment : 1;
     }
 
     function getUserAccountInfo(address user) external view returns (UserAccountInfo memory) {
