@@ -3,6 +3,7 @@ pragma solidity ^0.8.0;
 
 import "@solmate/tokens/ERC20.sol";
 import "@openzeppelin-contracts/utils/math/Math.sol";
+import "@openzeppelin-contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin-contracts/utils/cryptography/MessageHashUtils.sol";
 import "@openzeppelin-contracts/utils/cryptography/SignatureChecker.sol";
 import "@solmate/utils/SafeTransferLib.sol";
@@ -14,7 +15,7 @@ import "./UnitOfAccount.sol";
 import "./Structs.sol";
 import {FundShareVault} from "./FundShareVault.sol";
 
-contract Periphery is IPeriphery {
+contract Periphery is ERC721, IPeriphery {
     using SafeTransferLib for ERC20;
     using MessageHashUtils for bytes;
     using Math for uint256;
@@ -47,7 +48,7 @@ contract Periphery is IPeriphery {
         address oracleRouter_,
         address feeRecipient_,
         bool _whitelist
-    ) {
+    ) ERC721(string.concat(_vaultName, " Account"), string.concat("ACC-", _vaultSymbol)) {
         fund = IFund(fund_);
         oracleRouter = IPriceOracle(oracleRouter_);
         _setFeeRecipient(feeRecipient_);
@@ -111,7 +112,7 @@ contract Periphery is IPeriphery {
 
                 /// the performance fee is a percentage of the profit
                 /// but only if the current share price is greater than the high water mark price
-                uint256 fee = feeBps > 0 ? profit.mulDiv(feeBps, BP_DIVISOR) : 0;
+                fee = feeBps > 0 ? profit.mulDiv(feeBps, BP_DIVISOR) : 0;
             }
 
             /// we mint the profit to the periphery
