@@ -68,6 +68,9 @@ library Errors {
     error Deposit_InvalidPerformanceFee();
     error Deposit_InvalidFeeRecipient();
 
+    /// Admin errors
+    error Deposit_InvalidAdmin();
+
     /// Module errors
     error Deposit_ModulePaused();
 

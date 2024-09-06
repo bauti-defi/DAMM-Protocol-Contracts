@@ -562,4 +562,17 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         vm.expectRevert(Errors.Deposit_AccountNotTransferable.selector);
         periphery.safeTransferFrom(alice, bob, 1);
     }
+
+    function test_only_fund_can_change_admin(address attacker) public {
+        vm.assume(attacker != address(fund));
+
+        vm.prank(attacker);
+        vm.expectRevert(Errors.OnlyFund.selector);
+        periphery.setAdmin(attacker);
+
+        vm.prank(address(fund));
+        periphery.setAdmin(attacker);
+
+        assertTrue(periphery.admin() == attacker);
+    }
 }

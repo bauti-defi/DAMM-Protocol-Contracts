@@ -20,6 +20,8 @@ interface IPeriphery {
 
     event AssetDisabled(address asset);
 
+    event AdminUpdated(address oldAdmin, address newAdmin);
+
     event Deposit(
         address indexed user,
         address asset,
@@ -39,11 +41,10 @@ interface IPeriphery {
         uint256 relayerTip
     );
 
-    event WithdrawFees(address indexed to, address asset, uint256 sharesIn, uint256 assetAmountOut);
-
     function fund() external returns (IFund);
     function oracleRouter() external returns (IPriceOracle);
     function paused() external returns (bool);
+    function admin() external returns (address);
     function feeBps() external returns (uint256);
     function feeRecipient() external returns (address);
     function highWaterMarkPrice() external returns (uint256);

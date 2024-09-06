@@ -32,7 +32,7 @@ contract Periphery is ERC721, IPeriphery {
     FundShareVault public immutable vault;
 
     /// @dev the minter role
-    address immutable admin;
+    address public admin;
 
     uint256 public feeBps = 0;
     address public feeRecipient;
@@ -422,6 +422,23 @@ contract Periphery is ERC721, IPeriphery {
 
     function setFeeRecipient(address recipient_) external onlyFund {
         _setFeeRecipient(recipient_);
+    }
+
+    function _setAdmin(address admin_) private {
+        if (admin_ == address(0)) {
+            revert Errors.Deposit_InvalidAdmin();
+        }
+
+        address previous = admin;
+
+        /// update the admin
+        admin = admin_;
+
+        emit AdminUpdated(admin_, previous);
+    }
+
+    function setAdmin(address admin_) external onlyFund {
+        _setAdmin(admin_);
     }
 
     function enableAsset(address asset_, AssetPolicy memory policy_) external notPaused onlyFund {
