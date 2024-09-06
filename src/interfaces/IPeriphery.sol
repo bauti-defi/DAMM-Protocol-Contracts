@@ -44,6 +44,10 @@ interface IPeriphery {
     function fund() external returns (IFund);
     function oracleRouter() external returns (IPriceOracle);
     function paused() external returns (bool);
+    function feeBps() external returns (uint256);
+    function feeRecipient() external returns (address);
+    function highWaterMarkPrice() external returns (uint256);
+    function previousMarkPrice() external returns (uint256);
     function deposit(SignedDepositIntent calldata order) external returns (uint256 sharesOut);
     function withdraw(SignedWithdrawIntent calldata order)
         external
@@ -58,6 +62,6 @@ interface IPeriphery {
     function getAccountInfo(uint256 accountId) external returns (UserAccountInfo memory);
     function pauseAccount(uint256 accountId) external;
     function unpauseAccount(uint256 accountId) external;
-    // function openAccount(address user, Role role) external;
+    function openAccount(CreateAccountParams calldata params) external;
     function getAccountNonce(uint256 accountId) external returns (uint256);
 }

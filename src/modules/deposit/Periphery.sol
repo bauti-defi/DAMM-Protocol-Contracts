@@ -37,7 +37,7 @@ contract Periphery is ERC721, IPeriphery {
     uint256 public feeBps = 0;
     address public feeRecipient;
     uint256 public highWaterMarkPrice;
-    uint256 public previousWaterMark;
+    uint256 public previousMarkPrice;
 
     mapping(address asset => AssetPolicy policy) private assetPolicy;
     mapping(uint256 tokenId => UserAccountInfo account) private accountInfo;
@@ -45,7 +45,7 @@ contract Periphery is ERC721, IPeriphery {
     uint256 private tokenId = 0;
     bool public paused;
 
-    /// TODO: all of this in an intialize function
+    /// TODO: all of this in an intialize function?
     constructor(
         string memory vaultName_,
         string memory vaultSymbol_,
@@ -137,7 +137,7 @@ contract Periphery is ERC721, IPeriphery {
             uint256 nominalFee = feeBps > 0
                 ? profitDelta.abs().mulDiv(
                     feeBps * (currentSharePrice - highWaterMarkPrice),
-                    BP_DIVISOR * (currentSharePrice - previousWaterMark)
+                    BP_DIVISOR * (currentSharePrice - previousMarkPrice)
                 )
                 : 0;
 
@@ -156,9 +156,9 @@ contract Periphery is ERC721, IPeriphery {
         }
 
         /// update internal price
-        previousWaterMark = currentSharePrice;
-        if (previousWaterMark > highWaterMarkPrice) {
-            highWaterMarkPrice = previousWaterMark;
+        previousMarkPrice = currentSharePrice;
+        if (previousMarkPrice > highWaterMarkPrice) {
+            highWaterMarkPrice = previousMarkPrice;
         }
 
         _;
