@@ -84,8 +84,9 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
                         VALUATION_DECIMALS, // must be same as underlying oracles response denomination
                         payable(address(fund)),
                         address(oracleRouter),
-                        feeRecipient,
-                        true
+                        address(fund),
+                        /// fund is admin
+                        feeRecipient
                     )
                 )
             )
@@ -158,28 +159,32 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         mockToken1.mint(alice, 100_000_000 * mock1Unit);
     }
 
-    modifier whitelistUser(address user, Role role) {
+    modifier whitelistUser(address user_, uint256 ttl_, Role role_) {
         vm.startPrank(address(fund));
-        periphery.openAccount(user, role);
+        periphery.openAccount(
+            CreateAccountParams({user: user_, role: role_, ttl: ttl_, shareMintLimit: 0})
+        );
         vm.stopPrank();
 
         _;
     }
 
-    function _depositIntent(address user, address token, uint256 amount, uint256 nonce)
-        internal
-        view
-        returns (DepositIntent memory)
-    {
+    function _depositIntent(
+        uint256 accountId,
+        address user,
+        address token,
+        uint256 amount,
+        uint256 nonce
+    ) internal view returns (DepositIntent memory) {
         return DepositIntent({
-            order: DepositOrder({
+            deposit: DepositOrder({
+                accountId: accountId,
                 recipient: user,
                 asset: token,
                 amount: amount,
                 deadline: block.timestamp + 1000,
                 minSharesOut: 0
             }),
-            user: user,
             chaindId: block.chainid,
             relayerTip: 0,
             nonce: nonce
@@ -189,27 +194,32 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
     function _signDepositIntent(DepositIntent memory intent, uint256 userPK)
         internal
         pure
-        returns (SignedDepositOrder memory)
+        returns (SignedDepositIntent memory)
     {
         (uint8 v, bytes32 r, bytes32 s) =
             vm.sign(userPK, abi.encode(intent).toEthSignedMessageHash());
 
-        return SignedDepositOrder({intent: intent, signature: abi.encodePacked(r, s, v)});
+        return SignedDepositIntent({intent: intent, signature: abi.encodePacked(r, s, v)});
     }
 
-    function _withdrawIntent(address user, address to, address asset, uint256 shares, uint256 nonce)
-        internal
-        view
-        returns (WithdrawIntent memory)
-    {
+    function _withdrawIntent(
+        uint256 accountId,
+        address user,
+        address to,
+        address asset,
+        uint256 shares,
+        uint256 nonce
+    ) internal view returns (WithdrawIntent memory) {
         return WithdrawIntent({
-            user: user,
-            to: to,
-            asset: asset,
+            withdraw: WithdrawOrder({
+                accountId: accountId,
+                to: to,
+                asset: asset,
+                shares: shares,
+                deadline: block.timestamp + 1000,
+                minAmountOut: 0
+            }),
             chaindId: block.chainid,
-            shares: shares,
-            minAmountOut: 0,
-            deadline: block.timestamp + 1000,
             relayerTip: 0,
             nonce: nonce
         });
@@ -218,41 +228,93 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
     function _signWithdrawIntent(WithdrawIntent memory intent, uint256 userPK)
         internal
         pure
-        returns (WithdrawOrder memory)
+        returns (SignedWithdrawIntent memory)
     {
         (uint8 v, bytes32 r, bytes32 s) =
             vm.sign(userPK, abi.encode(intent).toEthSignedMessageHash());
 
-        return WithdrawOrder({intent: intent, signature: abi.encodePacked(r, s, v)});
+        return SignedWithdrawIntent({intent: intent, signature: abi.encodePacked(r, s, v)});
     }
 
-    function test_only_enabled_account_can_deposit_withdraw() public {
-        SignedDepositOrder memory dOrder =
-            _signDepositIntent(_depositIntent(alice, address(mockToken1), mock1Unit, 0), alicePK);
+    function test_only_account_signature_is_valid(string memory name)
+        public
+        whitelistUser(alice, 10000, Role.USER)
+    {
+        (address user, uint256 userPK) = makeAddrAndKey(name);
+
+        SignedDepositIntent memory dOrder =
+            _signDepositIntent(_depositIntent(1, alice, address(mockToken1), mock1Unit, 0), userPK);
 
         vm.prank(relayer);
-        vm.expectRevert(Errors.Deposit_OnlyUser.selector);
+        vm.expectRevert(Errors.Deposit_InvalidSignature.selector);
         periphery.deposit(dOrder);
 
-        WithdrawOrder memory wOrder = _signWithdrawIntent(
-            _withdrawIntent(alice, alice, address(mockToken1), mock1Unit, 0), alicePK
+        SignedWithdrawIntent memory wOrder = _signWithdrawIntent(
+            _withdrawIntent(1, alice, alice, address(mockToken1), mock1Unit, 0), userPK
         );
 
         vm.prank(relayer);
-        vm.expectRevert(Errors.Deposit_OnlyUser.selector);
+        vm.expectRevert(Errors.Deposit_InvalidSignature.selector);
         periphery.withdraw(wOrder);
     }
 
-    function test_order_must_have_valid_nonce() public whitelistUser(alice, Role.USER) {
-        SignedDepositOrder memory dOrder =
-            _signDepositIntent(_depositIntent(alice, address(mockToken1), mock1Unit, 1000), alicePK);
+    function test_only_enabled_account_can_deposit_withdraw(uint256 accountId_) public {
+        SignedDepositIntent memory dOrder = _signDepositIntent(
+            _depositIntent(accountId_, alice, address(mockToken1), mock1Unit, 0), alicePK
+        );
+
+        vm.prank(relayer);
+        vm.expectRevert(Errors.Deposit_AccountDoesNotExist.selector);
+        periphery.deposit(dOrder);
+
+        SignedWithdrawIntent memory wOrder = _signWithdrawIntent(
+            _withdrawIntent(accountId_, alice, alice, address(mockToken1), mock1Unit, 0), alicePK
+        );
+
+        vm.prank(relayer);
+        vm.expectRevert(Errors.Deposit_AccountDoesNotExist.selector);
+        periphery.withdraw(wOrder);
+    }
+
+    function test_only_active_account_can_deposit_withdraw()
+        public
+        whitelistUser(alice, 100000, Role.USER)
+    {
+        vm.prank(address(fund));
+        periphery.pauseAccount(1);
+
+        SignedDepositIntent memory dOrder =
+            _signDepositIntent(_depositIntent(1, alice, address(mockToken1), mock1Unit, 0), alicePK);
+
+        vm.prank(relayer);
+        vm.expectRevert(Errors.Deposit_AccountNotActive.selector);
+        periphery.deposit(dOrder);
+
+        SignedWithdrawIntent memory wOrder = _signWithdrawIntent(
+            _withdrawIntent(1, alice, alice, address(mockToken1), mock1Unit, 0), alicePK
+        );
+
+        vm.prank(relayer);
+        vm.expectRevert(Errors.Deposit_AccountNotActive.selector);
+        periphery.withdraw(wOrder);
+    }
+
+    function test_order_must_have_valid_nonce(uint256 nonce_)
+        public
+        whitelistUser(alice, 1000000, Role.USER)
+    {
+        vm.assume(nonce_ > 1);
+
+        SignedDepositIntent memory dOrder = _signDepositIntent(
+            _depositIntent(1, alice, address(mockToken1), mock1Unit, nonce_), alicePK
+        );
 
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_InvalidNonce.selector);
         periphery.deposit(dOrder);
 
-        WithdrawOrder memory wOrder = _signWithdrawIntent(
-            _withdrawIntent(alice, alice, address(mockToken1), mock1Unit, 10000), alicePK
+        SignedWithdrawIntent memory wOrder = _signWithdrawIntent(
+            _withdrawIntent(1, alice, alice, address(mockToken1), mock1Unit, nonce_), alicePK
         );
 
         vm.prank(relayer);
@@ -260,49 +322,60 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         periphery.withdraw(wOrder);
     }
 
-    function test_order_must_be_within_deadline() public whitelistUser(alice, Role.USER) {
-        SignedDepositOrder memory dOrder =
-            _signDepositIntent(_depositIntent(alice, address(mockToken1), mock1Unit, 0), alicePK);
+    function test_order_must_be_within_deadline(uint256 timestamp_)
+        public
+        whitelistUser(alice, 100000000 * 2, Role.USER)
+    {
+        vm.assume(timestamp_ > 10000);
+        vm.assume(timestamp_ < 100000000 * 2);
+
+        SignedDepositIntent memory dOrder =
+            _signDepositIntent(_depositIntent(1, alice, address(mockToken1), mock1Unit, 0), alicePK);
 
         // increase timestamp
-        vm.warp(100000000);
+        vm.warp(timestamp_);
 
         vm.prank(relayer);
-        vm.expectRevert(Errors.Deposit_IntentExpired.selector);
+        vm.expectRevert(Errors.Deposit_OrderExpired.selector);
         periphery.deposit(dOrder);
 
         // reset timestamp to generate valid order
         vm.warp(0);
 
-        WithdrawOrder memory wOrder = _signWithdrawIntent(
-            _withdrawIntent(alice, alice, address(mockToken1), mock1Unit, 0), alicePK
+        SignedWithdrawIntent memory wOrder = _signWithdrawIntent(
+            _withdrawIntent(1, alice, alice, address(mockToken1), mock1Unit, 0), alicePK
         );
 
         // increase timestamp
-        vm.warp(100000000);
+        vm.warp(timestamp_);
 
         vm.prank(relayer);
-        vm.expectRevert(Errors.Deposit_IntentExpired.selector);
+        vm.expectRevert(Errors.Deposit_OrderExpired.selector);
         periphery.withdraw(wOrder);
     }
 
-    function test_order_chain_id_must_match() public whitelistUser(alice, Role.USER) {
-        DepositIntent memory dIntent = _depositIntent(alice, address(mockToken1), mock1Unit, 0);
+    function test_order_chain_id_must_match(uint256 chainId_)
+        public
+        whitelistUser(alice, 1000000, Role.USER)
+    {
+        vm.assume(chainId_ != block.chainid);
 
-        dIntent.chaindId = 1000;
+        DepositIntent memory dIntent = _depositIntent(1, alice, address(mockToken1), mock1Unit, 0);
 
-        SignedDepositOrder memory dOrder = _signDepositIntent(dIntent, alicePK);
+        dIntent.chaindId = chainId_;
+
+        SignedDepositIntent memory dOrder = _signDepositIntent(dIntent, alicePK);
 
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_InvalidChain.selector);
         periphery.deposit(dOrder);
 
         WithdrawIntent memory wIntent =
-            _withdrawIntent(alice, alice, address(mockToken1), mock1Unit, 0);
+            _withdrawIntent(1, alice, alice, address(mockToken1), mock1Unit, 0);
 
-        wIntent.chaindId = 1000;
+        wIntent.chaindId = chainId_;
 
-        WithdrawOrder memory wOrder = _signWithdrawIntent(wIntent, alicePK);
+        SignedWithdrawIntent memory wOrder = _signWithdrawIntent(wIntent, alicePK);
 
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_InvalidChain.selector);
@@ -311,8 +384,8 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
 
     function test_only_super_user_can_deposit_or_withdraw_permissioned_asset()
         public
-        whitelistUser(bob, Role.SUPER_USER)
-        whitelistUser(alice, Role.USER)
+        whitelistUser(alice, 1000000 * 2, Role.USER)
+        whitelistUser(bob, 1000000 * 2, Role.SUPER_USER)
     {
         mockToken2.mint(bob, 100_000_000 * mock2Unit);
         mockToken2.mint(alice, 100_000_000 * mock2Unit);
@@ -327,31 +400,192 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         periphery.vault().approve(address(periphery), type(uint256).max);
         vm.stopPrank();
 
-        SignedDepositOrder memory dOrder = _signDepositIntent(
-            _depositIntent(alice, address(mockToken2), 1 * mock2Unit, 0), alicePK
+        SignedDepositIntent memory dOrder = _signDepositIntent(
+            _depositIntent(1, alice, address(mockToken2), 1 * mock2Unit, 0), alicePK
         );
 
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_OnlySuperUser.selector);
         periphery.deposit(dOrder);
 
-        dOrder =
-            _signDepositIntent(_depositIntent(bob, address(mockToken2), 10 * mock2Unit, 0), bobPK);
+        dOrder = _signDepositIntent(
+            _depositIntent(2, bob, address(mockToken2), 10 * mock2Unit, 0), bobPK
+        );
 
         vm.prank(relayer);
         periphery.deposit(dOrder);
 
-        WithdrawOrder memory wOrder =
-            _signWithdrawIntent(_withdrawIntent(bob, bob, address(mockToken2), 0, 1), bobPK);
+        SignedWithdrawIntent memory wOrder =
+            _signWithdrawIntent(_withdrawIntent(2, bob, bob, address(mockToken2), 0, 1), bobPK);
 
         vm.prank(relayer);
         periphery.withdraw(wOrder);
 
-        wOrder =
-            _signWithdrawIntent(_withdrawIntent(alice, alice, address(mockToken2), 0, 0), alicePK);
+        wOrder = _signWithdrawIntent(
+            _withdrawIntent(1, alice, alice, address(mockToken2), 0, 0), alicePK
+        );
 
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_OnlySuperUser.selector);
         periphery.withdraw(wOrder);
+    }
+
+    function test_only_non_expired_account_can_deposit_withdraw(uint256 timestamp)
+        public
+        whitelistUser(alice, 0, Role.USER)
+    {
+        vm.assume(timestamp > 0);
+        vm.assume(timestamp < 100000000 * 2);
+
+        vm.warp(timestamp);
+
+        SignedDepositIntent memory dOrder =
+            _signDepositIntent(_depositIntent(1, alice, address(mockToken1), mock1Unit, 0), alicePK);
+
+        vm.prank(relayer);
+        vm.expectRevert(Errors.Deposit_AccountExpired.selector);
+        periphery.deposit(dOrder);
+
+        SignedWithdrawIntent memory wOrder = _signWithdrawIntent(
+            _withdrawIntent(1, alice, alice, address(mockToken1), mock1Unit, 0), alicePK
+        );
+
+        vm.prank(relayer);
+        vm.expectRevert(Errors.Deposit_AccountExpired.selector);
+        periphery.withdraw(wOrder);
+    }
+
+    function test_only_allowed_assets_can_be_deposited_or_withdrawn(address asset)
+        public
+        whitelistUser(alice, 1000000, Role.USER)
+    {
+        vm.assume(asset != address(mockToken1));
+        vm.assume(asset != address(mockToken2));
+
+        SignedDepositIntent memory dOrder =
+            _signDepositIntent(_depositIntent(1, alice, asset, mock2Unit, 0), alicePK);
+
+        vm.prank(relayer);
+        vm.expectRevert(Errors.Deposit_AssetUnavailable.selector);
+        periphery.deposit(dOrder);
+
+        SignedWithdrawIntent memory wOrder =
+            _signWithdrawIntent(_withdrawIntent(1, alice, alice, asset, mock2Unit, 0), alicePK);
+
+        vm.prank(relayer);
+        vm.expectRevert(Errors.Deposit_AssetUnavailable.selector);
+        periphery.withdraw(wOrder);
+    }
+
+    function test_only_admin_can_pause_unpause_account(address attacker)
+        public
+        whitelistUser(alice, 1000000, Role.USER)
+    {
+        vm.assume(attacker != address(fund));
+
+        vm.prank(attacker);
+        vm.expectRevert(Errors.OnlyAdmin.selector);
+        periphery.pauseAccount(1);
+
+        vm.prank(attacker);
+        vm.expectRevert(Errors.OnlyAdmin.selector);
+        periphery.unpauseAccount(1);
+
+        vm.prank(address(fund));
+        periphery.pauseAccount(1);
+
+        assertTrue(periphery.getAccountInfo(1).state == AccountState.PAUSED);
+
+        vm.prank(address(fund));
+        periphery.unpauseAccount(1);
+
+        assertTrue(periphery.getAccountInfo(1).state == AccountState.ACTIVE);
+    }
+
+    function test_only_admin_can_close_account(address attacker)
+        public
+        whitelistUser(alice, 1000000, Role.USER)
+    {
+        vm.assume(attacker != address(fund));
+
+        vm.prank(attacker);
+        vm.expectRevert(Errors.OnlyAdmin.selector);
+        periphery.closeAccount(1);
+
+        vm.prank(address(fund));
+        periphery.closeAccount(1);
+
+        assertTrue(periphery.getAccountInfo(1).state == AccountState.CLOSED);
+        vm.expectRevert();
+        periphery.ownerOf(1);
+    }
+
+    function test_only_fund_can_pause_unpause_module(address attacker) public {
+        vm.assume(attacker != address(fund));
+
+        vm.prank(attacker);
+        vm.expectRevert(Errors.OnlyFund.selector);
+        periphery.pause();
+
+        vm.prank(address(fund));
+        periphery.pause();
+
+        assertTrue(periphery.paused());
+
+        vm.prank(attacker);
+        vm.expectRevert(Errors.OnlyFund.selector);
+        periphery.unpause();
+
+        vm.prank(address(fund));
+        periphery.unpause();
+
+        assertTrue(!periphery.paused());
+    }
+
+    function test_only_fund_can_transfer_account_nft(address attacker)
+        public
+        whitelistUser(alice, 1000000, Role.USER)
+    {
+        vm.prank(attacker);
+        vm.expectRevert(Errors.Deposit_AccountNotTransferable.selector);
+        periphery.transferFrom(alice, bob, 1);
+
+        vm.prank(alice);
+        vm.expectRevert(Errors.Deposit_AccountNotTransferable.selector);
+        periphery.transferFrom(alice, bob, 1);
+
+        vm.prank(attacker);
+        vm.expectRevert(Errors.Deposit_AccountNotTransferable.selector);
+        periphery.safeTransferFrom(alice, bob, 1);
+
+        vm.prank(alice);
+        vm.expectRevert(Errors.Deposit_AccountNotTransferable.selector);
+        periphery.safeTransferFrom(alice, bob, 1);
+    }
+
+    function test_only_fund_can_change_admin(address attacker) public {
+        vm.assume(attacker != address(fund) && attacker != address(0));
+
+        vm.prank(attacker);
+        vm.expectRevert(Errors.OnlyFund.selector);
+        periphery.setAdmin(attacker);
+
+        vm.prank(address(fund));
+        periphery.setAdmin(attacker);
+
+        assertTrue(periphery.admin() == attacker);
+    }
+
+    function test_only_fund_can_change_fee_recipient(address attacker) public {
+        vm.assume(attacker != address(fund) && attacker != address(0));
+
+        vm.prank(attacker);
+        vm.expectRevert(Errors.OnlyFund.selector);
+        periphery.setFeeRecipient(attacker);
+
+        vm.prank(address(fund));
+        periphery.setFeeRecipient(attacker);
+
+        assertTrue(periphery.feeRecipient() == attacker);
     }
 }

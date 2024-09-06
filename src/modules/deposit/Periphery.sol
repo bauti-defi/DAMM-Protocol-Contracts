@@ -3,21 +3,24 @@ pragma solidity ^0.8.0;
 
 import "@solmate/tokens/ERC20.sol";
 import "@openzeppelin-contracts/utils/math/Math.sol";
+import "@openzeppelin-contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin-contracts/utils/cryptography/MessageHashUtils.sol";
 import "@openzeppelin-contracts/utils/cryptography/SignatureChecker.sol";
+import "@openzeppelin-contracts/utils/math/SignedMath.sol";
 import "@solmate/utils/SafeTransferLib.sol";
 import "@src/libs/Constants.sol";
+import "@src/interfaces/IFund.sol";
 
 import "@src/libs/Errors.sol";
 import "@src/interfaces/IPeriphery.sol";
 import "./UnitOfAccount.sol";
-import "./Structs.sol";
 import {FundShareVault} from "./FundShareVault.sol";
 
-contract Periphery is IPeriphery {
+contract Periphery is ERC721, IPeriphery {
     using SafeTransferLib for ERC20;
     using MessageHashUtils for bytes;
     using Math for uint256;
+    using SignedMath for int256;
 
     /// @dev the DAMM fund the periphery is associated with
     IFund public immutable fund;
@@ -28,40 +31,57 @@ contract Periphery is IPeriphery {
     /// @dev used internally for yield accounting
     FundShareVault public immutable vault;
 
-    mapping(address asset => AssetPolicy policy) private assetPolicy;
-    mapping(address user => UserAccountInfo) private userAccountInfo;
-    mapping(address user => uint256 nonce) private userNonce;
+    /// @dev the minter role
+    address public admin;
 
-    uint256 public highWaterMarkPrice;
     uint256 public feeBps = 0;
     address public feeRecipient;
-    bool public paused;
-    /// @dev if users must be whitelisted or not
-    bool public immutable whitelist;
+    uint256 public highWaterMarkPrice;
+    uint256 public previousMarkPrice;
 
+    mapping(address asset => AssetPolicy policy) private assetPolicy;
+    mapping(uint256 tokenId => UserAccountInfo account) private accountInfo;
+
+    uint256 private tokenId = 0;
+    bool public paused;
+
+    /// TODO: all of this in an intialize function?
     constructor(
-        string memory _vaultName,
-        string memory _vaultSymbol,
-        uint8 _decimals,
+        string memory vaultName_,
+        string memory vaultSymbol_,
+        uint8 decimals_,
         address fund_,
         address oracleRouter_,
-        address feeRecipient_,
-        bool _whitelist
-    ) {
+        address admin_,
+        address feeRecipient_
+    ) ERC721(string.concat(vaultName_, " Account"), string.concat("ACC-", vaultSymbol_)) {
+        if (fund_ == address(0)) {
+            revert Errors.Deposit_InvalidConstructorParam();
+        }
+        if (oracleRouter_ == address(0)) {
+            revert Errors.Deposit_InvalidConstructorParam();
+        }
+        if (admin_ == address(0)) {
+            revert Errors.Deposit_InvalidConstructorParam();
+        }
+        if (feeRecipient_ == address(0)) {
+            revert Errors.Deposit_InvalidConstructorParam();
+        }
+
         fund = IFund(fund_);
         oracleRouter = IPriceOracle(oracleRouter_);
-        _setFeeRecipient(feeRecipient_);
-        whitelist = _whitelist;
+        admin = admin_;
+        feeRecipient = feeRecipient_;
 
-        unitOfAccount = new UnitOfAccount("Liquidity", "UNIT", _decimals);
-        vault = new FundShareVault(address(unitOfAccount), _vaultName, _vaultSymbol);
+        unitOfAccount = new UnitOfAccount("Liquidity", "UNIT", decimals_);
+        vault = new FundShareVault(address(unitOfAccount), vaultName_, vaultSymbol_);
 
         /// @notice infinite approval for the vault to manage periphery's balance
         unitOfAccount.approve(address(vault), type(uint256).max);
     }
 
-    modifier onlyWhenFundIsFullyDivested() {
-        if (fund.hasOpenPositions()) revert Errors.FundValuationOracle_FundNotFullyDivested();
+    modifier notPaused() {
+        if (paused) revert Errors.Deposit_ModulePaused();
         _;
     }
 
@@ -70,69 +90,75 @@ contract Periphery is IPeriphery {
         _;
     }
 
-    modifier isAllowed(address user) {
-        if (whitelist) {
-            if (userAccountInfo[user].role == Role.NONE) revert Errors.Deposit_OnlyUser();
-            if (userAccountInfo[user].status != AccountStatus.ACTIVE) {
-                revert Errors.Deposit_AccountNotActive();
-            }
-        }
+    modifier onlyAdmin() {
+        if (msg.sender != admin) revert Errors.OnlyAdmin();
         _;
     }
 
-    modifier notPaused() {
-        if (paused) revert Errors.Deposit_ModulePaused();
-        _;
+    function _price(bool isDeposit_) private view returns (uint256) {
+        return isDeposit_
+            ? vault.previewMint(10 ** vault.decimals())
+            : vault.previewRedeem(10 ** vault.decimals());
     }
 
-    /// @dev two things must happen here.
-    /// 1. calculate the profit/loss since the last time this function was called.
-    /// 2. strip protocol fee
-    /// 3. update vault's total assets to match the fund's total assets
-    modifier update() {
+    /// @dev A few things must happen here
+    /// 1. Calculate the profit delta between the fund and the vault
+    /// 2. Update the vault's total assets to match the fund's total assets
+    /// 3. If there is profit above the high water mark, take a fee
+    /// 4. Update the high water mark if the current price is higher
+    /// 5. Invariants check
+    modifier update(bool isDeposit_) {
         uint256 assetsInFund = oracleRouter.getQuote(0, address(fund), address(unitOfAccount));
         uint256 assetsInVault = vault.totalAssets();
 
-        /// we know that the difference between the assets in the fund and the assets in the vault
-        /// is equal to the profit/loss since last update
-        if (assetsInFund > assetsInVault) {
-            uint256 profit = assetsInFund - assetsInVault;
+        int256 profitDelta = int256(assetsInFund) - int256(assetsInVault);
 
-            uint256 circulatingVaultSupply = vault.totalSupply();
-            uint256 currentSharePrice = 0;
-            if (circulatingVaultSupply > 0) {
-                currentSharePrice = assetsInFund / circulatingVaultSupply;
-            }
-
-            uint256 fee;
-            if (currentSharePrice > highWaterMarkPrice) {
-                /// update the high water mark price
-                highWaterMarkPrice = currentSharePrice;
-
-                /// the performance fee is a percentage of the profit
-                /// but only if the current share price is greater than the high water mark price
-                uint256 fee = feeBps > 0 ? profit.mulDiv(feeBps, BP_DIVISOR) : 0;
-            }
-
-            /// we mint the profit to the periphery
-            unitOfAccount.mint(address(this), profit);
+        if (profitDelta > 0) {
+            unitOfAccount.mint(address(this), profitDelta.abs());
 
             /// we transfer the profit (deducting the fee) into the vault
             /// this will distribute the profit to the vault's shareholders
-            if (!unitOfAccount.transfer(address(vault), profit - fee)) {
+            if (!unitOfAccount.transfer(address(vault), profitDelta.abs())) {
                 revert Errors.Deposit_AssetTransferFailed();
             }
-
-            /// if a positive fee has been accrued
-            if (fee > 0) {
-                /// we deposit the fee into the vault on behalf of the fee recipient
-                vault.deposit(fee, feeRecipient);
-            }
-        } else if (assetsInFund < assetsInVault) {
+        } else if (profitDelta < 0) {
             /// if the fund has lost value, we need to account for it
             /// so we decrease the vault's total assets to match the fund's total assets
             /// by burning the loss
-            unitOfAccount.burn(address(vault), assetsInVault - assetsInFund);
+            unitOfAccount.burn(address(vault), profitDelta.abs());
+        }
+
+        uint256 currentSharePrice = _price(isDeposit_);
+
+        /// if there is profit
+        if (currentSharePrice > highWaterMarkPrice) {
+            /// take a fee only on the profit above the high water mark price
+            /// notice price has precision baked in so we must divide by it to get the actual profit
+            uint256 nominalFee = feeBps > 0
+                ? profitDelta.abs().mulDiv(
+                    feeBps * (currentSharePrice - highWaterMarkPrice),
+                    BP_DIVISOR * (currentSharePrice - previousMarkPrice)
+                )
+                : 0;
+
+            /// we will burn, mint, deposit as to not affect the vault's total assets
+            /// and respect its underlying math calculations
+            if (nominalFee > 0) {
+                /// we burn the fee that was deposited into the vault
+                unitOfAccount.burn(address(vault), nominalFee);
+
+                /// we mint the fee to the periphery
+                unitOfAccount.mint(address(this), nominalFee);
+
+                /// we deposit the fee into the vault on behalf of the fee recipient
+                vault.deposit(nominalFee, feeRecipient);
+            }
+        }
+
+        /// update internal price
+        previousMarkPrice = currentSharePrice;
+        if (previousMarkPrice > highWaterMarkPrice) {
+            highWaterMarkPrice = previousMarkPrice;
         }
 
         _;
@@ -148,22 +174,69 @@ contract Periphery is IPeriphery {
         }
     }
 
-    function deposit(DepositOrder calldata order)
+    function deposit(SignedDepositIntent calldata order)
         public
         notPaused
-        isAllowed(msg.sender)
-        update
+        update(true)
         returns (uint256 sharesOut)
     {
-        if (order.deadline < block.timestamp) revert Errors.Deposit_IntentExpired();
+        address minter = _ownerOf(order.intent.deposit.accountId);
+        if (minter == address(0)) {
+            revert Errors.Deposit_AccountDoesNotExist();
+        }
 
+        if (
+            !SignatureChecker.isValidSignatureNow(
+                minter, abi.encode(order.intent).toEthSignedMessageHash(), order.signature
+            )
+        ) revert Errors.Deposit_InvalidSignature();
+
+        if (order.intent.nonce != accountInfo[order.intent.deposit.accountId].nonce++) {
+            revert Errors.Deposit_InvalidNonce();
+        }
+
+        if (order.intent.chaindId != block.chainid) revert Errors.Deposit_InvalidChain();
+
+        sharesOut = _deposit(order.intent.deposit, minter);
+
+        /// pay the relayer if required
+        if (order.intent.relayerTip > 0) {
+            ERC20(order.intent.deposit.asset).safeTransferFrom(
+                minter, msg.sender, order.intent.relayerTip
+            );
+        }
+
+        emit Deposit(
+            order.intent.deposit.accountId,
+            order.intent.deposit.asset,
+            order.intent.deposit.amount,
+            sharesOut
+        );
+    }
+
+    function _deposit(DepositOrder calldata order, address user)
+        private
+        returns (uint256 sharesOut)
+    {
         AssetPolicy memory policy = assetPolicy[order.asset];
+
+        if (order.deadline < block.timestamp) {
+            revert Errors.Deposit_OrderExpired();
+        }
+
+        UserAccountInfo memory account = accountInfo[order.accountId];
+
+        if (!account.isActive()) revert Errors.Deposit_AccountNotActive();
+
+        if (account.isExpired()) {
+            revert Errors.Deposit_AccountExpired();
+        }
 
         if (!policy.canDeposit || !policy.enabled) {
             revert Errors.Deposit_AssetUnavailable();
         }
 
-        if (policy.permissioned && userAccountInfo[msg.sender].role != Role.SUPER_USER) {
+        if (policy.permissioned && !account.isSuperUser()) {
             revert Errors.Deposit_OnlySuperUser();
         }
 
@@ -172,11 +245,11 @@ contract Periphery is IPeriphery {
 
         /// if amount is 0, then deposit the user's entire balance
         if (assetAmountIn == 0) {
-            assetAmountIn = assetToken.balanceOf(msg.sender);
+            assetAmountIn = assetToken.balanceOf(user);
         }
 
         /// transfer asset from user to fund
-        assetToken.safeTransferFrom(msg.sender, address(fund), assetAmountIn);
+        assetToken.safeTransferFrom(user, address(fund), assetAmountIn);
 
         /// calculate how much liquidity for this amount of deposited asset
         uint256 liquidity =
@@ -197,119 +270,32 @@ contract Periphery is IPeriphery {
         if (sharesOut < order.minSharesOut) {
             revert Errors.Deposit_SlippageLimitExceeded();
         }
-
-        /// TODO: emit event
     }
 
-    function deposit(SignedDepositOrder calldata order)
+    function withdraw(SignedWithdrawIntent calldata order)
         public
         notPaused
-        isAllowed(order.intent.user)
-        update
-        returns (uint256 sharesOut)
-    {
-        if (
-            !SignatureChecker.isValidSignatureNow(
-                order.intent.user,
-                abi.encode(order.intent).toEthSignedMessageHash(),
-                order.signature
-            )
-        ) revert Errors.Deposit_InvalidSignature();
-        if (order.intent.nonce != userNonce[order.intent.user]++) {
-            revert Errors.Deposit_InvalidNonce();
-        }
-
-        if (order.intent.chaindId != block.chainid) revert Errors.Deposit_InvalidChain();
-        if (order.intent.order.deadline < block.timestamp) revert Errors.Deposit_IntentExpired();
-
-        AssetPolicy memory policy = assetPolicy[order.intent.order.asset];
-
-        if (!policy.canDeposit || !policy.enabled) {
-            revert Errors.Deposit_AssetUnavailable();
-        }
-
-        if (policy.permissioned && userAccountInfo[order.intent.user].role != Role.SUPER_USER) {
-            revert Errors.Deposit_OnlySuperUser();
-        }
-
-        uint256 assetAmountIn = order.intent.order.amount;
-        ERC20 assetToken = ERC20(order.intent.order.asset);
-
-        /// if amount is 0, then deposit the user's entire balance
-        if (assetAmountIn == 0) {
-            assetAmountIn = assetToken.balanceOf(order.intent.user);
-
-            /// make sure there is enough asset to cover the relayer tip
-            if (order.intent.relayerTip > 0 && assetAmountIn <= order.intent.relayerTip) {
-                revert Errors.Deposit_InsufficientAmount();
-            }
-
-            /// deduct it from the amount to deposit
-            assetAmountIn -= order.intent.relayerTip;
-        }
-
-        /// pay the relayer if required
-        if (order.intent.relayerTip > 0) {
-            assetToken.safeTransferFrom(order.intent.user, msg.sender, order.intent.relayerTip);
-        }
-
-        /// transfer asset from user to fund
-        assetToken.safeTransferFrom(order.intent.user, address(fund), assetAmountIn);
-
-        /// calculate how much liquidity for this amount of deposited asset
-        uint256 liquidity =
-            oracleRouter.getQuote(assetAmountIn, order.intent.order.asset, address(unitOfAccount));
-
-        /// make sure the deposit is above the minimum
-        if (liquidity < policy.minimumDeposit) {
-            revert Errors.Deposit_InsufficientDeposit();
-        }
-
-        /// mint liquidity to periphery
-        unitOfAccount.mint(address(this), liquidity);
-
-        /// mint shares to user using the liquidity that was just minted to periphery
-        sharesOut = vault.deposit(liquidity, order.intent.order.recipient);
-
-        /// lets make sure slippage is acceptable
-        if (sharesOut < order.intent.order.minSharesOut) {
-            revert Errors.Deposit_SlippageLimitExceeded();
-        }
-
-        emit Deposit(
-            order.intent.user,
-            order.intent.order.asset,
-            assetAmountIn,
-            sharesOut,
-            msg.sender,
-            order.intent.relayerTip
-        );
-    }
-
-    function withdraw(WithdrawOrder calldata order)
-        public
-        isAllowed(order.intent.user)
-        update
+        update(false)
         returns (uint256 assetAmountOut)
     {
+        address burner = _ownerOf(order.intent.withdraw.accountId);
+        if (burner == address(0)) {
+            revert Errors.Deposit_AccountDoesNotExist();
+        }
         if (
             !SignatureChecker.isValidSignatureNow(
-                order.intent.user,
-                abi.encode(order.intent).toEthSignedMessageHash(),
-                order.signature
+                burner, abi.encode(order.intent).toEthSignedMessageHash(), order.signature
             )
         ) revert Errors.Deposit_InvalidSignature();
-        if (order.intent.nonce != userNonce[order.intent.user]++) {
+
+        if (order.intent.nonce != accountInfo[order.intent.withdraw.accountId].nonce++) {
             revert Errors.Deposit_InvalidNonce();
         }
 
         if (order.intent.chaindId != block.chainid) revert Errors.Deposit_InvalidChain();
-        if (order.intent.deadline < block.timestamp) revert Errors.Deposit_IntentExpired();
 
         /// withdraw liquidity from vault
-        assetAmountOut = _withdraw(
-            order.intent.asset, order.intent.shares, order.intent.user, order.intent.minAmountOut
-        );
+        assetAmountOut = _withdraw(order.intent.withdraw, burner);
 
         /// pay the relayer if required
         if (order.intent.relayerTip > 0) {
@@ -317,56 +303,49 @@ contract Periphery is IPeriphery {
                 revert Errors.Deposit_InsufficientAmount();
             }
 
-            _transferAssetFromFund(order.intent.asset, msg.sender, order.intent.relayerTip);
+            _transferAssetFromFund(order.intent.withdraw.asset, msg.sender, order.intent.relayerTip);
         }
 
         /// transfer asset from fund to receiver
         _transferAssetFromFund(
-            order.intent.asset, order.intent.to, assetAmountOut - order.intent.relayerTip
+            order.intent.withdraw.asset,
+            order.intent.withdraw.to,
+            assetAmountOut - order.intent.relayerTip
         );
 
         emit Withdraw(
-            order.intent.user,
-            order.intent.to,
-            order.intent.asset,
-            order.intent.shares,
-            assetAmountOut,
-            msg.sender,
-            order.intent.relayerTip
+            order.intent.withdraw.accountId,
+            order.intent.withdraw.asset,
+            order.intent.withdraw.shares,
+            assetAmountOut
         );
     }
 
-    function withdrawFees(address asset, uint256 shares, uint256 minAmountOut)
-        public
-        update
-        returns (uint256 assetAmountOut)
-    {
-        if (msg.sender != feeRecipient) {
-            revert Errors.Deposit_OnlyFeeRecipient();
-        }
-
-        /// withdraw liquidity from vault
-        assetAmountOut = _withdraw(asset, shares, feeRecipient, minAmountOut);
-
-        /// transfer asset from fund to feeRecipient
-        _transferAssetFromFund(asset, feeRecipient, assetAmountOut);
-
-        emit WithdrawFees(feeRecipient, asset, shares, assetAmountOut);
-    }
-
-    function _withdraw(address assetOut, uint256 sharesToBurn, address user, uint256 minAmountOut)
+    function _withdraw(WithdrawOrder calldata order, address user)
         private
         returns (uint256 assetAmountOut)
     {
-        AssetPolicy memory policy = assetPolicy[assetOut];
+        if (order.deadline < block.timestamp) revert Errors.Deposit_OrderExpired();
+
+        AssetPolicy memory policy = assetPolicy[order.asset];
 
         if (!policy.canWithdraw || !policy.enabled) {
             revert Errors.Deposit_AssetUnavailable();
         }
 
-        if (policy.permissioned && userAccountInfo[user].role != Role.SUPER_USER) {
+        UserAccountInfo memory account = accountInfo[order.accountId];
+
+        if (policy.permissioned && !account.isSuperUser()) {
             revert Errors.Deposit_OnlySuperUser();
         }
+
+        if (!account.isActive()) revert Errors.Deposit_AccountNotActive();
+
+        if (account.isExpired()) {
+            revert Errors.Deposit_AccountExpired();
+        }
+
+        uint256 sharesToBurn = order.shares;
 
         /// if shares to burn is 0, then burn all shares owned by user
         if (sharesToBurn == 0) {
@@ -385,21 +364,21 @@ contract Periphery is IPeriphery {
         unitOfAccount.burn(address(this), liquidity);
 
         /// calculate how much asset for this amount of liquidity
-        assetAmountOut = oracleRouter.getQuote(liquidity, address(unitOfAccount), assetOut);
+        assetAmountOut = oracleRouter.getQuote(liquidity, address(unitOfAccount), order.asset);
 
         /// make sure slippage is acceptable
         ///@notice if minAmountOut is 0, then slippage is not checked
-        if (minAmountOut > 0 && assetAmountOut < minAmountOut) {
+        if (order.minAmountOut > 0 && assetAmountOut < order.minAmountOut) {
             revert Errors.Deposit_SlippageLimitExceeded();
         }
     }
 
-    function _transferAssetFromFund(address asset, address to, uint256 amount) private {
+    function _transferAssetFromFund(address asset_, address to_, uint256 amount_) private {
         /// call fund to transfer asset out
         (bool success, bytes memory returnData) = fund.execTransactionFromModuleReturnData(
-            asset,
+            asset_,
             0,
-            abi.encodeWithSignature("transfer(address,uint256)", to, amount),
+            abi.encodeWithSignature("transfer(address,uint256)", to_, amount_),
             Enum.Operation.Call
         );
 
@@ -407,6 +386,20 @@ contract Periphery is IPeriphery {
         if (!success || (returnData.length > 0 && !abi.decode(returnData, (bool)))) {
             revert Errors.Deposit_AssetTransferFailed();
         }
+    }
+
+    function getAccountNonce(uint256 accountId_) external view returns (uint256) {
+        return accountInfo[accountId_].nonce;
+    }
+
+    function setFeeBps(uint256 bps_) external notPaused onlyFund {
+        if (bps_ >= BP_DIVISOR) {
+            revert Errors.Deposit_InvalidPerformanceFee();
+        }
+        uint256 oldFee = feeBps;
+        feeBps = bps_;
+
+        emit PerformanceFeeUpdated(oldFee, bps_);
     }
 
     function _setFeeRecipient(address recipient) private {
@@ -422,108 +415,106 @@ contract Periphery is IPeriphery {
         emit FeeRecipientUpdated(recipient, previous);
     }
 
-    function setFeeRecipient(address recipient) external notPaused onlyFund {
-        _setFeeRecipient(recipient);
+    function setFeeRecipient(address recipient_) external onlyFund {
+        _setFeeRecipient(recipient_);
     }
 
-    function setFeeBps(uint256 bps) external notPaused onlyFund {
-        if (bps >= BP_DIVISOR) {
-            revert Errors.Deposit_InvalidPerformanceFee();
+    function _setAdmin(address admin_) private {
+        if (admin_ == address(0)) {
+            revert Errors.Deposit_InvalidAdmin();
         }
-        uint256 oldFee = feeBps;
-        feeBps = bps;
 
-        emit PerformanceFeeUpdated(oldFee, bps);
+        address previous = admin;
+
+        /// update the admin
+        admin = admin_;
+
+        emit AdminUpdated(admin_, previous);
     }
 
-    function enableAsset(address asset, AssetPolicy memory policy) external notPaused onlyFund {
-        if (!fund.isAssetOfInterest(asset)) {
+    function setAdmin(address admin_) external onlyFund {
+        _setAdmin(admin_);
+    }
+
+    function enableAsset(address asset_, AssetPolicy memory policy_) external notPaused onlyFund {
+        if (!fund.isAssetOfInterest(asset_)) {
             revert Errors.Deposit_AssetNotSupported();
         }
-        if (!policy.enabled) {
+        if (!policy_.enabled) {
             revert Errors.Deposit_InvalidAssetPolicy();
         }
 
-        assetPolicy[asset] = policy;
+        assetPolicy[asset_] = policy_;
 
-        emit AssetEnabled(asset, policy);
+        emit AssetEnabled(asset_, policy_);
     }
 
-    function disableAsset(address asset) external notPaused onlyFund {
-        assetPolicy[asset].enabled = false;
+    function disableAsset(address asset_) external onlyFund {
+        assetPolicy[asset_].enabled = false;
 
-        emit AssetDisabled(asset);
+        emit AssetDisabled(asset_);
     }
 
-    function getAssetPolicy(address asset) external view returns (AssetPolicy memory) {
-        return assetPolicy[asset];
+    function getAssetPolicy(address asset_) external view returns (AssetPolicy memory) {
+        return assetPolicy[asset_];
     }
 
-    function increaseNonce(uint256 increment) external notPaused isAllowed(msg.sender) {
-        userNonce[msg.sender] += increment > 1 ? increment : 1;
+    /// @notice restricting the transfer makes this a soulbound token
+    function transferFrom(address from_, address to_, uint256 tokenId_) public override {
+        revert Errors.Deposit_AccountNotTransferable();
     }
 
-    function getUserAccountInfo(address user) external view returns (UserAccountInfo memory) {
-        return userAccountInfo[user];
+    function openAccount(CreateAccountParams calldata params_) public notPaused onlyAdmin {
+        _safeMint(params_.user, ++tokenId);
+        accountInfo[tokenId] = UserAccountInfo({
+            role: params_.role,
+            state: AccountState.ACTIVE,
+            expirationTimestamp: block.timestamp + params_.ttl,
+            nonce: 0,
+            shareMintLimit: params_.shareMintLimit
+        });
+
+        emit AccountOpened(tokenId, params_.role, block.timestamp + params_.ttl);
     }
 
-    function _pauseAccount(address user) private {
-        if (userAccountInfo[user].status != AccountStatus.ACTIVE) {
+    function closeAccount(uint256 accountId_) public onlyAdmin {
+        if (!accountInfo[accountId_].canBeClosed()) revert Errors.Deposit_AccountCannotBeClosed();
+        _burn(accountId_);
+        accountInfo[accountId_].state = AccountState.CLOSED;
+    }
+
+    function pauseAccount(uint256 accountId_) public onlyAdmin {
+        if (!accountInfo[accountId_].isActive()) {
             revert Errors.Deposit_AccountNotActive();
         }
-
-        userAccountInfo[user].status = AccountStatus.PAUSED;
-
-        emit AccountPaused(user);
+        accountInfo[accountId_].state = AccountState.PAUSED;
     }
 
-    function pauseAccount(address user) public onlyFund {
-        _pauseAccount(user);
-    }
-
-    function unpauseAccount(address user) public onlyFund {
-        if (userAccountInfo[user].status != AccountStatus.PAUSED) {
+    function unpauseAccount(uint256 accountId_) public notPaused onlyAdmin {
+        if (!accountInfo[accountId_].isPaused()) {
             revert Errors.Deposit_AccountNotPaused();
         }
+        accountInfo[accountId_].state = AccountState.ACTIVE;
 
-        userAccountInfo[user].status = AccountStatus.ACTIVE;
-
-        /// lets increment the nonce to prevent delayed replay attacks
-        userNonce[user]++;
-
-        emit AccountUnpaused(user);
+        /// increase nonce to avoid replay attacks
+        accountInfo[accountId_].nonce++;
     }
 
-    function updateAccountRole(address user, Role role) public onlyFund {
-        if (userAccountInfo[user].status == AccountStatus.NULL) {
+    function getAccountInfo(uint256 accountId_) public view returns (UserAccountInfo memory) {
+        return accountInfo[accountId_];
+    }
+
+    function increaseAccountNonce(uint256 accountId_, uint256 increment_) external notPaused {
+        if (_ownerOf(accountId_) != msg.sender) revert Errors.Deposit_OnlyAccountOwner();
+        if (accountInfo[accountId_].isActive()) {
             revert Errors.Deposit_AccountNotActive();
         }
-        Role currentRole = userAccountInfo[user].role;
-        if (currentRole == role || role == Role.NONE) {
-            revert Errors.Deposit_InvalidAccountRoleUpdate();
-        }
 
-        userAccountInfo[user].role = role;
-
-        emit AccountRoleChanged(user, currentRole, role);
+        accountInfo[accountId_].nonce += increment_ > 1 ? increment_ : 1;
     }
 
-    function _openAccount(address user, Role role) private {
-        if (userAccountInfo[user].status != AccountStatus.NULL) {
-            revert Errors.Deposit_AccountExists();
-        }
-
-        userAccountInfo[user] = UserAccountInfo({role: role, status: AccountStatus.ACTIVE});
-
-        emit AccountOpened(user, role);
-    }
-
-    function openAccount(address user, Role role) public onlyFund {
-        _openAccount(user, role);
-    }
-
-    function getUserNonce(address user) external view returns (uint256) {
-        return userNonce[user];
+    function getNextTokenId() public view returns (uint256) {
+        return tokenId + 1;
     }
 
     function pause() external onlyFund {
