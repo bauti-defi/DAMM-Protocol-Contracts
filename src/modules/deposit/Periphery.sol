@@ -55,10 +55,18 @@ contract Periphery is ERC721, IPeriphery {
         address admin_,
         address feeRecipient_
     ) ERC721(string.concat(vaultName_, " Account"), string.concat("ACC-", vaultSymbol_)) {
-        require(fund_ != address(0), "Periphery: INVALID_FUND");
-        require(oracleRouter_ != address(0), "Periphery: INVALID_ORACLE_ROUTER");
-        require(admin_ != address(0), "Periphery: INVALID_ADMIN");
-        require(feeRecipient_ != address(0), "Periphery: INVALID_FEE_RECIPIENT");
+        if (fund_ == address(0)) {
+            revert Errors.Deposit_InvalidConstructorParam();
+        }
+        if (oracleRouter_ == address(0)) {
+            revert Errors.Deposit_InvalidConstructorParam();
+        }
+        if (admin_ == address(0)) {
+            revert Errors.Deposit_InvalidConstructorParam();
+        }
+        if (feeRecipient_ == address(0)) {
+            revert Errors.Deposit_InvalidConstructorParam();
+        }
 
         fund = IFund(fund_);
         oracleRouter = IPriceOracle(oracleRouter_);
@@ -220,9 +228,9 @@ contract Periphery is ERC721, IPeriphery {
 
         UserAccountInfo memory account = accountInfo[order.accountId];
 
-        if (account.state != AccountState.ACTIVE) revert Errors.Deposit_AccountNotActive();
+        if (!account.isActive()) revert Errors.Deposit_AccountNotActive();
 
-        if (account.expirationTimestamp != 0 && block.timestamp >= account.expirationTimestamp) {
+        if (account.isExpired()) {
             revert Errors.Deposit_AccountExpired();
         }
 
@@ -230,7 +238,7 @@ contract Periphery is ERC721, IPeriphery {
             revert Errors.Deposit_AssetUnavailable();
         }
 
-        if (policy.permissioned && account.role != Role.SUPER_USER) {
+        if (policy.permissioned && !account.isSuperUser()) {
             revert Errors.Deposit_OnlySuperUser();
         }
 
@@ -332,13 +340,13 @@ contract Periphery is ERC721, IPeriphery {
 
         UserAccountInfo memory account = accountInfo[order.accountId];
 
-        if (policy.permissioned && account.role != Role.SUPER_USER) {
+        if (policy.permissioned && !account.isSuperUser()) {
             revert Errors.Deposit_OnlySuperUser();
         }
 
-        if (account.state != AccountState.ACTIVE) revert Errors.Deposit_AccountNotActive();
+        if (!account.isActive()) revert Errors.Deposit_AccountNotActive();
 
-        if (account.expirationTimestamp != 0 && block.timestamp >= account.expirationTimestamp) {
+        if (account.isExpired()) {
             revert Errors.Deposit_AccountExpired();
         }
 
@@ -458,19 +466,20 @@ contract Periphery is ERC721, IPeriphery {
     }
 
     function closeAccount(uint256 accountId_) public onlyAdmin {
+        if (!accountInfo[accountId_].canBeClosed()) revert Errors.Deposit_AccountCannotBeClosed();
         _burn(accountId_);
         accountInfo[accountId_].state = AccountState.CLOSED;
     }
 
     function pauseAccount(uint256 accountId_) public onlyAdmin {
-        if (accountInfo[accountId_].state != AccountState.ACTIVE) {
+        if (!accountInfo[accountId_].isActive()) {
             revert Errors.Deposit_AccountNotActive();
         }
         accountInfo[accountId_].state = AccountState.PAUSED;
     }
 
     function unpauseAccount(uint256 accountId_) public notPaused onlyAdmin {
-        if (accountInfo[accountId_].state != AccountState.PAUSED) {
+        if (!accountInfo[accountId_].isPaused()) {
             revert Errors.Deposit_AccountNotPaused();
         }
         accountInfo[accountId_].state = AccountState.ACTIVE;
@@ -485,6 +494,9 @@ contract Periphery is ERC721, IPeriphery {
 
     function increaseAccountNonce(uint256 accountId_, uint256 increment_) external notPaused {
         if (_ownerOf(accountId_) != msg.sender) revert Errors.Deposit_OnlyAccountOwner();
+        if (accountInfo[accountId_].isActive()) {
+            revert Errors.Deposit_AccountNotActive();
+        }
 
         accountInfo[accountId_].nonce += increment_ > 1 ? increment_ : 1;
     }

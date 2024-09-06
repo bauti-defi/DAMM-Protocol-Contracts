@@ -75,8 +75,32 @@ struct UserAccountInfo {
 }
 
 struct CreateAccountParams {
-    address user;
-    Role role;
     uint256 ttl;
     uint256 shareMintLimit;
+    address user;
+    Role role;
 }
+
+library AccountLib {
+    function isActive(UserAccountInfo memory account) internal pure returns (bool) {
+        return account.state == AccountState.ACTIVE;
+    }
+
+    function isPaused(UserAccountInfo memory account) internal pure returns (bool) {
+        return account.state == AccountState.PAUSED;
+    }
+
+    function canBeClosed(UserAccountInfo memory account) internal pure returns (bool) {
+        return account.state == AccountState.ACTIVE || account.state == AccountState.PAUSED;
+    }
+
+    function isSuperUser(UserAccountInfo memory account) internal pure returns (bool) {
+        return account.role == Role.SUPER_USER;
+    }
+
+    function isExpired(UserAccountInfo memory account) internal view returns (bool) {
+        return account.expirationTimestamp != 0 && block.timestamp >= account.expirationTimestamp;
+    }
+}
+
+using AccountLib for UserAccountInfo global;

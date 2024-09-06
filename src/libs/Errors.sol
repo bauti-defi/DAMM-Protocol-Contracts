@@ -23,6 +23,9 @@ library Errors {
     error Hook_InvalidOperation();
     error Hook_InvalidTargetSelector();
 
+    /// Constructor errors
+    error Deposit_InvalidConstructorParam();
+
     /// Signature errors
     error Deposit_InvalidSignature();
     error Deposit_InvalidNonce();
@@ -53,6 +56,7 @@ library Errors {
     error Deposit_AccountDoesNotExist();
     error Deposit_AccountExpired();
     error Deposit_AccountNotTransferable();
+    error Deposit_AccountCannotBeClosed();
 
     /// Access control errors
     error Deposit_OnlyUser();
