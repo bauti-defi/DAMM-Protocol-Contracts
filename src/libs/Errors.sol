@@ -51,12 +51,10 @@ library Errors {
     error Deposit_AccountNotPaused();
     error Deposit_AccountNotActive();
     error Deposit_AccountDoesNotExist();
-    error Deposit_AccountExists();
     error Deposit_AccountExpired();
     error Deposit_AccountNotTransferable();
 
     /// Access control errors
-    error Deposit_OnlyFeeRecipient();
     error Deposit_OnlyUser();
     error Deposit_OnlySuperUser();
     error Deposit_OnlyPeriphery();
