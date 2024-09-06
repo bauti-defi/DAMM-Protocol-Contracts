@@ -99,8 +99,8 @@ contract TestFundValuation is TestBaseProtocol, TestBaseGnosis, TokenMinter {
                         USD_DECIMALS, // must be same as underlying chainlink oracles. USD = 8
                         payable(address(fund)),
                         address(oracleRouter),
-                        makeAddr("FeeRecipient"),
-                        true
+                        address(fund),
+                        makeAddr("FeeRecipient")
                     )
                 )
             )

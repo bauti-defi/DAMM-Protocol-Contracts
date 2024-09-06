@@ -5,6 +5,7 @@ pragma solidity ^0.8.0;
 library Errors {
     /// Shared errors
     error OnlyFund();
+    error OnlyAdmin();
 
     /// Transaction module errors
     error Transaction_HookNotDefined();
@@ -49,16 +50,17 @@ library Errors {
     /// Account errors
     error Deposit_AccountNotPaused();
     error Deposit_AccountNotActive();
-    error Deposit_InvalidAccountRoleUpdate();
     error Deposit_AccountDoesNotExist();
     error Deposit_AccountExists();
     error Deposit_AccountExpired();
+    error Deposit_AccountNotTransferable();
 
     /// Access control errors
     error Deposit_OnlyFeeRecipient();
     error Deposit_OnlyUser();
     error Deposit_OnlySuperUser();
     error Deposit_OnlyPeriphery();
+    error Deposit_OnlyAccountOwner();
 
     /// Fee errors
     error Deposit_InvalidPerformanceFee();

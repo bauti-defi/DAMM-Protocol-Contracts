@@ -2,14 +2,14 @@
 pragma solidity ^0.8.0;
 
 struct DepositIntent {
-    DepositOrder order;
-    address user;
+    DepositOrder deposit;
     uint256 chaindId;
     uint256 relayerTip;
     uint256 nonce;
 }
 
 struct DepositOrder {
+    uint256 accountId;
     address recipient;
     address asset;
     uint256 amount;
@@ -17,24 +17,28 @@ struct DepositOrder {
     uint256 minSharesOut;
 }
 
-struct SignedDepositOrder {
+struct SignedDepositIntent {
     DepositIntent intent;
     bytes signature;
 }
 
-struct WithdrawIntent {
-    address user;
+struct WithdrawOrder {
+    uint256 accountId;
     address to;
     address asset;
-    uint256 chaindId;
     uint256 shares;
     uint256 deadline;
     uint256 minAmountOut;
+}
+
+struct WithdrawIntent {
+    WithdrawOrder withdraw;
+    uint256 chaindId;
     uint256 relayerTip;
     uint256 nonce;
 }
 
-struct WithdrawOrder {
+struct SignedWithdrawIntent {
     WithdrawIntent intent;
     bytes signature;
 }
@@ -46,10 +50,11 @@ enum Role {
     SUPER_USER
 }
 
-enum AccountStatus {
+enum AccountState {
     NULL,
     ACTIVE,
-    PAUSED
+    PAUSED,
+    CLOSED
 }
 
 struct AssetPolicy {
@@ -63,5 +68,15 @@ struct AssetPolicy {
 
 struct UserAccountInfo {
     Role role;
-    AccountStatus status;
+    AccountState state;
+    uint256 expirationTimestamp;
+    uint256 nonce;
+    uint256 shareMintLimit;
+}
+
+struct CreateAccountParams {
+    address user;
+    Role role;
+    uint256 ttl;
+    uint256 shareMintLimit;
 }
