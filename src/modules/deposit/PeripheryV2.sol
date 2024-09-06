@@ -16,7 +16,7 @@ import "@src/interfaces/IPeripheryV2.sol";
 import "./UnitOfAccount.sol";
 import {FundShareVault} from "./FundShareVault.sol";
 
-contract PeripheryV2 is ERC721 {
+contract PeripheryV2 is ERC721, IPeripheryV2 {
     using SafeTransferLib for ERC20;
     using MessageHashUtils for bytes;
     using Math for uint256;
@@ -42,7 +42,7 @@ contract PeripheryV2 is ERC721 {
     mapping(address asset => AssetPolicy policy) private assetPolicy;
     mapping(uint256 tokenId => UserAccountInfo account) private accountInfo;
 
-    uint256 tokenId = 1;
+    uint256 public tokenId = 0;
     bool public paused;
 
     /// TODO: all of this in an intialize function
@@ -99,7 +99,7 @@ contract PeripheryV2 is ERC721 {
     /// 3. If there is profit above the high water mark, take a fee
     /// 4. Update the high water mark if the current price is higher
     /// 5. Invariants check
-    modifier update(bool deposit) {
+    modifier update(bool isDeposit_) {
         uint256 assetsInFund = oracleRouter.getQuote(0, address(fund), address(unitOfAccount));
         uint256 assetsInVault = vault.totalAssets();
 
@@ -120,7 +120,7 @@ contract PeripheryV2 is ERC721 {
             unitOfAccount.burn(address(vault), profitDelta.abs());
         }
 
-        uint256 currentSharePrice = _price(deposit);
+        uint256 currentSharePrice = _price(isDeposit_);
 
         /// if there is profit
         if (currentSharePrice > highWaterMarkPrice) {
@@ -174,7 +174,7 @@ contract PeripheryV2 is ERC721 {
     {
         address minter = _ownerOf(order.intent.deposit.accountId);
         if (minter == address(0)) {
-            revert Errors.Deposit_AccountNotAuthorized();
+            revert Errors.Deposit_AccountDoesNotExist();
         }
 
         if (
@@ -183,11 +183,11 @@ contract PeripheryV2 is ERC721 {
             )
         ) revert Errors.Deposit_InvalidSignature();
 
-        if (order.intent.chaindId != block.chainid) revert Errors.Deposit_InvalidChain();
-
         if (order.intent.nonce != accountInfo[order.intent.deposit.accountId].nonce++) {
             revert Errors.Deposit_InvalidNonce();
         }
+
+        if (order.intent.chaindId != block.chainid) revert Errors.Deposit_InvalidChain();
 
         sharesOut = _deposit(order.intent.deposit, minter);
 
@@ -220,7 +220,7 @@ contract PeripheryV2 is ERC721 {
 
         UserAccountInfo memory account = accountInfo[order.accountId];
 
-        // if(account.state != AccountState.ACTIVE) revert Errors.Deposit_AccountNotActive();
+        if (account.state != AccountState.ACTIVE) revert Errors.Deposit_AccountNotActive();
 
         if (account.expirationTimestamp != 0 && block.timestamp >= account.expirationTimestamp) {
             revert Errors.Deposit_AccountExpired();
@@ -273,7 +273,9 @@ contract PeripheryV2 is ERC721 {
         returns (uint256 assetAmountOut)
     {
         address burner = _ownerOf(order.intent.withdraw.accountId);
-        require(burner != address(0), "PeripheryV2: INVALID_ACCOUNT");
+        if (burner == address(0)) {
+            revert Errors.Deposit_AccountDoesNotExist();
+        }
         if (
             !SignatureChecker.isValidSignatureNow(
                 burner, abi.encode(order.intent).toEthSignedMessageHash(), order.signature
@@ -328,8 +330,16 @@ contract PeripheryV2 is ERC721 {
             revert Errors.Deposit_AssetUnavailable();
         }
 
-        if (policy.permissioned && accountInfo[order.accountId].role != Role.SUPER_USER) {
+        UserAccountInfo memory account = accountInfo[order.accountId];
+
+        if (policy.permissioned && account.role != Role.SUPER_USER) {
             revert Errors.Deposit_OnlySuperUser();
+        }
+
+        if (account.state != AccountState.ACTIVE) revert Errors.Deposit_AccountNotActive();
+
+        if (account.expirationTimestamp != 0 && block.timestamp >= account.expirationTimestamp) {
+            revert Errors.Deposit_AccountExpired();
         }
 
         uint256 sharesToBurn = order.shares;
@@ -360,12 +370,12 @@ contract PeripheryV2 is ERC721 {
         }
     }
 
-    function _transferAssetFromFund(address asset, address to, uint256 amount) private {
+    function _transferAssetFromFund(address asset_, address to_, uint256 amount_) private {
         /// call fund to transfer asset out
         (bool success, bytes memory returnData) = fund.execTransactionFromModuleReturnData(
-            asset,
+            asset_,
             0,
-            abi.encodeWithSignature("transfer(address,uint256)", to, amount),
+            abi.encodeWithSignature("transfer(address,uint256)", to_, amount_),
             Enum.Operation.Call
         );
 
@@ -379,14 +389,14 @@ contract PeripheryV2 is ERC721 {
         return accountInfo[accountId_].nonce;
     }
 
-    function setFeeBps(uint256 bps) external notPaused onlyFund {
-        if (bps >= BP_DIVISOR) {
+    function setFeeBps(uint256 bps_) external notPaused onlyFund {
+        if (bps_ >= BP_DIVISOR) {
             revert Errors.Deposit_InvalidPerformanceFee();
         }
         uint256 oldFee = feeBps;
-        feeBps = bps;
+        feeBps = bps_;
 
-        // emit PerformanceFeeUpdated(oldFee, bps);
+        emit PerformanceFeeUpdated(oldFee, bps_);
     }
 
     function enableAsset(address asset_, AssetPolicy memory policy_) external notPaused onlyFund {
@@ -417,13 +427,16 @@ contract PeripheryV2 is ERC721 {
         super.transferFrom(from_, to_, tokenId_);
     }
 
-    function openAccount(address user_, uint256 expirationTimestamp_, Role role_)
-        public
-        notPaused
-        onlyAdmin
-    {
-        _safeMint(user_, tokenId++);
-        accountInfo[tokenId] = UserAccountInfo(role_, AccountState.ACTIVE, expirationTimestamp_, 0);
+    function openAccount(address user_, uint256 ttl_, Role role_) public notPaused onlyAdmin {
+        _safeMint(user_, ++tokenId);
+        accountInfo[tokenId] = UserAccountInfo({
+            role: role_,
+            state: AccountState.ACTIVE,
+            expirationTimestamp: block.timestamp + ttl_,
+            nonce: 0
+        });
+
+        emit AccountOpened(tokenId, role_, block.timestamp + ttl_);
     }
 
     function closeAccount(uint256 accountId_) public onlyAdmin {
@@ -452,12 +465,12 @@ contract PeripheryV2 is ERC721 {
     function pause() external onlyFund {
         paused = true;
 
-        // emit Paused();
+        emit Paused();
     }
 
     function unpause() external onlyFund {
         paused = false;
 
-        // emit Unpaused();
+        emit Unpaused();
     }
 }

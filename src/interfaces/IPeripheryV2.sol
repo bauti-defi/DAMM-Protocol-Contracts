@@ -5,24 +5,12 @@ import "@src/interfaces/IFund.sol";
 import "@euler-price-oracle/interfaces/IPriceOracle.sol";
 import "@src/modules/deposit/StructsV2.sol";
 
-interface IPeriphery {
+interface IPeripheryV2 {
     event Paused();
 
     event Unpaused();
 
-    event AssetEnabled(address asset, AssetPolicy policy);
-
-    event AssetDisabled(address asset);
-
-    event AccountOpened(address indexed user, Role role);
-
-    event AccountRoleChanged(address indexed user, Role oldRole, Role newRole);
-
-    event AccountPaused(address indexed user);
-
-    event AccountUnpaused(address indexed user);
-
-    event FeeRecipientUpdated(address newRecipient, address oldRecipient);
+    event AccountOpened(uint256 indexed accountId, Role role, uint256 expirationTimestamp);
 
     event PerformanceFeeUpdated(uint256 oldFee, uint256 newFee);
 
@@ -47,13 +35,13 @@ interface IPeriphery {
 
     event WithdrawFees(address indexed to, address asset, uint256 sharesIn, uint256 assetAmountOut);
 
-    // function fund() external returns (IFund);
-    // function oracleRouter() external returns (IPriceOracle);
-    // function paused() external returns (bool);
+    function fund() external returns (IFund);
+    function oracleRouter() external returns (IPriceOracle);
+    function paused() external returns (bool);
     // function deposit(SignedDepositIntent calldata order) external returns (uint256 sharesOut);
     // function withdraw(WithdrawOrder calldata order) external returns (uint256 assetAmountOut);
     // function setFeeRecipient(address newFeeRecipient) external;
-    // function setFeeBps(uint256 newFeeBps) external;
+    function setFeeBps(uint256 newFeeBps) external;
     // function enableAsset(address asset, AssetPolicy memory policy) external;
     // function disableAsset(address asset) external;
     // function getAssetPolicy(address asset) external returns (AssetPolicy memory);

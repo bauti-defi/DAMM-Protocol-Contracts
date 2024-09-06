@@ -50,7 +50,7 @@ library Errors {
     error Deposit_AccountNotPaused();
     error Deposit_AccountNotActive();
     error Deposit_InvalidAccountRoleUpdate();
-    error Deposit_AccountNotAuthorized();
+    error Deposit_AccountDoesNotExist();
     error Deposit_AccountExists();
     error Deposit_AccountExpired();
 
