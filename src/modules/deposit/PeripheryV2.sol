@@ -16,8 +16,6 @@ import "@src/interfaces/IPeripheryV2.sol";
 import "./UnitOfAccount.sol";
 import {FundShareVault} from "./FundShareVault.sol";
 
-uint256 constant SHARE_PRICE_PRECISION = 1e5;
-
 contract PeripheryV2 is ERC721 {
     using SafeTransferLib for ERC20;
     using MessageHashUtils for bytes;
@@ -89,53 +87,70 @@ contract PeripheryV2 is ERC721 {
         _;
     }
 
-    /// @dev two things must happen here.
-    /// 1. calculate the profit/loss since the last time this function was called.
-    /// 2. strip protocol fee
-    /// 3. update vault's total assets to match the fund's total assets
-    modifier update() {
+    function _price(bool deposit) private view returns (uint256) {
+        return deposit
+            ? vault.previewMint(10 ** vault.decimals())
+            : vault.previewRedeem(10 ** vault.decimals());
+    }
+
+    /// @dev A few things must happen here
+    /// 1. Calculate the profit delta between the fund and the vault
+    /// 2. Update the vault's total assets to match the fund's total assets
+    /// 3. If there is profit above the high water mark, take a fee
+    /// 4. Update the high water mark if the current price is higher
+    /// 5. Invariants check
+    modifier update(bool deposit) {
         uint256 assetsInFund = oracleRouter.getQuote(0, address(fund), address(unitOfAccount));
         uint256 assetsInVault = vault.totalAssets();
-        uint256 circulatingVaultSupply = vault.totalSupply();
-
-        uint256 currentSharePrice = circulatingVaultSupply > 0
-            ? SHARE_PRICE_PRECISION * assetsInFund / circulatingVaultSupply
-            : 0;
 
         int256 profitDelta = int256(assetsInFund) - int256(assetsInVault);
-        uint256 nominalFee;
-
-        /// there is profit
-        if (currentSharePrice > highWaterMarkPrice) {
-            /// take a fee only on the profit above the high water mark price
-            /// notice price has precision baked in so we must divide by it to get the actual profit
-            nominalFee = feeBps > 0
-                ? profitDelta.abs().mulDiv(
-                    feeBps * (currentSharePrice - highWaterMarkPrice),
-                    BP_DIVISOR * (currentSharePrice - previousWaterMark) * SHARE_PRICE_PRECISION
-                )
-                : 0;
-        }
 
         if (profitDelta > 0) {
             unitOfAccount.mint(address(this), profitDelta.abs());
 
             /// we transfer the profit (deducting the fee) into the vault
             /// this will distribute the profit to the vault's shareholders
-            if (!unitOfAccount.transfer(address(vault), profitDelta.abs() - nominalFee)) {
+            if (!unitOfAccount.transfer(address(vault), profitDelta.abs())) {
                 revert Errors.Deposit_AssetTransferFailed();
             }
-
-            /// if a positive fee has been accrued
-            if (nominalFee > 0) {
-                /// we deposit the fee into the vault on behalf of the fee recipient
-                vault.deposit(nominalFee, feeRecipient);
-            }
-        } else {
+        } else if (profitDelta < 0) {
             /// if the fund has lost value, we need to account for it
             /// so we decrease the vault's total assets to match the fund's total assets
             /// by burning the loss
             unitOfAccount.burn(address(vault), profitDelta.abs());
+        }
+
+        uint256 currentSharePrice = _price(deposit);
+
+        /// if there is profit
+        if (currentSharePrice > highWaterMarkPrice) {
+            /// take a fee only on the profit above the high water mark price
+            /// notice price has precision baked in so we must divide by it to get the actual profit
+            uint256 nominalFee = feeBps > 0
+                ? profitDelta.abs().mulDiv(
+                    feeBps * (currentSharePrice - highWaterMarkPrice),
+                    BP_DIVISOR * (currentSharePrice - previousWaterMark)
+                )
+                : 0;
+
+            /// we will burn, mint, deposit as to not affect the vault's total assets
+            /// and respect its underlying math calculations
+            if (nominalFee > 0) {
+                /// we burn the fee that was deposited into the vault
+                unitOfAccount.burn(address(vault), nominalFee);
+
+                /// we mint the fee to the periphery
+                unitOfAccount.mint(address(this), nominalFee);
+
+                /// we deposit the fee into the vault on behalf of the fee recipient
+                vault.deposit(nominalFee, feeRecipient);
+            }
+        }
+
+        /// update internal price
+        previousWaterMark = currentSharePrice;
+        if (previousWaterMark > highWaterMarkPrice) {
+            highWaterMarkPrice = previousWaterMark;
         }
 
         _;
@@ -149,103 +164,38 @@ contract PeripheryV2 is ERC721 {
         if (assetsInFund != assetsInVault) {
             revert Errors.Deposit_AssetInvariantViolated();
         }
-
-
-        /// update internal price
-        previousWaterMark = circulatingVaultSupply > 0
-            ? SHARE_PRICE_PRECISION * assetsInFund / circulatingVaultSupply
-            : 0;
-        if(previousWaterMark > highWaterMarkPrice) {
-            highWaterMarkPrice = previousWaterMark;
-        }
     }
 
     function deposit(SignedDepositIntent calldata order)
         public
         notPaused
-        update
+        update(true)
         returns (uint256 sharesOut)
     {
         address minter = _ownerOf(order.intent.deposit.accountId);
-        require(minter != address(0), "PeripheryV2: INVALID_ACCOUNT");
-        {
-            if (
-                !SignatureChecker.isValidSignatureNow(
-                    minter, abi.encode(order.intent).toEthSignedMessageHash(), order.signature
-                )
-            ) revert Errors.Deposit_InvalidSignature();
-            if (order.intent.nonce != accountInfo[order.intent.deposit.accountId].nonce++) {
-                revert Errors.Deposit_InvalidNonce();
-            }
-        }
-        {
-            if (order.intent.chaindId != block.chainid) revert Errors.Deposit_InvalidChain();
-            if (order.intent.deposit.deadline < block.timestamp) {
-                revert Errors.Deposit_IntentExpired();
-            }
-
-            UserAccountInfo memory account = accountInfo[order.intent.deposit.accountId];
-            require(
-                account.expirationTimestamp == 0 || block.timestamp < account.expirationTimestamp,
-                "PeripheryV2: ACCOUNT_EXPIRED"
-            );
-        }
-
-        AssetPolicy memory policy = assetPolicy[order.intent.deposit.asset];
-
-        if (!policy.canDeposit || !policy.enabled) {
-            revert Errors.Deposit_AssetUnavailable();
+        if (minter == address(0)) {
+            revert Errors.Deposit_AccountNotAuthorized();
         }
 
         if (
-            policy.permissioned
-                && accountInfo[order.intent.deposit.accountId].role != Role.SUPER_USER
-        ) {
-            revert Errors.Deposit_OnlySuperUser();
+            !SignatureChecker.isValidSignatureNow(
+                minter, abi.encode(order.intent).toEthSignedMessageHash(), order.signature
+            )
+        ) revert Errors.Deposit_InvalidSignature();
+
+        if (order.intent.chaindId != block.chainid) revert Errors.Deposit_InvalidChain();
+
+        if (order.intent.nonce != accountInfo[order.intent.deposit.accountId].nonce++) {
+            revert Errors.Deposit_InvalidNonce();
         }
 
-        uint256 assetAmountIn = order.intent.deposit.amount;
-        ERC20 assetToken = ERC20(order.intent.deposit.asset);
-
-        /// if amount is 0, then deposit the user's entire balance
-        if (assetAmountIn == 0) {
-            assetAmountIn = assetToken.balanceOf(minter);
-
-            /// make sure there is enough asset to cover the relayer tip
-            if (assetAmountIn <= order.intent.relayerTip) {
-                revert Errors.Deposit_InsufficientAmount();
-            }
-
-            /// deduct it from the amount to deposit
-            assetAmountIn -= order.intent.relayerTip;
-        }
+        sharesOut = _deposit(order.intent.deposit, minter);
 
         /// pay the relayer if required
         if (order.intent.relayerTip > 0) {
-            assetToken.safeTransferFrom(minter, msg.sender, order.intent.relayerTip);
-        }
-
-        /// transfer asset from user to fund
-        assetToken.safeTransferFrom(minter, address(fund), assetAmountIn);
-
-        /// calculate how much liquidity for this amount of deposited asset
-        uint256 liquidity =
-            oracleRouter.getQuote(assetAmountIn, order.intent.deposit.asset, address(unitOfAccount));
-
-        /// make sure the deposit is above the minimum
-        if (liquidity < policy.minimumDeposit) {
-            revert Errors.Deposit_InsufficientDeposit();
-        }
-
-        /// mint liquidity to periphery
-        unitOfAccount.mint(address(this), liquidity);
-
-        /// mint shares to user using the liquidity that was just minted to periphery
-        sharesOut = vault.deposit(liquidity, order.intent.deposit.recipient);
-
-        /// lets make sure slippage is acceptable
-        if (sharesOut < order.intent.deposit.minSharesOut) {
-            revert Errors.Deposit_SlippageLimitExceeded();
+            ERC20(order.intent.deposit.asset).safeTransferFrom(
+                minter, msg.sender, order.intent.relayerTip
+            );
         }
 
         // emit Deposit(
@@ -258,10 +208,68 @@ contract PeripheryV2 is ERC721 {
         // );
     }
 
+    function _deposit(DepositOrder calldata order, address user)
+        private
+        returns (uint256 sharesOut)
+    {
+        AssetPolicy memory policy = assetPolicy[order.asset];
+
+        if (order.deadline < block.timestamp) {
+            revert Errors.Deposit_OrderExpired();
+        }
+
+        UserAccountInfo memory account = accountInfo[order.accountId];
+
+        // if(account.state != AccountState.ACTIVE) revert Errors.Deposit_AccountNotActive();
+
+        if (account.expirationTimestamp != 0 && block.timestamp >= account.expirationTimestamp) {
+            revert Errors.Deposit_AccountExpired();
+        }
+
+        if (!policy.canDeposit || !policy.enabled) {
+            revert Errors.Deposit_AssetUnavailable();
+        }
+
+        if (policy.permissioned && account.role != Role.SUPER_USER) {
+            revert Errors.Deposit_OnlySuperUser();
+        }
+
+        uint256 assetAmountIn = order.amount;
+        ERC20 assetToken = ERC20(order.asset);
+
+        /// if amount is 0, then deposit the user's entire balance
+        if (assetAmountIn == 0) {
+            assetAmountIn = assetToken.balanceOf(user);
+        }
+
+        /// transfer asset from user to fund
+        assetToken.safeTransferFrom(user, address(fund), assetAmountIn);
+
+        /// calculate how much liquidity for this amount of deposited asset
+        uint256 liquidity =
+            oracleRouter.getQuote(assetAmountIn, order.asset, address(unitOfAccount));
+
+        /// make sure the deposit is above the minimum
+        if (liquidity < policy.minimumDeposit) {
+            revert Errors.Deposit_InsufficientDeposit();
+        }
+
+        /// mint liquidity to periphery
+        unitOfAccount.mint(address(this), liquidity);
+
+        /// mint shares to user using the liquidity that was just minted to periphery
+        sharesOut = vault.deposit(liquidity, order.recipient);
+
+        /// lets make sure slippage is acceptable
+        if (sharesOut < order.minSharesOut) {
+            revert Errors.Deposit_SlippageLimitExceeded();
+        }
+    }
+
     function withdraw(SignedWithdrawIntent calldata order)
         public
         notPaused
-        update
+        update(false)
         returns (uint256 assetAmountOut)
     {
         address burner = _ownerOf(order.intent.withdraw.accountId);
@@ -312,7 +320,7 @@ contract PeripheryV2 is ERC721 {
         private
         returns (uint256 assetAmountOut)
     {
-        if (order.deadline < block.timestamp) revert Errors.Deposit_IntentExpired();
+        if (order.deadline < block.timestamp) revert Errors.Deposit_OrderExpired();
 
         AssetPolicy memory policy = assetPolicy[order.asset];
 
@@ -405,12 +413,7 @@ contract PeripheryV2 is ERC721 {
     }
 
     /// @notice restricting the transfer makes this a soulbound token
-    function transferFrom(address from_, address to_, uint256 tokenId_)
-        public
-        override
-        notPaused
-        onlyFund
-    {
+    function transferFrom(address from_, address to_, uint256 tokenId_) public override onlyFund {
         super.transferFrom(from_, to_, tokenId_);
     }
 
@@ -425,21 +428,17 @@ contract PeripheryV2 is ERC721 {
 
     function closeAccount(uint256 accountId_) public onlyAdmin {
         _burn(accountId_);
-        accountInfo[accountId_].status = AccountState.CLOSED;
+        accountInfo[accountId_].state = AccountState.CLOSED;
     }
 
     function pauseAccount(uint256 accountId_) public onlyAdmin {
-        require(
-            accountInfo[accountId_].status == AccountState.ACTIVE, "PeripheryV2: INVALID_STATUS"
-        );
-        accountInfo[accountId_].status = AccountState.PAUSED;
+        require(accountInfo[accountId_].state == AccountState.ACTIVE, "PeripheryV2: INVALID_STATUS");
+        accountInfo[accountId_].state = AccountState.PAUSED;
     }
 
     function unpauseAccount(uint256 accountId_) public notPaused onlyAdmin {
-        require(
-            accountInfo[accountId_].status == AccountState.PAUSED, "PeripheryV2: INVALID_STATUS"
-        );
-        accountInfo[accountId_].status = AccountState.ACTIVE;
+        require(accountInfo[accountId_].state == AccountState.PAUSED, "PeripheryV2: INVALID_STATUS");
+        accountInfo[accountId_].state = AccountState.ACTIVE;
 
         /// increase nonce to avoid replay attacks
         accountInfo[accountId_].nonce++;

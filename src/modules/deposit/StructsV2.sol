@@ -68,7 +68,7 @@ struct AssetPolicy {
 
 struct UserAccountInfo {
     Role role;
-    AccountState status;
+    AccountState state;
     uint256 expirationTimestamp;
     uint256 nonce;
 }

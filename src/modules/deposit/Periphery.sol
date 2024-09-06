@@ -156,7 +156,7 @@ contract Periphery is ERC721, IPeriphery {
         update
         returns (uint256 sharesOut)
     {
-        if (order.deadline < block.timestamp) revert Errors.Deposit_IntentExpired();
+        if (order.deadline < block.timestamp) revert Errors.Deposit_OrderExpired();
 
         AssetPolicy memory policy = assetPolicy[order.asset];
 
@@ -221,7 +221,7 @@ contract Periphery is ERC721, IPeriphery {
         }
 
         if (order.intent.chaindId != block.chainid) revert Errors.Deposit_InvalidChain();
-        if (order.intent.order.deadline < block.timestamp) revert Errors.Deposit_IntentExpired();
+        if (order.intent.order.deadline < block.timestamp) revert Errors.Deposit_OrderExpired();
 
         AssetPolicy memory policy = assetPolicy[order.intent.order.asset];
 
@@ -305,7 +305,7 @@ contract Periphery is ERC721, IPeriphery {
         }
 
         if (order.intent.chaindId != block.chainid) revert Errors.Deposit_InvalidChain();
-        if (order.intent.deadline < block.timestamp) revert Errors.Deposit_IntentExpired();
+        if (order.intent.deadline < block.timestamp) revert Errors.Deposit_OrderExpired();
 
         /// withdraw liquidity from vault
         assetAmountOut = _withdraw(

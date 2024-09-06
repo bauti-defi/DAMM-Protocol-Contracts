@@ -268,7 +268,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         vm.warp(100000000);
 
         vm.prank(relayer);
-        vm.expectRevert(Errors.Deposit_IntentExpired.selector);
+        vm.expectRevert(Errors.Deposit_OrderExpired.selector);
         periphery.deposit(dOrder);
 
         // reset timestamp to generate valid order
@@ -282,7 +282,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         vm.warp(100000000);
 
         vm.prank(relayer);
-        vm.expectRevert(Errors.Deposit_IntentExpired.selector);
+        vm.expectRevert(Errors.Deposit_OrderExpired.selector);
         periphery.withdraw(wOrder);
     }
 

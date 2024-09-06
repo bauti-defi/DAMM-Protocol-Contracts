@@ -25,7 +25,7 @@ library Errors {
     /// Signature errors
     error Deposit_InvalidSignature();
     error Deposit_InvalidNonce();
-    error Deposit_IntentExpired();
+    error Deposit_OrderExpired();
     error Deposit_InvalidChain();
 
     /// Amount errors
@@ -50,7 +50,9 @@ library Errors {
     error Deposit_AccountNotPaused();
     error Deposit_AccountNotActive();
     error Deposit_InvalidAccountRoleUpdate();
+    error Deposit_AccountNotAuthorized();
     error Deposit_AccountExists();
+    error Deposit_AccountExpired();
 
     /// Access control errors
     error Deposit_OnlyFeeRecipient();
