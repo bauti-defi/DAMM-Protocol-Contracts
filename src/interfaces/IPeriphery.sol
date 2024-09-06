@@ -23,22 +23,11 @@ interface IPeriphery {
     event AdminUpdated(address oldAdmin, address newAdmin);
 
     event Deposit(
-        address indexed user,
-        address asset,
-        uint256 assetAmountIn,
-        uint256 sharesOut,
-        address relayer,
-        uint256 relayerTip
+        uint256 indexed accountId, address asset, uint256 assetAmountIn, uint256 sharesOut
     );
 
     event Withdraw(
-        address indexed user,
-        address to,
-        address asset,
-        uint256 sharesIn,
-        uint256 assetAmountOut,
-        address relayer,
-        uint256 relayerTip
+        uint256 indexed accountId, address asset, uint256 sharesIn, uint256 assetAmountOut
     );
 
     function fund() external returns (IFund);

@@ -206,14 +206,12 @@ contract Periphery is ERC721, IPeriphery {
             );
         }
 
-        // emit Deposit(
-        //     order.intent.user,
-        //     order.intent.order.asset,
-        //     assetAmountIn,
-        //     sharesOut,
-        //     msg.sender,
-        //     order.intent.relayerTip
-        // );
+        emit Deposit(
+            order.intent.deposit.accountId,
+            order.intent.deposit.asset,
+            order.intent.deposit.amount,
+            sharesOut
+        );
     }
 
     function _deposit(DepositOrder calldata order, address user)
@@ -315,15 +313,12 @@ contract Periphery is ERC721, IPeriphery {
             assetAmountOut - order.intent.relayerTip
         );
 
-        // emit Withdraw(
-        //     order.intent.user,
-        //     order.intent.to,
-        //     order.intent.asset,
-        //     order.intent.shares,
-        //     assetAmountOut,
-        //     msg.sender,
-        //     order.intent.relayerTip
-        // );
+        emit Withdraw(
+            order.intent.withdraw.accountId,
+            order.intent.withdraw.asset,
+            order.intent.withdraw.shares,
+            assetAmountOut
+        );
     }
 
     function _withdraw(WithdrawOrder calldata order, address user)

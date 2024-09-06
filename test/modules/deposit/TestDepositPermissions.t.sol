@@ -564,7 +564,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
     }
 
     function test_only_fund_can_change_admin(address attacker) public {
-        vm.assume(attacker != address(fund));
+        vm.assume(attacker != address(fund) && attacker != address(0));
 
         vm.prank(attacker);
         vm.expectRevert(Errors.OnlyFund.selector);
@@ -574,5 +574,18 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         periphery.setAdmin(attacker);
 
         assertTrue(periphery.admin() == attacker);
+    }
+
+    function test_only_fund_can_change_fee_recipient(address attacker) public {
+        vm.assume(attacker != address(fund) && attacker != address(0));
+
+        vm.prank(attacker);
+        vm.expectRevert(Errors.OnlyFund.selector);
+        periphery.setFeeRecipient(attacker);
+
+        vm.prank(address(fund));
+        periphery.setFeeRecipient(attacker);
+
+        assertTrue(periphery.feeRecipient() == attacker);
     }
 }
