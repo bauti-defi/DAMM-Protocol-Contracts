@@ -8,6 +8,7 @@ import "@openzeppelin-contracts/utils/cryptography/MessageHashUtils.sol";
 import "@openzeppelin-contracts/utils/cryptography/SignatureChecker.sol";
 import "@openzeppelin-contracts/utils/math/SignedMath.sol";
 import "@solmate/utils/SafeTransferLib.sol";
+import "@solady/utils/ReentrancyGuard.sol";
 import "@src/libs/Constants.sol";
 import "@src/interfaces/IFund.sol";
 
@@ -16,7 +17,7 @@ import "@src/interfaces/IPeriphery.sol";
 import "./UnitOfAccount.sol";
 import {FundShareVault} from "./FundShareVault.sol";
 
-contract Periphery is ERC721, IPeriphery {
+contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
     using SafeTransferLib for ERC20;
     using MessageHashUtils for bytes;
     using Math for uint256;
@@ -173,10 +174,10 @@ contract Periphery is ERC721, IPeriphery {
         }
     }
 
-    /// TODO: none reentrant
     function deposit(SignedDepositIntent calldata order)
         public
         notPaused
+        nonReentrant
         update(true)
         returns (uint256 sharesOut)
     {
@@ -306,6 +307,7 @@ contract Periphery is ERC721, IPeriphery {
     function withdraw(SignedWithdrawIntent calldata order)
         public
         notPaused
+        nonReentrant
         update(false)
         returns (uint256 assetAmountOut)
     {
