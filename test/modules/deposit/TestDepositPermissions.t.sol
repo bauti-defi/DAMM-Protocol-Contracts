@@ -588,4 +588,6 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
 
         assertTrue(periphery.feeRecipient() == attacker);
     }
+
+    /// TODO: test share mint limit exceeded
 }

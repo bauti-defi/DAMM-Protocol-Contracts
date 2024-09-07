@@ -174,6 +174,7 @@ contract Periphery is ERC721, IPeriphery {
         }
     }
 
+    /// TODO: none reentrant
     function deposit(SignedDepositIntent calldata order)
         public
         notPaused
@@ -225,7 +226,7 @@ contract Periphery is ERC721, IPeriphery {
             revert Errors.Deposit_AccountDoesNotExist();
         }
 
-        if(minter != msg.sender) {
+        if (minter != msg.sender) {
             revert Errors.Deposit_OnlyAccountOwner();
         }
 
@@ -290,6 +291,17 @@ contract Periphery is ERC721, IPeriphery {
         if (sharesOut < order.minSharesOut) {
             revert Errors.Deposit_SlippageLimitExceeded();
         }
+
+        /// make sure the user hasn't exceeded their share mint limit
+        /// shareMintLimit == 0 means no limit
+        if (
+            account.shareMintLimit != 0 && account.sharesMinted + sharesOut > account.shareMintLimit
+        ) {
+            revert Errors.Deposit_ShareMintLimitExceeded();
+        }
+
+        /// update the user's minted shares
+        if (account.shareMintLimit != 0) accountInfo[order.accountId].sharesMinted += sharesOut;
     }
 
     function withdraw(SignedWithdrawIntent calldata order)
@@ -352,7 +364,7 @@ contract Periphery is ERC721, IPeriphery {
             revert Errors.Deposit_AccountDoesNotExist();
         }
 
-        if(burner != msg.sender) {
+        if (burner != msg.sender) {
             revert Errors.Deposit_OnlyAccountOwner();
         }
 
@@ -393,6 +405,16 @@ contract Periphery is ERC721, IPeriphery {
         /// if shares to burn is 0, then burn all shares owned by user
         if (sharesToBurn == 0) {
             sharesToBurn = vault.balanceOf(user);
+        }
+
+        /// make sure the user has not exceeded their share burn limit
+        if (account.shareMintLimit != 0 && account.sharesMinted < sharesToBurn) {
+            revert Errors.Deposit_ShareBurnLimitExceeded();
+        }
+
+        /// update the user's minted shares
+        if (account.shareMintLimit != 0) {
+            accountInfo[order.accountId].sharesMinted -= sharesToBurn;
         }
 
         /// burn vault shares in exchange for liquidity (unit of account) tokens
@@ -514,10 +536,13 @@ contract Periphery is ERC721, IPeriphery {
             state: AccountState.ACTIVE,
             expirationTimestamp: block.timestamp + params_.ttl,
             nonce: 0,
-            shareMintLimit: params_.shareMintLimit
+            shareMintLimit: params_.shareMintLimit,
+            sharesMinted: 0
         });
 
-        emit AccountOpened(tokenId, params_.role, block.timestamp + params_.ttl);
+        emit AccountOpened(
+            tokenId, params_.role, block.timestamp + params_.ttl, params_.shareMintLimit
+        );
     }
 
     function closeAccount(uint256 accountId_) public onlyAdmin {
