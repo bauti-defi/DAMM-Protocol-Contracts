@@ -214,6 +214,26 @@ contract Periphery is ERC721, IPeriphery {
         );
     }
 
+    function deposit(DepositOrder calldata order)
+        public
+        notPaused
+        update(true)
+        returns (uint256 sharesOut)
+    {
+        address minter = _ownerOf(order.accountId);
+        if (minter == address(0)) {
+            revert Errors.Deposit_AccountDoesNotExist();
+        }
+
+        if(minter != msg.sender) {
+            revert Errors.Deposit_OnlyAccountOwner();
+        }
+
+        sharesOut = _deposit(order, minter);
+
+        emit Deposit(order.accountId, order.asset, order.amount, sharesOut);
+    }
+
     function _deposit(DepositOrder calldata order, address user)
         private
         returns (uint256 sharesOut)
@@ -319,6 +339,29 @@ contract Periphery is ERC721, IPeriphery {
             order.intent.withdraw.shares,
             assetAmountOut
         );
+    }
+
+    function withdraw(WithdrawOrder calldata order)
+        public
+        notPaused
+        update(false)
+        returns (uint256 assetAmountOut)
+    {
+        address burner = _ownerOf(order.accountId);
+        if (burner == address(0)) {
+            revert Errors.Deposit_AccountDoesNotExist();
+        }
+
+        if(burner != msg.sender) {
+            revert Errors.Deposit_OnlyAccountOwner();
+        }
+
+        assetAmountOut = _withdraw(order, burner);
+
+        /// transfer asset from fund to receiver
+        _transferAssetFromFund(order.asset, order.to, assetAmountOut);
+
+        emit Withdraw(order.accountId, order.asset, order.shares, assetAmountOut);
     }
 
     function _withdraw(WithdrawOrder calldata order, address user)
