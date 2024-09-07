@@ -8,6 +8,7 @@ import "@openzeppelin-contracts/utils/cryptography/MessageHashUtils.sol";
 import "@openzeppelin-contracts/utils/cryptography/SignatureChecker.sol";
 import "@openzeppelin-contracts/utils/math/SignedMath.sol";
 import "@solmate/utils/SafeTransferLib.sol";
+import "@solady/utils/ReentrancyGuard.sol";
 import "@src/libs/Constants.sol";
 import "@src/interfaces/IFund.sol";
 
@@ -16,7 +17,7 @@ import "@src/interfaces/IPeriphery.sol";
 import "./UnitOfAccount.sol";
 import {FundShareVault} from "./FundShareVault.sol";
 
-contract Periphery is ERC721, IPeriphery {
+contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
     using SafeTransferLib for ERC20;
     using MessageHashUtils for bytes;
     using Math for uint256;
@@ -45,7 +46,6 @@ contract Periphery is ERC721, IPeriphery {
     uint256 private tokenId = 0;
     bool public paused;
 
-    /// TODO: all of this in an intialize function?
     constructor(
         string memory vaultName_,
         string memory vaultSymbol_,
@@ -177,6 +177,7 @@ contract Periphery is ERC721, IPeriphery {
     function deposit(SignedDepositIntent calldata order)
         public
         notPaused
+        nonReentrant
         update(true)
         returns (uint256 sharesOut)
     {
@@ -212,6 +213,26 @@ contract Periphery is ERC721, IPeriphery {
             order.intent.deposit.amount,
             sharesOut
         );
+    }
+
+    function deposit(DepositOrder calldata order)
+        public
+        notPaused
+        update(true)
+        returns (uint256 sharesOut)
+    {
+        address minter = _ownerOf(order.accountId);
+        if (minter == address(0)) {
+            revert Errors.Deposit_AccountDoesNotExist();
+        }
+
+        if (minter != msg.sender) {
+            revert Errors.Deposit_OnlyAccountOwner();
+        }
+
+        sharesOut = _deposit(order, minter);
+
+        emit Deposit(order.accountId, order.asset, order.amount, sharesOut);
     }
 
     function _deposit(DepositOrder calldata order, address user)
@@ -270,11 +291,23 @@ contract Periphery is ERC721, IPeriphery {
         if (sharesOut < order.minSharesOut) {
             revert Errors.Deposit_SlippageLimitExceeded();
         }
+
+        /// make sure the user hasn't exceeded their share mint limit
+        /// shareMintLimit == 0 means no limit
+        if (
+            account.shareMintLimit != 0 && account.sharesMinted + sharesOut > account.shareMintLimit
+        ) {
+            revert Errors.Deposit_ShareMintLimitExceeded();
+        }
+
+        /// update the user's minted shares
+        if (account.shareMintLimit != 0) accountInfo[order.accountId].sharesMinted += sharesOut;
     }
 
     function withdraw(SignedWithdrawIntent calldata order)
         public
         notPaused
+        nonReentrant
         update(false)
         returns (uint256 assetAmountOut)
     {
@@ -321,6 +354,29 @@ contract Periphery is ERC721, IPeriphery {
         );
     }
 
+    function withdraw(WithdrawOrder calldata order)
+        public
+        notPaused
+        update(false)
+        returns (uint256 assetAmountOut)
+    {
+        address burner = _ownerOf(order.accountId);
+        if (burner == address(0)) {
+            revert Errors.Deposit_AccountDoesNotExist();
+        }
+
+        if (burner != msg.sender) {
+            revert Errors.Deposit_OnlyAccountOwner();
+        }
+
+        assetAmountOut = _withdraw(order, burner);
+
+        /// transfer asset from fund to receiver
+        _transferAssetFromFund(order.asset, order.to, assetAmountOut);
+
+        emit Withdraw(order.accountId, order.asset, order.shares, assetAmountOut);
+    }
+
     function _withdraw(WithdrawOrder calldata order, address user)
         private
         returns (uint256 assetAmountOut)
@@ -352,6 +408,16 @@ contract Periphery is ERC721, IPeriphery {
             sharesToBurn = vault.balanceOf(user);
         }
 
+        /// make sure the user has not exceeded their share burn limit
+        if (account.shareMintLimit != 0 && account.sharesMinted < sharesToBurn) {
+            revert Errors.Deposit_ShareBurnLimitExceeded();
+        }
+
+        /// update the user's minted shares
+        if (account.shareMintLimit != 0) {
+            accountInfo[order.accountId].sharesMinted -= sharesToBurn;
+        }
+
         /// burn vault shares in exchange for liquidity (unit of account) tokens
         uint256 liquidity = vault.redeem(sharesToBurn, address(this), user);
 
@@ -368,7 +434,7 @@ contract Periphery is ERC721, IPeriphery {
 
         /// make sure slippage is acceptable
         ///@notice if minAmountOut is 0, then slippage is not checked
-        if (order.minAmountOut > 0 && assetAmountOut < order.minAmountOut) {
+        if (order.minAmountOut != 0 && assetAmountOut < order.minAmountOut) {
             revert Errors.Deposit_SlippageLimitExceeded();
         }
     }
@@ -471,10 +537,13 @@ contract Periphery is ERC721, IPeriphery {
             state: AccountState.ACTIVE,
             expirationTimestamp: block.timestamp + params_.ttl,
             nonce: 0,
-            shareMintLimit: params_.shareMintLimit
+            shareMintLimit: params_.shareMintLimit,
+            sharesMinted: 0
         });
 
-        emit AccountOpened(tokenId, params_.role, block.timestamp + params_.ttl);
+        emit AccountOpened(
+            tokenId, params_.role, block.timestamp + params_.ttl, params_.shareMintLimit
+        );
     }
 
     function closeAccount(uint256 accountId_) public onlyAdmin {

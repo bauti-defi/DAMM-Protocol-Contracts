@@ -72,6 +72,7 @@ struct UserAccountInfo {
     uint256 expirationTimestamp;
     uint256 nonce;
     uint256 shareMintLimit;
+    uint256 sharesMinted;
 }
 
 struct CreateAccountParams {

@@ -10,7 +10,9 @@ interface IPeriphery {
 
     event Unpaused();
 
-    event AccountOpened(uint256 indexed accountId, Role role, uint256 expirationTimestamp);
+    event AccountOpened(
+        uint256 indexed accountId, Role role, uint256 expirationTimestamp, uint256 shareMintLimit
+    );
 
     event PerformanceFeeUpdated(uint256 oldFee, uint256 newFee);
 

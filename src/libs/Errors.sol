@@ -37,6 +37,8 @@ library Errors {
     error Deposit_InsufficientDeposit();
     error Deposit_InsufficientWithdrawal();
     error Deposit_SlippageLimitExceeded();
+    error Deposit_ShareMintLimitExceeded();
+    error Deposit_ShareBurnLimitExceeded();
 
     /// Supply invariant errors
     error Deposit_SupplyInvariantViolated();
