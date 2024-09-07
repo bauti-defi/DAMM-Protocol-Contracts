@@ -275,20 +275,6 @@ contract TestTransactionModule is Test, TestBaseGnosis, TestBaseProtocol {
         assertTrue(adjustedFundBalance > address(fund).balance, "gas was not refunded");
     }
 
-    function test_execute_reverts_if_gas_price_exceeds_limit() public withHook(mock_hook()) {
-        vm.prank(address(fund));
-        transactionModule.setMaxGasPriorityInBasisPoints(500);
-
-        vm.txGasPrice(1000);
-
-        Transaction[] memory calls = new Transaction[](1);
-        calls[0] = incrementCall(10);
-
-        vm.expectRevert(Errors.Transaction_GasLimitExceeded.selector);
-        vm.prank(operator);
-        transactionModule.execute(calls);
-    }
-
     function test_execute_reverts() public withHook(mock_trigger_revert_hook()) {
         vm.expectRevert("MockTarget revert");
 

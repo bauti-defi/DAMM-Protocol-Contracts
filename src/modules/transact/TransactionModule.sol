@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 
 import {ISafe} from "@src/interfaces/ISafe.sol";
 import {Enum} from "@safe-contracts/common/Enum.sol";
-import {ReentrancyGuard} from "@openzeppelin-contracts/utils/ReentrancyGuard.sol";
+import "@solady/utils/ReentrancyGuard.sol";
 import "@src/libs/Errors.sol";
 import "@src/interfaces/ITransactionHooks.sol";
 import "@src/interfaces/ITransactionModule.sol";
@@ -13,7 +13,6 @@ import {BP_DIVISOR} from "@src/libs/Constants.sol";
 contract TransactionModule is ReentrancyGuard, ITransactionModule {
     address public immutable fund;
     IHookRegistry public immutable hookRegistry;
-    uint256 public maxGasPriorityInBasisPoints;
     bool public paused;
 
     modifier onlyFund() {
@@ -30,18 +29,6 @@ contract TransactionModule is ReentrancyGuard, ITransactionModule {
     modifier refundGasToCaller() {
         uint256 gasAtStart = gasleft();
 
-        /// failsafe for caller not to be able to set a gas price that is too high
-        /// the fund can update this limit in moments of emergency (e.g. high gas prices, network congestion, etc.)
-        /// gasPriority = tx.gasprice - block.basefee
-        /// @dev the chain must be EIP1559 complient to support `basefee`
-        if (
-            maxGasPriorityInBasisPoints > 0 && tx.gasprice > block.basefee
-                && ((tx.gasprice - block.basefee) * BP_DIVISOR) / tx.gasprice
-                    >= maxGasPriorityInBasisPoints
-        ) {
-            revert Errors.Transaction_GasLimitExceeded();
-        }
-
         _;
 
         if (
@@ -57,13 +44,6 @@ contract TransactionModule is ReentrancyGuard, ITransactionModule {
     constructor(address owner, address _hookRegistry) {
         fund = owner;
         hookRegistry = IHookRegistry(_hookRegistry);
-    }
-
-    function setMaxGasPriorityInBasisPoints(uint256 newMaxGasPriorityInBasisPoints)
-        external
-        onlyFund
-    {
-        maxGasPriorityInBasisPoints = newMaxGasPriorityInBasisPoints;
     }
 
     function _executeAndReturnDataOrRevert(
