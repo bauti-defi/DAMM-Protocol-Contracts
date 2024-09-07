@@ -45,7 +45,6 @@ contract Periphery is ERC721, IPeriphery {
     uint256 private tokenId = 0;
     bool public paused;
 
-    /// TODO: all of this in an intialize function?
     constructor(
         string memory vaultName_,
         string memory vaultSymbol_,
@@ -433,7 +432,7 @@ contract Periphery is ERC721, IPeriphery {
 
         /// make sure slippage is acceptable
         ///@notice if minAmountOut is 0, then slippage is not checked
-        if (order.minAmountOut > 0 && assetAmountOut < order.minAmountOut) {
+        if (order.minAmountOut != 0 && assetAmountOut < order.minAmountOut) {
             revert Errors.Deposit_SlippageLimitExceeded();
         }
     }
