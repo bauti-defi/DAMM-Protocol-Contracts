@@ -11,7 +11,6 @@ import "./Structs.sol";
 import {BP_DIVISOR} from "@src/libs/Constants.sol";
 
 contract TransactionModule is ReentrancyGuard, ITransactionModule {
-    
     address public immutable fund;
     IHookRegistry public immutable hookRegistry;
     bool public paused;

@@ -40,7 +40,7 @@ contract HookRegistry is IHookRegistry {
         bytes32 pointer = config.pointer();
 
         /// TODO: test this
-        if(hooks[pointer].defined) {
+        if (hooks[pointer].defined) {
             revert Errors.Hook_AlreadyDefined();
         }
 

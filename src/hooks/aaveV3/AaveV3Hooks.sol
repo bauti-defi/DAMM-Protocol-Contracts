@@ -4,7 +4,8 @@ pragma solidity ^0.8.0;
 import {IBeforeTransaction} from "@src/interfaces/ITransactionHooks.sol";
 import {IPortfolio} from "@src/interfaces/IPortfolio.sol";
 import {IPool} from "@aave-v3-core/interfaces/IPool.sol";
-import "@src/hooks/BaseHook.sol";
+import {BaseHook} from "@src/hooks/BaseHook.sol";
+import {Errors} from "@src/libs/Errors.sol";
 import "@src/libs/Constants.sol";
 
 error AaveV3Hooks_OnlyWhitelistedTokens();
@@ -18,7 +19,6 @@ event AaveV3Hooks_AssetEnabled(address asset);
 event AaveV3Hooks_AssetDisabled(address asset);
 
 contract AaveV3Hooks is BaseHook, IBeforeTransaction {
-
     bytes4 constant L1_WITHDRAW_SELECTOR = IPool.withdraw.selector;
     bytes4 constant L1_SUPPLY_SELECTOR = IPool.supply.selector;
 
@@ -83,5 +83,10 @@ contract AaveV3Hooks is BaseHook, IBeforeTransaction {
         assetWhitelist[asset] = false;
 
         emit AaveV3Hooks_AssetDisabled(asset);
+    }
+
+    function supportsInterface(bytes4 interfaceId) public view override returns (bool) {
+        return interfaceId == type(IBeforeTransaction).interfaceId
+            || super.supportsInterface(interfaceId);
     }
 }
