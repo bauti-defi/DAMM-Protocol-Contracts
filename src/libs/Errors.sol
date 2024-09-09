@@ -17,11 +17,12 @@ library Errors {
     /// Hook errors
     error Hook_InvalidOperator();
     error Hook_InvalidTargetAddress();
-    error Hook_InvalidBeforeHookAddress();
-    error Hook_InvalidAfterHookAddress();
+    error Hook_InvalidBeforeHook();
+    error Hook_InvalidAfterHook();
     error Hook_InvalidValue();
     error Hook_InvalidOperation();
     error Hook_InvalidTargetSelector();
+    error Hook_AlreadyDefined();
 
     /// Constructor errors
     error Deposit_InvalidConstructorParam();

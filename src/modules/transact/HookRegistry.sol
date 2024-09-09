@@ -39,10 +39,15 @@ contract HookRegistry is IHookRegistry {
 
         bytes32 pointer = config.pointer();
 
+        /// TODO: test this
+        if (hooks[pointer].defined) {
+            revert Errors.Hook_AlreadyDefined();
+        }
+
         hooks[pointer] = Hooks({
             beforeTrxHook: config.beforeTrxHook,
             afterTrxHook: config.afterTrxHook,
-            defined: true // TODO: change to status code, same cost but more descriptive
+            defined: true
         });
 
         emit HookSet(
@@ -55,6 +60,9 @@ contract HookRegistry is IHookRegistry {
         );
     }
 
+    /// @custom:hunter Only the fund address can call this, but not the Fund owners.
+    /// @custom:hunter Therefore a malicious operator could drain gas to prevent
+    /// @custom:hunter their hook from being overwritten - consider using a permit.
     function removeHooks(HookConfig calldata config) external onlyFund {
         delete hooks[config.pointer()];
 

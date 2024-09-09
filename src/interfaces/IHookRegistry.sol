@@ -6,8 +6,8 @@ import {Hooks, HookConfig} from "@src/modules/transact/Hooks.sol";
 interface IHookRegistry {
     error Hook_InvalidOperator();
     error Hook_InvalidTargetAddress();
-    error Hook_InvalidBeforeHookAddress();
-    error Hook_InvalidAfterHookAddress();
+    error Hook_InvalidBeforeHook();
+    error Hook_InvalidAfterHook();
     error Hook_InvalidOperation();
     error OnlyFund();
 

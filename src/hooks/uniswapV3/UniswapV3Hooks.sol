@@ -5,7 +5,8 @@ import {IBeforeTransaction} from "@src/interfaces/ITransactionHooks.sol";
 import {INonfungiblePositionManager} from "@src/interfaces/external/INonfungiblePositionManager.sol";
 import {IUniswapRouter} from "@src/interfaces/external/IUniswapRouter.sol";
 import {IERC721} from "@openzeppelin-contracts/token/ERC721/IERC721.sol";
-import "@src/hooks/BaseHook.sol";
+import {BaseHook} from "@src/hooks/BaseHook.sol";
+import {Errors} from "@src/libs/Errors.sol";
 import "@src/libs/Constants.sol";
 
 error UniswapV3Hooks_OnlyWhitelistedTokens();
@@ -156,5 +157,10 @@ contract UniswapV3Hooks is BaseHook, IBeforeTransaction {
         assetWhitelist[asset] = false;
 
         emit UniswapV3Hooks_AssetDisabled(asset);
+    }
+
+    function supportsInterface(bytes4 interfaceId) public view override returns (bool) {
+        return interfaceId == type(IBeforeTransaction).interfaceId
+            || super.supportsInterface(interfaceId);
     }
 }

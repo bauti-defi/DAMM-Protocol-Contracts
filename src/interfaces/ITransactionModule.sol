@@ -13,7 +13,6 @@ interface ITransactionModule {
     function hookRegistry() external returns (IHookRegistry);
 
     function execute(Transaction[] calldata transactions) external;
-    function setMaxGasPriorityInBasisPoints(uint256 maxMinerTipInBasisPoints) external;
 
     function pause() external;
     function unpause() external;

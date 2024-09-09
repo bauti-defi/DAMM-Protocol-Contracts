@@ -10,6 +10,7 @@ import {ITransactionModule} from "@src/interfaces/ITransactionModule.sol";
 import {Enum} from "@safe-contracts/common/Enum.sol";
 import {SafeUtils, SafeTransaction} from "@test/utils/SafeUtils.sol";
 import {IBeforeTransaction, IAfterTransaction} from "@src/interfaces/ITransactionHooks.sol";
+import {BaseHook} from "@src/hooks/BaseHook.sol";
 import "@src/libs/Errors.sol";
 import "@src/modules/transact/Hooks.sol";
 import "@src/modules/transact/HookRegistry.sol";
@@ -35,7 +36,9 @@ contract MockTarget {
     }
 }
 
-contract VerifyValueHook is IBeforeTransaction {
+contract VerifyValueHook is BaseHook, IBeforeTransaction {
+    constructor() BaseHook(address(0)) {}
+
     function checkBeforeTransaction(address, bytes4, uint8, uint256 value, bytes memory)
         external
         pure
@@ -43,9 +46,16 @@ contract VerifyValueHook is IBeforeTransaction {
     {
         require(value > 0, "Value must be greater than 0");
     }
+
+    function supportsInterface(bytes4 interfaceId) public view override returns (bool) {
+        return interfaceId == type(IBeforeTransaction).interfaceId
+            || super.supportsInterface(interfaceId);
+    }
 }
 
-contract RevertBeforeHook is IBeforeTransaction {
+contract RevertBeforeHook is BaseHook, IBeforeTransaction {
+    constructor() BaseHook(address(0)) {}
+
     function checkBeforeTransaction(address, bytes4, uint8, uint256, bytes memory)
         external
         pure
@@ -53,12 +63,17 @@ contract RevertBeforeHook is IBeforeTransaction {
     {
         revert("RevertBeforeHook");
     }
+
+    function supportsInterface(bytes4 interfaceId) public view override returns (bool) {
+        return interfaceId == type(IBeforeTransaction).interfaceId
+            || super.supportsInterface(interfaceId);
+    }
 }
 
-contract VerifyCallbackHook is IAfterTransaction {
+contract VerifyCallbackHook is BaseHook, IAfterTransaction {
     string internal callback;
 
-    constructor(string memory _callback) {
+    constructor(string memory _callback) BaseHook(address(0)) {
         callback = _callback;
     }
 
@@ -76,15 +91,27 @@ contract VerifyCallbackHook is IAfterTransaction {
             "Callback mismatch"
         );
     }
+
+    function supportsInterface(bytes4 interfaceId) public view override returns (bool) {
+        return interfaceId == type(IAfterTransaction).interfaceId
+            || super.supportsInterface(interfaceId);
+    }
 }
 
-contract RevertAfterHook is IAfterTransaction {
+contract RevertAfterHook is BaseHook, IAfterTransaction {
+    constructor() BaseHook(address(0)) {}
+
     function checkAfterTransaction(address, bytes4, uint8, uint256, bytes memory, bytes memory)
         external
         pure
         override
     {
         revert("RevertAfterHook");
+    }
+
+    function supportsInterface(bytes4 interfaceId) public view override returns (bool) {
+        return interfaceId == type(IAfterTransaction).interfaceId
+            || super.supportsInterface(interfaceId);
     }
 }
 
@@ -273,20 +300,6 @@ contract TestTransactionModule is Test, TestBaseGnosis, TestBaseProtocol {
 
         assertEq(target.value(), 530, "Target value not incremented");
         assertTrue(adjustedFundBalance > address(fund).balance, "gas was not refunded");
-    }
-
-    function test_execute_reverts_if_gas_price_exceeds_limit() public withHook(mock_hook()) {
-        vm.prank(address(fund));
-        transactionModule.setMaxGasPriorityInBasisPoints(500);
-
-        vm.txGasPrice(1000);
-
-        Transaction[] memory calls = new Transaction[](1);
-        calls[0] = incrementCall(10);
-
-        vm.expectRevert(Errors.Transaction_GasLimitExceeded.selector);
-        vm.prank(operator);
-        transactionModule.execute(calls);
     }
 
     function test_execute_reverts() public withHook(mock_trigger_revert_hook()) {

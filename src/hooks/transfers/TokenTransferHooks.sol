@@ -4,7 +4,7 @@ pragma solidity ^0.8.0;
 import {IBeforeTransaction} from "@src/interfaces/ITransactionHooks.sol";
 import "@openzeppelin-contracts/interfaces/IERC20.sol";
 import "@src/libs/Errors.sol";
-import "@src/hooks/BaseHook.sol";
+import {BaseHook} from "@src/hooks/BaseHook.sol";
 import "@src/libs/Constants.sol";
 
 library TransferWhitelistLib {
@@ -137,5 +137,10 @@ contract TokenTransferHooks is BaseHook, IBeforeTransaction {
         returns (bool)
     {
         return transferWhitelist.contains(token, recipient, sender, selector);
+    }
+
+    function supportsInterface(bytes4 interfaceId) public view override returns (bool) {
+        return interfaceId == type(IBeforeTransaction).interfaceId
+            || super.supportsInterface(interfaceId);
     }
 }

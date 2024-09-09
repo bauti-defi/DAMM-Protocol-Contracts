@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.0;
 
+import "@openzeppelin-contracts/utils/introspection/ERC165Checker.sol";
+import {IBeforeTransaction, IAfterTransaction} from "@src/interfaces/ITransactionHooks.sol";
 import "@src/libs/Errors.sol";
 import "./Structs.sol";
 
-// cast sig "isOwner(address)"
-bytes4 constant IS_OWNER_SAFE_SELECTOR = 0x2f54bf6e;
-
 library HookLib {
+    using ERC165Checker for address;
+
     function pointer(HookConfig memory config) internal pure returns (bytes32) {
         return hookPointer(config.operator, config.target, config.operation, config.targetSelector);
     }
@@ -21,27 +22,25 @@ library HookLib {
             revert Errors.Hook_InvalidOperator();
         }
 
-        (bool success, bytes memory returnData) =
-            fund.staticcall(abi.encodeWithSelector(IS_OWNER_SAFE_SELECTOR, config.operator));
-
-        /// @notice fund admin cannot be an operator
-        if (!success || abi.decode(returnData, (bool))) {
-            revert Errors.Hook_InvalidOperator();
-        }
-
         /// basic target sanity checks
-        if (config.target == address(0) || config.target == address(this)) {
+        if (config.target == address(0)) {
             revert Errors.Hook_InvalidTargetAddress();
         }
 
         /// basic beforeTrxHook sanity checks
-        if (config.beforeTrxHook == address(this) || config.beforeTrxHook == config.operator) {
-            revert Errors.Hook_InvalidBeforeHookAddress();
+        if (
+            config.beforeTrxHook != address(0)
+                && !config.beforeTrxHook.supportsInterface(type(IBeforeTransaction).interfaceId)
+        ) {
+            revert Errors.Hook_InvalidBeforeHook();
         }
 
         /// basic afterTrxHook sanity checks
-        if (config.afterTrxHook == address(this) || config.afterTrxHook == config.operator) {
-            revert Errors.Hook_InvalidAfterHookAddress();
+        if (
+            config.afterTrxHook != address(0)
+                && !config.afterTrxHook.supportsInterface(type(IAfterTransaction).interfaceId)
+        ) {
+            revert Errors.Hook_InvalidAfterHook();
         }
 
         // only 0 or 1 allowed (0 = call, 1 = delegatecall)
