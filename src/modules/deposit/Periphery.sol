@@ -552,6 +552,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
 
     function closeAccount(uint256 accountId_) public onlyAdmin {
         if (!accountInfo[accountId_].canBeClosed()) revert Errors.Deposit_AccountCannotBeClosed();
+        /// @notice this will revert if the token does not exist
         _burn(accountId_);
         accountInfo[accountId_].state = AccountState.CLOSED;
     }
@@ -560,6 +561,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         if (!accountInfo[accountId_].isActive()) {
             revert Errors.Deposit_AccountNotActive();
         }
+        if (_ownerOf(accountId_) == address(0)) revert Errors.Deposit_AccountDoesNotExist();
         accountInfo[accountId_].state = AccountState.PAUSED;
     }
 
@@ -567,6 +569,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         if (!accountInfo[accountId_].isPaused()) {
             revert Errors.Deposit_AccountNotPaused();
         }
+        if (_ownerOf(accountId_) == address(0)) revert Errors.Deposit_AccountDoesNotExist();
         accountInfo[accountId_].state = AccountState.ACTIVE;
 
         /// increase nonce to avoid replay attacks
