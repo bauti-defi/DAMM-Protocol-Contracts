@@ -218,6 +218,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
     function deposit(DepositOrder calldata order)
         public
         notPaused
+        nonReentrant
         update(true)
         returns (uint256 sharesOut)
     {
@@ -357,6 +358,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
     function withdraw(WithdrawOrder calldata order)
         public
         notPaused
+        nonReentrant
         update(false)
         returns (uint256 assetAmountOut)
     {
