@@ -1,66 +1,22 @@
-## Foundry
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+# DAMM Protocol
 
-Foundry consists of:
+The DAMM protocol is a ALM (Automated Liquidity Management) protocol that allows the creation of decentralized mutual funds. These mutual funds can be actively managed by operators with varying degrees of autonomy and strategies. 
 
--   **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
--   **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
--   **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
--   **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+## Getting Started
 
-## Documentation
+This project is built with the foundry development kit. You can install it by following the instructions [here](https://book.getfoundry.sh/getting-started/installation.html).
 
-https://book.getfoundry.sh/
+### Install dependencies
 
-## Usage
-
-### Build
-
-```shell
-$ forge build
+```bash
+forge install
 ```
 
-### Test
+### Run tests
 
-```shell
-$ forge test
-```
+> Note: Fork tests require you to set `ARBI_RPC_URL` in the `.env` file. You can get a free RPC URL [here](https://www.alchemy.com/). The `.env` file should be at the root of the project.
 
-### Format
-
-```shell
-$ forge fmt
-```
-
-### Gas Snapshots
-
-```shell
-$ forge snapshot
-```
-
-### Anvil
-
-```shell
-$ anvil
-```
-
-### Deploy
-
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
-```
-
-### Cast
-
-```shell
-$ cast <subcommand>
-```
-
-### Help
-
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
+```bash
+forge test
 ```
