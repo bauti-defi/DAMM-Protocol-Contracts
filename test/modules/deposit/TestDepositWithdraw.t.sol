@@ -65,7 +65,7 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
         assertTrue(fund.isOwner(fundAdmin), "Fund admin not owner");
 
         vm.prank(address(fund));
-        oracleRouter = new EulerRouter(address(fund));
+        oracleRouter = new EulerRouter(address(1), address(fund));
         vm.label(address(oracleRouter), "OracleRouter");
 
         // deploy periphery using module factory

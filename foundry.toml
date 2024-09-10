@@ -25,8 +25,9 @@ remappings = [
     
     ### @dev These imports are so we can compile the uniswapv3 periphery contracts inside tests
     "@uniswap/v3-core/=lib/v3-periphery/node_modules/@uniswap/v3-core",
-    "@openzeppelin/contracts/=lib/v3-periphery/node_modules/@openzeppelin/contracts/"
+    "@openzeppelin/contracts/=lib/v3-periphery/node_modules/@openzeppelin/contracts/",
     #####
+    "ethereum-vault-connector/=lib/euler-price-oracle/lib/ethereum-vault-connector/src/"
 ]
 
 fs_permissions = [{ access = "read", path = "./"}]

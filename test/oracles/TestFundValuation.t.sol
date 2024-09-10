@@ -80,7 +80,7 @@ contract TestFundValuation is TestBaseProtocol, TestBaseGnosis, TokenMinter {
         );
 
         vm.prank(address(fund));
-        oracleRouter = new EulerRouter(address(fund));
+        oracleRouter = new EulerRouter(address(1), address(fund));
         vm.label(address(oracleRouter), "OracleRouter");
 
         // deploy periphery using module factory
