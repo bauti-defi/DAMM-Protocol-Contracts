@@ -20,7 +20,7 @@ interface IPortfolio {
 
     function holdsPosition(bytes32 positionPointer) external view returns (bool);
 
-    function getLatestLiquidationBlock() external view returns (uint256);
+    function getLatestLiquidationBlock() external view returns (int256);
 
     function getFundLiquidationTimeSeries() external view returns (uint256[] memory);
 

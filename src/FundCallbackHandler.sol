@@ -73,7 +73,7 @@ contract FundCallbackHandler is
         /// @notice returns false if position is already open
         result = openPositions.add(positionPointer);
 
-        emit PositionOpened(_msgSender(), positionPointer);
+        if (result) emit PositionOpened(_msgSender(), positionPointer);
     }
 
     function onPositionClosed(bytes32 positionPointer)
@@ -86,12 +86,12 @@ contract FundCallbackHandler is
         /// @notice returns false if position is already closed
         result = openPositions.remove(positionPointer);
 
-        bool liquidated = openPositions.length() == 0;
-        if (liquidated && result) {
+        bool liquidated = openPositions.length() == 0 && result;
+        if (liquidated) {
             fundLiquidationTimeSeries.push(block.number);
         }
 
-        emit PositionClosed(_msgSender(), positionPointer, liquidated && result);
+        if (result) emit PositionClosed(_msgSender(), positionPointer, liquidated);
     }
 
     function holdsPosition(bytes32 positionPointer) external view override returns (bool) {
@@ -102,12 +102,12 @@ contract FundCallbackHandler is
         return openPositions.length() > 0;
     }
 
-    function getLatestLiquidationBlock() external view override returns (uint256) {
+    function getLatestLiquidationBlock() external view override returns (int256) {
         uint256 length = fundLiquidationTimeSeries.length;
 
-        if (length == 0) revert Errors.Fund_EmptyFundLiquidationTimeSeries();
+        if (length == 0) return -1;
 
-        return fundLiquidationTimeSeries[length - 1];
+        return int256(fundLiquidationTimeSeries[length - 1]);
     }
 
     function getFundLiquidationTimeSeries() external view override returns (uint256[] memory) {
