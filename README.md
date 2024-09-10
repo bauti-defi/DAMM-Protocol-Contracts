@@ -1,7 +1,11 @@
-
 # DAMM Protocol
 
-The DAMM protocol is a ALM (Automated Liquidity Management) protocol that allows the creation of decentralized mutual funds. These mutual funds can be actively managed by operators with varying degrees of autonomy and strategies. 
+The DAMM protocol is an ALM (Automated Liquidity Management) protocol that allows the creation of decentralized mutual funds. These mutual funds can be actively managed by operators with varying degrees of autonomy and strategies. 
+
+## Links
+
+- Website: [dammcap.finance](https://dammcap.finance)
+- Twitter: [@DAMM_Capital](https://x.com/DAMM_Capital)
 
 ## Getting Started
 
