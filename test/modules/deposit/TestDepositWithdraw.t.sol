@@ -252,20 +252,26 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
         mockToken1.mint(alice, 10 * mock1Unit);
         mockToken1.mint(bob, 10 * mock1Unit);
 
-        vm.startPrank(relayer);
+        // Alice deposits 10
+        vm.prank(relayer);
         periphery.deposit(_depositOrder(1, alice, alicePK, address(mockToken1), 10 * mock1Unit));
-        periphery.deposit(_depositOrder(2, bob, bobPK, address(mockToken1), 0));
-        vm.stopPrank();
 
-        /// simulate that the fund gains 100 units of mockToken1
+        // Bob deposits 0 (all balance)
+        vm.prank(relayer);
+        periphery.deposit(_depositOrder(2, bob, bobPK, address(mockToken1), 0));
+
+        // Simulate that the fund gains 100 units of mockToken1
         mockToken1.mint(address(fund), 100 * mock1Unit);
 
-        vm.startPrank(relayer);
+        // Alice withdraws
+        vm.prank(relayer);
         periphery.withdraw(_withdrawOrder(1, alice, alicePK, alice, address(mockToken1), 0));
-        periphery.withdraw(_withdrawOrder(2, bob, bobPK, bob, address(mockToken1), 0));
-        vm.stopPrank();
 
-        /// @notice you wont get exact amount out because of vault inflation attack protection
+        // Bob withdraws
+        vm.prank(relayer);
+        periphery.withdraw(_withdrawOrder(2, bob, bobPK, bob, address(mockToken1), 0));
+
+        // @notice you wont get exact amount out because of vault inflation attack protection
         assertApproxEqRel(mockToken1.balanceOf(alice), 60 * mock1Unit, 0.1e18);
         assertApproxEqRel(mockToken1.balanceOf(bob), 60 * mock1Unit, 0.1e18);
         assertApproxEqRel(mockToken1.balanceOf(address(fund)), 5, 1);
@@ -349,13 +355,14 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
 
         mockToken1.mint(alice, 100 * mock1Unit);
 
-        /// alice deposits 10
+        // Alice deposits 10
         vm.prank(relayer);
         periphery.deposit(_depositOrder(1, alice, alicePK, address(mockToken1), 10 * mock1Unit));
 
-        /// simulate that the fund loses 5 units of mockToken1
+        // Simulate that the fund loses 5 units of mockToken1
         mockToken1.burn(address(fund), 5 * mock1Unit);
 
+        // Alice withdraws
         vm.prank(relayer);
         periphery.withdraw(_withdrawOrder(1, alice, alicePK, aliceClaimer, address(mockToken1), 0));
 
@@ -365,24 +372,22 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
         assertEq(periphery.vault().balanceOf(alice), 0);
         assertEq(mockToken1.balanceOf(address(fund)), 0);
 
-        /// clear aliceclaimer balance
+        // Clear aliceclaimer balance
         mockToken1.burn(aliceClaimer, mockToken1.balanceOf(aliceClaimer));
 
-        /// alice deposits 20
+        // Alice deposits 20 (in two transactions of 10 each)
         vm.prank(relayer);
         periphery.deposit(_depositOrder(1, alice, alicePK, address(mockToken1), 10 * mock1Unit));
-
-        assertEq(periphery.vault().balanceOf(feeRecipient), 0);
-
         vm.prank(relayer);
         periphery.deposit(_depositOrder(1, alice, alicePK, address(mockToken1), 10 * mock1Unit));
 
         assertEq(periphery.vault().balanceOf(feeRecipient), 0);
         assertEq(mockToken1.balanceOf(address(fund)), 20 * mock1Unit);
 
-        /// simulate that the fund gains 20 units of mockToken1
+        // Simulate that the fund gains 20 units of mockToken1
         mockToken1.mint(address(fund), 20 * mock1Unit);
 
+        // Alice withdraws
         vm.prank(relayer);
         periphery.withdraw(_withdrawOrder(1, alice, alicePK, aliceClaimer, address(mockToken1), 0));
 
@@ -392,17 +397,100 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
         assertGt(periphery.vault().balanceOf(feeRecipient), 0);
         assertEq(periphery.vault().balanceOf(feeRecipient), periphery.vault().totalSupply());
 
-        /// fee recipient transfers vault tokens (fee) to bob
+        // Fee recipient transfers vault tokens (fee) to bob
         vm.startPrank(feeRecipient);
         periphery.vault().transfer(bob, periphery.vault().balanceOf(feeRecipient));
         vm.stopPrank();
 
-        /// bob withdraws on behalf of the fee recipient
+        // Bob withdraws on behalf of the fee recipient
         vm.prank(relayer);
         periphery.withdraw(_withdrawOrder(2, bob, bobPK, feeclaimer, address(mockToken1), 0));
 
         assertApproxEqRel(mockToken1.balanceOf(feeclaimer), 2 * mock1Unit, 0.000000000000001e18);
     }
 
-    /// TODO: test none intent based withdraw/deposit
+    function test_deposit_withdraw_without_intent() public approveAll(alice) {
+        vm.startPrank(address(fund));
+        periphery.openAccount(
+            CreateAccountParams({user: alice, role: Role.USER, ttl: 100000000, shareMintLimit: 0})
+        );
+        vm.stopPrank();
+
+        mockToken1.mint(alice, 10 * mock1Unit);
+
+        uint256 initialBalance = mockToken1.balanceOf(alice);
+
+        // Regular deposit
+        vm.prank(relayer);
+        uint256 sharesOut =
+            periphery.deposit(_depositOrder(1, alice, alicePK, address(mockToken1), 5 * mock1Unit));
+
+        assertEq(mockToken1.balanceOf(alice), initialBalance - 5 * mock1Unit);
+        assertGt(sharesOut, 0);
+
+        uint256 shareBalance = periphery.vault().balanceOf(alice);
+        assertEq(shareBalance, sharesOut);
+
+        // Regular withdraw
+        vm.prank(relayer);
+        uint256 assetAmountOut = periphery.withdraw(
+            _withdrawOrder(1, alice, alicePK, alice, address(mockToken1), shareBalance)
+        );
+
+        assertEq(mockToken1.balanceOf(alice), initialBalance);
+        assertEq(periphery.vault().balanceOf(alice), 0);
+        assertGt(assetAmountOut, 0);
+    }
+
+    function test_deposit_withdraw_comparison() public approveAll(alice) {
+        vm.startPrank(address(fund));
+        periphery.openAccount(
+            CreateAccountParams({user: alice, role: Role.USER, ttl: 100000000, shareMintLimit: 0})
+        );
+        vm.stopPrank();
+
+        mockToken1.mint(alice, 20 * mock1Unit);
+
+        uint256 initialBalance = mockToken1.balanceOf(alice);
+
+        // Intent-based deposit
+        vm.prank(relayer);
+        uint256 intentSharesOut =
+            periphery.deposit(_depositOrder(1, alice, alicePK, address(mockToken1), 5 * mock1Unit));
+
+        // Regular deposit
+        vm.prank(relayer);
+        uint256 regularSharesOut =
+            periphery.deposit(_depositOrder(1, alice, alicePK, address(mockToken1), 5 * mock1Unit));
+
+        // Compare results
+        assertEq(
+            intentSharesOut,
+            regularSharesOut,
+            "Shares out should be equal for intent and regular deposit"
+        );
+
+        uint256 totalShares = periphery.vault().balanceOf(alice);
+
+        // Intent-based withdraw
+        vm.prank(relayer);
+        uint256 intentAssetOut = periphery.withdraw(
+            _withdrawOrder(1, alice, alicePK, alice, address(mockToken1), totalShares / 2)
+        );
+
+        // Regular withdraw
+        vm.prank(relayer);
+        uint256 regularAssetOut = periphery.withdraw(
+            _withdrawOrder(1, alice, alicePK, alice, address(mockToken1), totalShares / 2)
+        );
+
+        // Compare results
+        assertEq(
+            intentAssetOut,
+            regularAssetOut,
+            "Asset out should be equal for intent and regular withdraw"
+        );
+        assertEq(mockToken1.balanceOf(alice), initialBalance);
+        assertEq(periphery.vault().balanceOf(alice), 0);
+    }
 }
