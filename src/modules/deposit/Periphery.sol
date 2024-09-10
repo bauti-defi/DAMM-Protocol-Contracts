@@ -211,7 +211,8 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             order.intent.deposit.accountId,
             order.intent.deposit.asset,
             order.intent.deposit.amount,
-            sharesOut
+            sharesOut,
+            order.intent.relayerTip
         );
     }
 
@@ -233,7 +234,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
 
         sharesOut = _deposit(order, minter);
 
-        emit Deposit(order.accountId, order.asset, order.amount, sharesOut);
+        emit Deposit(order.accountId, order.asset, order.amount, sharesOut, 0);
     }
 
     function _deposit(DepositOrder calldata order, address user)
@@ -351,7 +352,8 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             order.intent.withdraw.accountId,
             order.intent.withdraw.asset,
             order.intent.withdraw.shares,
-            assetAmountOut
+            assetAmountOut,
+            order.intent.relayerTip
         );
     }
 
@@ -376,7 +378,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         /// transfer asset from fund to receiver
         _transferAssetFromFund(order.asset, order.to, assetAmountOut);
 
-        emit Withdraw(order.accountId, order.asset, order.shares, assetAmountOut);
+        emit Withdraw(order.accountId, order.asset, order.shares, assetAmountOut, 0);
     }
 
     function _withdraw(WithdrawOrder calldata order, address user)

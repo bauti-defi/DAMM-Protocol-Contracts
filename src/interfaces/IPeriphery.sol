@@ -25,11 +25,19 @@ interface IPeriphery {
     event AdminUpdated(address oldAdmin, address newAdmin);
 
     event Deposit(
-        uint256 indexed accountId, address asset, uint256 assetAmountIn, uint256 sharesOut
+        uint256 indexed accountId,
+        address asset,
+        uint256 assetAmountIn,
+        uint256 sharesOut,
+        uint256 relayerFee
     );
 
     event Withdraw(
-        uint256 indexed accountId, address asset, uint256 sharesIn, uint256 assetAmountOut
+        uint256 indexed accountId,
+        address asset,
+        uint256 sharesIn,
+        uint256 assetAmountOut,
+        uint256 relayerFee
     );
 
     function fund() external returns (IFund);
