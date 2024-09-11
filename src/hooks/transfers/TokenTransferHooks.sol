@@ -81,7 +81,11 @@ contract TokenTransferHooks is BaseHook, IBeforeTransaction {
             (address recipient, uint256 _amount) = abi.decode(data, (address, uint256));
 
             /// transfer must go to an authorized recipient
-            if (!transferWhitelist.contains(target, recipient, address(fund), selector)) {
+            if (
+                !transferWhitelist.contains(
+                    target, recipient, address(fund), IERC20.transfer.selector
+                )
+            ) {
                 revert TokenTransferHooks_TransferNotAllowed();
             }
         } else if (selector == IERC20.transferFrom.selector) {
@@ -90,7 +94,9 @@ contract TokenTransferHooks is BaseHook, IBeforeTransaction {
                 abi.decode(data, (address, address, uint256));
 
             /// transfer must go to an authorized recipient
-            if (!transferWhitelist.contains(target, recipient, sender, selector)) {
+            if (
+                !transferWhitelist.contains(target, recipient, sender, IERC20.transferFrom.selector)
+            ) {
                 revert TokenTransferHooks_TransferNotAllowed();
             }
         } else if (selector == NATIVE_ETH_TRANSFER_SELECTOR) {
@@ -98,7 +104,11 @@ contract TokenTransferHooks is BaseHook, IBeforeTransaction {
             if (data.length > 0) revert TokenTransferHooks_DataMustBeEmpty();
 
             /// @notice the target is the recipient of the native asset (eth)
-            if (!transferWhitelist.contains(NATIVE_ASSET, target, address(fund), selector)) {
+            if (
+                !transferWhitelist.contains(
+                    NATIVE_ASSET, target, address(fund), NATIVE_ETH_TRANSFER_SELECTOR
+                )
+            ) {
                 revert TokenTransferHooks_TransferNotAllowed();
             }
         } else {
