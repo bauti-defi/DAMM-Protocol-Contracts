@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.0;
 
-import {IBeforeTransaction} from "@src/interfaces/ITransactionHooks.sol";
+import {IBeforeTransaction, IAfterTransaction} from "@src/interfaces/ITransactionHooks.sol";
 import {INonfungiblePositionManager} from "@src/interfaces/external/INonfungiblePositionManager.sol";
 import {IUniswapRouter} from "@src/interfaces/external/IUniswapRouter.sol";
 import {IERC721} from "@openzeppelin-contracts/token/ERC721/IERC721.sol";
@@ -18,7 +18,7 @@ event UniswapV3Hooks_AssetEnabled(address asset);
 
 event UniswapV3Hooks_AssetDisabled(address asset);
 
-contract UniswapV3Hooks is BaseHook, IBeforeTransaction {
+contract UniswapV3Hooks is BaseHook, IBeforeTransaction, IAfterTransaction {
     INonfungiblePositionManager public immutable uniswapV3PositionManager;
     IUniswapRouter public immutable uniswapV3Router;
 
@@ -31,7 +31,7 @@ contract UniswapV3Hooks is BaseHook, IBeforeTransaction {
         uniswapV3Router = IUniswapRouter(_uniswapV3Router);
     }
 
-    function _checkPosition(uint256 tokenId) internal view {
+    function isValidPosition(uint256 tokenId) internal view {
         if (IERC721(address(uniswapV3PositionManager)).ownerOf(tokenId) != address(fund)) {
             revert UniswapV3Hooks_InvalidPosition();
         }
@@ -42,6 +42,11 @@ contract UniswapV3Hooks is BaseHook, IBeforeTransaction {
         if (!assetWhitelist[token0] || !assetWhitelist[token1]) {
             revert UniswapV3Hooks_OnlyWhitelistedTokens();
         }
+    }
+
+    function createPositionPointer(uint256 tokenId) internal pure returns (bytes32 pointer) {
+        pointer =
+            keccak256(abi.encodePacked(tokenId, type(INonfungiblePositionManager).interfaceId));
     }
 
     function checkBeforeTransaction(
@@ -85,7 +90,7 @@ contract UniswapV3Hooks is BaseHook, IBeforeTransaction {
                     tokenId := calldataload(data.offset)
                 }
 
-                _checkPosition(tokenId);
+                isValidPosition(tokenId);
             } else if (selector == INonfungiblePositionManager.decreaseLiquidity.selector) {
                 uint256 tokenId;
 
@@ -93,7 +98,7 @@ contract UniswapV3Hooks is BaseHook, IBeforeTransaction {
                     tokenId := calldataload(data.offset)
                 }
 
-                _checkPosition(tokenId);
+                isValidPosition(tokenId);
             } else if (selector == INonfungiblePositionManager.collect.selector) {
                 uint256 tokenId;
 
@@ -101,7 +106,7 @@ contract UniswapV3Hooks is BaseHook, IBeforeTransaction {
                     tokenId := calldataload(data.offset)
                 }
 
-                _checkPosition(tokenId);
+                isValidPosition(tokenId);
             } else {
                 revert Errors.Hook_InvalidTargetSelector();
             }
@@ -140,6 +145,45 @@ contract UniswapV3Hooks is BaseHook, IBeforeTransaction {
         }
     }
 
+    function checkAfterTransaction(
+        address target,
+        bytes4 selector,
+        uint8 operation,
+        uint256,
+        bytes calldata data,
+        bytes calldata returnData
+    ) external override onlyFund expectOperation(operation, CALL) {
+        if (target == address(uniswapV3PositionManager)) {
+            if (selector == INonfungiblePositionManager.mint.selector) {
+                uint256 tokenId;
+                uint128 liquidity;
+                assembly {
+                    tokenId := calldataload(returnData.offset)
+                    liquidity := calldataload(add(returnData.offset, 0x20))
+                }
+
+                /// if liquidity is not 0, the position was opened
+                if (liquidity > 0) {
+                    /// @notice this is a no-op if the position is already closed
+                    fund.onPositionOpened(createPositionPointer(tokenId));
+                }
+            } else if (selector == INonfungiblePositionManager.collect.selector) {
+                uint256 tokenId;
+                assembly {
+                    tokenId := calldataload(data.offset)
+                }
+
+                /// if the position has no tokens owed or liquidity, then the position is empty and can be closed
+                (,,,,,,, uint128 liquidity,,, uint128 token0Owed, uint128 token1Owed) =
+                    uniswapV3PositionManager.positions(tokenId);
+                if (liquidity + token0Owed + token1Owed == 0) {
+                    /// @notice this is a no-op if the position is already closed
+                    fund.onPositionClosed(createPositionPointer(tokenId));
+                }
+            }
+        }
+    }
+
     function enableAsset(address asset) external onlyFund {
         if (
             asset == address(0) || asset == address(this) || asset == address(fund)
@@ -161,6 +205,7 @@ contract UniswapV3Hooks is BaseHook, IBeforeTransaction {
 
     function supportsInterface(bytes4 interfaceId) public view override returns (bool) {
         return interfaceId == type(IBeforeTransaction).interfaceId
+            || interfaceId == type(IAfterTransaction).interfaceId
             || super.supportsInterface(interfaceId);
     }
 }

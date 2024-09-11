@@ -4,28 +4,25 @@ pragma solidity ^0.8.0;
 import {Test} from "@forge-std/Test.sol";
 
 import "@test/forked/BaseUniswapV3.sol";
-import "@test/base/TestBaseGnosis.sol";
+import "@test/base/TestBaseFund.sol";
 import "@test/base/TestBaseProtocol.sol";
 import "@safe-contracts/SafeL2.sol";
 import "@safe-contracts/Safe.sol";
 import "@src/modules/transact/HookRegistry.sol";
 import "@src/modules/transact/TransactionModule.sol";
-import "@test/utils/SafeUtils.sol";
 import "@test/forked/TokenMinter.sol";
 import "@src/hooks/uniswapV3/UniswapV3Hooks.sol";
 import {HookConfig} from "@src/modules/transact/Hooks.sol";
 import {Enum} from "@safe-contracts/common/Enum.sol";
 import {IERC721} from "@openzeppelin-contracts/token/ERC721/IERC721.sol";
 import "@src/modules/transact/Structs.sol";
+import {POSITION_OPENER_ROLE, POSITION_CLOSER_ROLE} from "@src/libs/Constants.sol";
 
-contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, TokenMinter {
-    using SafeUtils for SafeL2;
-
+contract TestUniswapV3 is TestBaseFund, TestBaseProtocol, BaseUniswapV3, TokenMinter {
     uint256 constant BIG_NUMBER = 10 ** 12;
 
     address internal fundAdmin;
     uint256 internal fundAdminPK;
-    SafeL2 internal fund;
     HookRegistry internal hookRegistry;
     TransactionModule internal transactionModule;
     UniswapV3Hooks internal uniswapV3Hooks;
@@ -36,17 +33,14 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
 
     uint256 internal arbitrumFork;
 
-    function setUp()
-        public
-        override(BaseUniswapV3, TokenMinter, TestBaseGnosis, TestBaseProtocol)
-    {
+    function setUp() public override(BaseUniswapV3, TokenMinter, TestBaseFund, TestBaseProtocol) {
         arbitrumFork = vm.createFork(vm.envString("ARBI_RPC_URL"));
 
         vm.selectFork(arbitrumFork);
         assertEq(vm.activeFork(), arbitrumFork);
 
         BaseUniswapV3.setUp();
-        TestBaseGnosis.setUp();
+        TestBaseFund.setUp();
         TestBaseProtocol.setUp();
         TokenMinter.setUp();
 
@@ -58,7 +52,7 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
         address[] memory admins = new address[](1);
         admins[0] = fundAdmin;
 
-        fund = deploySafe(admins, 1);
+        fund = fundFactory.deployFund(address(safeProxyFactory), address(safeSingleton), admins, 1);
         assertTrue(address(fund) != address(0), "Failed to deploy fund");
         assertTrue(fund.isOwner(fundAdmin), "Fund admin not owner");
 
@@ -96,7 +90,7 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
         assertEq(transactionModule.fund(), address(fund), "TransactionModule fund not set");
 
         uniswapV3Hooks = UniswapV3Hooks(
-            deployModule(
+            deployModuleWithRoles(
                 payable(address(fund)),
                 fundAdmin,
                 fundAdminPK,
@@ -107,7 +101,8 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
                     abi.encode(
                         address(fund), UNI_V3_POSITION_MANAGER_ADDRESS, UNI_V3_SWAP_ROUTER_ADDRESS
                     )
-                )
+                ),
+                POSITION_OPENER_ROLE | POSITION_CLOSER_ROLE
             )
         );
 
@@ -119,7 +114,7 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
                 operator: operator,
                 target: UNI_V3_POSITION_MANAGER_ADDRESS,
                 beforeTrxHook: address(uniswapV3Hooks),
-                afterTrxHook: address(0),
+                afterTrxHook: address(uniswapV3Hooks),
                 operation: 0,
                 targetSelector: uniswapPositionManager.mint.selector
             })
@@ -149,7 +144,7 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
                 operator: operator,
                 target: UNI_V3_POSITION_MANAGER_ADDRESS,
                 beforeTrxHook: address(uniswapV3Hooks),
-                afterTrxHook: address(0),
+                afterTrxHook: address(uniswapV3Hooks),
                 operation: 0,
                 targetSelector: uniswapPositionManager.collect.selector
             })
@@ -287,8 +282,8 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
             .CollectParams({
             tokenId: positionId,
             recipient: address(fund),
-            amount0Max: 1000,
-            amount1Max: 1000
+            amount0Max: 1000000,
+            amount1Max: 1000000
         });
 
         trx = Transaction({
@@ -329,12 +324,14 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
         enableAsset(ARB_USDC)
         enableAsset(ARB_USDCe)
     {
+        assertFalse(fund.hasOpenPositions());
         Transaction[] memory calls = new Transaction[](1);
         calls[0] = _mint_call();
 
         vm.prank(operator, operator);
         transactionModule.execute(calls);
 
+        assertTrue(fund.hasOpenPositions());
         assertEq(
             IERC721(UNI_V3_POSITION_MANAGER_ADDRESS).balanceOf(address(fund)),
             1,
@@ -420,12 +417,14 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
         enableAsset(ARB_USDC)
         enableAsset(ARB_USDCe)
     {
+        assertFalse(fund.hasOpenPositions());
         Transaction[] memory calls = new Transaction[](1);
         calls[0] = _mint_call();
 
         vm.prank(operator, operator);
         transactionModule.execute(calls);
 
+        assertTrue(fund.hasOpenPositions());
         assertEq(
             IERC721(UNI_V3_POSITION_MANAGER_ADDRESS).balanceOf(address(fund)),
             1,
@@ -444,6 +443,7 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
         vm.prank(operator, operator);
         transactionModule.execute(calls);
 
+        assertTrue(fund.hasOpenPositions());
         assertEq(
             IERC721(UNI_V3_POSITION_MANAGER_ADDRESS).ownerOf(nextPositionId),
             address(fund),
@@ -554,12 +554,14 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
         enableAsset(ARB_USDC)
         enableAsset(ARB_USDCe)
     {
+        assertFalse(fund.hasOpenPositions());
         Transaction[] memory calls = new Transaction[](1);
         calls[0] = _mint_call();
 
         vm.prank(operator, operator);
         transactionModule.execute(calls);
 
+        assertTrue(fund.hasOpenPositions());
         assertEq(
             IERC721(UNI_V3_POSITION_MANAGER_ADDRESS).balanceOf(address(fund)),
             1,
@@ -577,6 +579,7 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
         vm.prank(operator, operator);
         transactionModule.execute(calls);
 
+        assertTrue(fund.hasOpenPositions());
         assertEq(
             IERC721(UNI_V3_POSITION_MANAGER_ADDRESS).ownerOf(nextPositionId),
             address(fund),
@@ -670,24 +673,39 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
         enableAsset(ARB_USDC)
         enableAsset(ARB_USDCe)
     {
+        assertFalse(fund.hasOpenPositions());
         Transaction[] memory calls = new Transaction[](1);
         calls[0] = _mint_call();
 
         vm.prank(operator, operator);
         transactionModule.execute(calls);
 
+        assertTrue(fund.hasOpenPositions());
+
         uint256 token0Balance = USDC.balanceOf(address(fund));
         uint256 token1Balance = USDCe.balanceOf(address(fund));
-        calls[0] = _decrease_liquidity_call(nextPositionId, 100);
+
+        /// get position liquidity amount
+        (,,,,,,, uint128 liquidity,,,,) = uniswapPositionManager.positions(nextPositionId);
+
+        calls[0] = _decrease_liquidity_call(nextPositionId, liquidity);
 
         vm.prank(operator, operator);
         transactionModule.execute(calls);
+
+        assertTrue(fund.hasOpenPositions());
 
         calls[0] = _collect_call(nextPositionId);
 
         vm.prank(operator, operator);
         transactionModule.execute(calls);
 
+        (,,,,,,, uint128 finalLiquidity,,, uint128 finalToken0Owed, uint128 finalToken1Owed) =
+            uniswapPositionManager.positions(nextPositionId);
+
+        assertTrue(finalLiquidity == 0 && finalToken0Owed == 0 && finalToken1Owed == 0);
+
+        assertFalse(fund.hasOpenPositions());
         assertEq(
             IERC721(UNI_V3_POSITION_MANAGER_ADDRESS).ownerOf(nextPositionId),
             address(fund),
@@ -937,36 +955,14 @@ contract TestUniswapV3 is TestBaseGnosis, TestBaseProtocol, BaseUniswapV3, Token
     }
 
     function test_enable_disable_asset() public {
-        bytes memory transaction =
-            abi.encodeWithSelector(uniswapV3Hooks.enableAsset.selector, address(ARB_USDC));
+        vm.prank(address(fund));
+        uniswapV3Hooks.enableAsset(address(ARB_USDC));
 
-        bool success = fund.executeTrx(
-            fundAdminPK,
-            SafeTransaction({
-                value: 0,
-                target: address(uniswapV3Hooks),
-                operation: Enum.Operation.Call,
-                transaction: transaction
-            })
-        );
-
-        assertTrue(success, "Failed to enable asset");
         assertTrue(uniswapV3Hooks.assetWhitelist(address(ARB_USDC)), "Asset not whitelisted");
 
-        transaction =
-            abi.encodeWithSelector(uniswapV3Hooks.disableAsset.selector, address(ARB_USDC));
+        vm.prank(address(fund));
+        uniswapV3Hooks.disableAsset(address(ARB_USDC));
 
-        success = fund.executeTrx(
-            fundAdminPK,
-            SafeTransaction({
-                value: 0,
-                target: address(uniswapV3Hooks),
-                operation: Enum.Operation.Call,
-                transaction: transaction
-            })
-        );
-
-        assertTrue(success, "Failed to disable asset");
         assertTrue(!uniswapV3Hooks.assetWhitelist(address(ARB_USDC)), "Asset still whitelisted");
     }
 
