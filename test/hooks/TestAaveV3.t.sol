@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.0;
 
-import {TestBaseGnosis} from "@test/base/TestBaseGnosis.sol";
+import {TestBaseFund, IFund} from "@test/base/TestBaseFund.sol";
 import {TestBaseProtocol} from "@test/base/TestBaseProtocol.sol";
 import {SafeL2} from "@safe-contracts/SafeL2.sol";
 import {Safe} from "@safe-contracts/Safe.sol";
 import {HookRegistry} from "@src/modules/transact/HookRegistry.sol";
 import {TransactionModule} from "@src/modules/transact/TransactionModule.sol";
-import {SafeUtils, SafeTransaction} from "@test/utils/SafeUtils.sol";
 import "@src/hooks/aaveV3/AaveV3Hooks.sol";
 import {HookConfig} from "@src/modules/transact/Hooks.sol";
 import {BaseAaveV3} from "@test/forked/BaseAaveV3.sol";
@@ -17,16 +16,13 @@ import {Enum} from "@safe-contracts/common/Enum.sol";
 import {console2} from "@forge-std/Test.sol";
 import "@src/modules/transact/Structs.sol";
 
-contract TestAaveV3 is TestBaseGnosis, TestBaseProtocol, BaseAaveV3, TokenMinter {
-    using SafeUtils for SafeL2;
-
+contract TestAaveV3 is TestBaseFund, TestBaseProtocol, BaseAaveV3, TokenMinter {
     uint256 constant BIG_NUMBER = 10 ** 12;
 
     IERC20 internal constant aUSDC = IERC20(0x724dc807b04555b71ed48a6896b6F41593b8C637);
 
     address internal fundAdmin;
     uint256 internal fundAdminPK;
-    SafeL2 internal fund;
     HookRegistry internal hookRegistry;
     TransactionModule internal transactionModule;
     AaveV3Hooks internal aaveV3Hooks;
@@ -35,14 +31,14 @@ contract TestAaveV3 is TestBaseGnosis, TestBaseProtocol, BaseAaveV3, TokenMinter
 
     uint256 internal arbitrumFork;
 
-    function setUp() public override(BaseAaveV3, TokenMinter, TestBaseGnosis, TestBaseProtocol) {
+    function setUp() public override(BaseAaveV3, TokenMinter, TestBaseFund, TestBaseProtocol) {
         arbitrumFork = vm.createFork(vm.envString("ARBI_RPC_URL"));
 
         vm.selectFork(arbitrumFork);
         assertEq(vm.activeFork(), arbitrumFork);
 
         BaseAaveV3.setUp();
-        TestBaseGnosis.setUp();
+        TestBaseFund.setUp();
         TestBaseProtocol.setUp();
         TokenMinter.setUp();
 
@@ -54,7 +50,7 @@ contract TestAaveV3 is TestBaseGnosis, TestBaseProtocol, BaseAaveV3, TokenMinter
         address[] memory admins = new address[](1);
         admins[0] = fundAdmin;
 
-        fund = deploySafe(admins, 1);
+        fund = fundFactory.deployFund(address(safeProxyFactory), address(safeSingleton), admins, 1);
         assertTrue(address(fund) != address(0), "Failed to deploy fund");
         assertTrue(fund.isOwner(fundAdmin), "Fund admin not owner");
 
@@ -92,7 +88,7 @@ contract TestAaveV3 is TestBaseGnosis, TestBaseProtocol, BaseAaveV3, TokenMinter
         assertEq(transactionModule.fund(), address(fund), "TransactionModule fund not set");
 
         aaveV3Hooks = AaveV3Hooks(
-            deployModule(
+            deployModuleWithRoles(
                 payable(address(fund)),
                 fundAdmin,
                 fundAdminPK,
@@ -100,7 +96,8 @@ contract TestAaveV3 is TestBaseGnosis, TestBaseProtocol, BaseAaveV3, TokenMinter
                 0,
                 abi.encodePacked(
                     type(AaveV3Hooks).creationCode, abi.encode(address(fund), address(aaveV3Pool))
-                )
+                ),
+                POSITION_OPENER_ROLE | POSITION_CLOSER_ROLE
             )
         );
 
@@ -122,7 +119,7 @@ contract TestAaveV3 is TestBaseGnosis, TestBaseProtocol, BaseAaveV3, TokenMinter
                 operator: operator,
                 target: address(aaveV3Pool),
                 beforeTrxHook: address(aaveV3Hooks),
-                afterTrxHook: address(0),
+                afterTrxHook: address(aaveV3Hooks),
                 operation: 0,
                 targetSelector: aaveV3Pool.withdraw.selector
             })
@@ -148,6 +145,7 @@ contract TestAaveV3 is TestBaseGnosis, TestBaseProtocol, BaseAaveV3, TokenMinter
 
     function test_supply() public withAllowance(USDC) enableAsset(address(ARB_USDC)) {
         assertEq(aUSDC.balanceOf(address(fund)), 0);
+        assertFalse(fund.hasOpenPositions());
 
         Transaction[] memory calls = new Transaction[](1);
 
@@ -164,6 +162,7 @@ contract TestAaveV3 is TestBaseGnosis, TestBaseProtocol, BaseAaveV3, TokenMinter
 
         assertEq(aUSDC.balanceOf(address(fund)), 1000);
         assertEq(USDC.balanceOf(address(fund)), BIG_NUMBER - 1000);
+        assertTrue(fund.hasOpenPositions());
     }
 
     function test_cannot_supply_to_recipient_that_is_not_fund()
@@ -208,6 +207,7 @@ contract TestAaveV3 is TestBaseGnosis, TestBaseProtocol, BaseAaveV3, TokenMinter
 
     function test_withdraw() public withAllowance(USDC) enableAsset(address(ARB_USDC)) {
         assertEq(aUSDC.balanceOf(address(fund)), 0);
+        assertFalse(fund.hasOpenPositions());
 
         Transaction[] memory calls = new Transaction[](1);
         calls[0] = Transaction({
@@ -221,6 +221,7 @@ contract TestAaveV3 is TestBaseGnosis, TestBaseProtocol, BaseAaveV3, TokenMinter
         vm.prank(operator, operator);
         transactionModule.execute(calls);
 
+        assertTrue(fund.hasOpenPositions());
         assertEq(aUSDC.balanceOf(address(fund)), 1000);
         assertEq(USDC.balanceOf(address(fund)), BIG_NUMBER - 1000);
 
@@ -235,6 +236,7 @@ contract TestAaveV3 is TestBaseGnosis, TestBaseProtocol, BaseAaveV3, TokenMinter
         vm.prank(operator, operator);
         transactionModule.execute(calls);
 
+        assertFalse(fund.hasOpenPositions());
         assertEq(aUSDC.balanceOf(address(fund)), 0);
         assertEq(USDC.balanceOf(address(fund)), BIG_NUMBER);
     }
@@ -280,35 +282,14 @@ contract TestAaveV3 is TestBaseGnosis, TestBaseProtocol, BaseAaveV3, TokenMinter
     }
 
     function test_enable_disable_asset() public {
-        bytes memory transaction =
-            abi.encodeWithSelector(aaveV3Hooks.enableAsset.selector, address(ARB_USDC));
+        vm.prank(address(fund));
+        aaveV3Hooks.enableAsset(address(ARB_USDC));
 
-        bool success = fund.executeTrx(
-            fundAdminPK,
-            SafeTransaction({
-                value: 0,
-                target: address(aaveV3Hooks),
-                operation: Enum.Operation.Call,
-                transaction: transaction
-            })
-        );
-
-        assertTrue(success, "Failed to enable asset");
         assertTrue(aaveV3Hooks.assetWhitelist(address(ARB_USDC)), "Asset not whitelisted");
 
-        transaction = abi.encodeWithSelector(aaveV3Hooks.disableAsset.selector, address(ARB_USDC));
+        vm.prank(address(fund));
+        aaveV3Hooks.disableAsset(address(ARB_USDC));
 
-        success = fund.executeTrx(
-            fundAdminPK,
-            SafeTransaction({
-                value: 0,
-                target: address(aaveV3Hooks),
-                operation: Enum.Operation.Call,
-                transaction: transaction
-            })
-        );
-
-        assertTrue(success, "Failed to disable asset");
         assertTrue(!aaveV3Hooks.assetWhitelist(address(ARB_USDC)), "Asset still whitelisted");
     }
 
