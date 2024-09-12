@@ -55,7 +55,7 @@ contract UniswapV3Hooks is BaseHook, IBeforeTransaction, IAfterTransaction {
         uint8 operation,
         uint256,
         bytes calldata data
-    ) external view override onlyFund expectOperation(operation, CALL) {
+    ) external override onlyFund expectOperation(operation, CALL) {
         if (target == address(uniswapV3PositionManager)) {
             if (selector == INonfungiblePositionManager.mint.selector) {
                 address token0;
@@ -91,6 +91,9 @@ contract UniswapV3Hooks is BaseHook, IBeforeTransaction, IAfterTransaction {
                 }
 
                 isValidPosition(tokenId);
+
+                /// optimistacally open up a position for this tokenId
+                fund.onPositionOpened(createPositionPointer(tokenId));
             } else if (selector == INonfungiblePositionManager.decreaseLiquidity.selector) {
                 uint256 tokenId;
 
@@ -144,6 +147,8 @@ contract UniswapV3Hooks is BaseHook, IBeforeTransaction, IAfterTransaction {
             revert Errors.Hook_InvalidTargetAddress();
         }
     }
+
+    /// TODO: make sure increase liquidity adds positions if needed
 
     function checkAfterTransaction(
         address target,
