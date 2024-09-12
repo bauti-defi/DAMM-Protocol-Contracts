@@ -148,8 +148,6 @@ contract UniswapV3Hooks is BaseHook, IBeforeTransaction, IAfterTransaction {
         }
     }
 
-    /// TODO: make sure increase liquidity adds positions if needed
-
     function checkAfterTransaction(
         address target,
         bytes4 selector,
