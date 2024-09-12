@@ -11,7 +11,8 @@ import "@safe-contracts/Safe.sol";
 import "@src/modules/transact/HookRegistry.sol";
 import "@src/modules/transact/TransactionModule.sol";
 import "@test/forked/TokenMinter.sol";
-import "@src/hooks/uniswapV3/UniswapV3Hooks.sol";
+import "@src/hooks/uniswapV3/UniswapV3CallValidator.sol";
+import "@src/hooks/uniswapV3/UniswapV3PositionManager.sol";
 import {HookConfig} from "@src/modules/transact/Hooks.sol";
 import {Enum} from "@safe-contracts/common/Enum.sol";
 import {IERC721} from "@openzeppelin-contracts/token/ERC721/IERC721.sol";
@@ -25,7 +26,8 @@ contract TestUniswapV3 is TestBaseFund, TestBaseProtocol, BaseUniswapV3, TokenMi
     uint256 internal fundAdminPK;
     HookRegistry internal hookRegistry;
     TransactionModule internal transactionModule;
-    UniswapV3Hooks internal uniswapV3Hooks;
+    UniswapV3CallValidator internal uniswapV3CallValidator;
+    UniswapV3PositionManager internal uniswapV3PositionManager;
 
     uint176 nextPositionId;
 
@@ -89,32 +91,48 @@ contract TestUniswapV3 is TestBaseFund, TestBaseProtocol, BaseUniswapV3, TokenMi
 
         assertEq(transactionModule.fund(), address(fund), "TransactionModule fund not set");
 
-        uniswapV3Hooks = UniswapV3Hooks(
+        uniswapV3CallValidator = UniswapV3CallValidator(
+            deployModule(
+                payable(address(fund)),
+                fundAdmin,
+                fundAdminPK,
+                bytes32("uniswapV3CallValidator"),
+                0,
+                abi.encodePacked(
+                    type(UniswapV3CallValidator).creationCode,
+                    abi.encode(
+                        address(fund), UNI_V3_POSITION_MANAGER_ADDRESS, UNI_V3_SWAP_ROUTER_ADDRESS
+                    )
+                )
+            )
+        );
+
+        vm.label(address(uniswapV3CallValidator), "UniswapV3CallValidator");
+
+        uniswapV3PositionManager = UniswapV3PositionManager(
             deployModuleWithRoles(
                 payable(address(fund)),
                 fundAdmin,
                 fundAdminPK,
-                bytes32("uniswapV3Hooks"),
+                bytes32("uniswapV3PositionManager"),
                 0,
                 abi.encodePacked(
-                    type(UniswapV3Hooks).creationCode,
-                    abi.encode(
-                        address(fund), UNI_V3_POSITION_MANAGER_ADDRESS, UNI_V3_SWAP_ROUTER_ADDRESS
-                    )
+                    type(UniswapV3PositionManager).creationCode,
+                    abi.encode(address(fund), UNI_V3_POSITION_MANAGER_ADDRESS)
                 ),
                 POSITION_OPENER_ROLE | POSITION_CLOSER_ROLE
             )
         );
 
-        vm.label(address(uniswapV3Hooks), "UniswapV3Hooks");
+        vm.label(address(uniswapV3PositionManager), "UniswapV3PositionManager");
 
         vm.startPrank(address(fund));
         hookRegistry.setHooks(
             HookConfig({
                 operator: operator,
                 target: UNI_V3_POSITION_MANAGER_ADDRESS,
-                beforeTrxHook: address(uniswapV3Hooks),
-                afterTrxHook: address(uniswapV3Hooks),
+                beforeTrxHook: address(uniswapV3CallValidator),
+                afterTrxHook: address(uniswapV3PositionManager),
                 operation: 0,
                 targetSelector: uniswapPositionManager.mint.selector
             })
@@ -123,8 +141,8 @@ contract TestUniswapV3 is TestBaseFund, TestBaseProtocol, BaseUniswapV3, TokenMi
             HookConfig({
                 operator: operator,
                 target: UNI_V3_POSITION_MANAGER_ADDRESS,
-                beforeTrxHook: address(uniswapV3Hooks),
-                afterTrxHook: address(0),
+                beforeTrxHook: address(uniswapV3CallValidator),
+                afterTrxHook: address(uniswapV3PositionManager),
                 operation: 0,
                 targetSelector: uniswapPositionManager.increaseLiquidity.selector
             })
@@ -133,7 +151,7 @@ contract TestUniswapV3 is TestBaseFund, TestBaseProtocol, BaseUniswapV3, TokenMi
             HookConfig({
                 operator: operator,
                 target: UNI_V3_POSITION_MANAGER_ADDRESS,
-                beforeTrxHook: address(uniswapV3Hooks),
+                beforeTrxHook: address(uniswapV3CallValidator),
                 afterTrxHook: address(0),
                 operation: 0,
                 targetSelector: uniswapPositionManager.decreaseLiquidity.selector
@@ -143,8 +161,8 @@ contract TestUniswapV3 is TestBaseFund, TestBaseProtocol, BaseUniswapV3, TokenMi
             HookConfig({
                 operator: operator,
                 target: UNI_V3_POSITION_MANAGER_ADDRESS,
-                beforeTrxHook: address(uniswapV3Hooks),
-                afterTrxHook: address(uniswapV3Hooks),
+                beforeTrxHook: address(uniswapV3CallValidator),
+                afterTrxHook: address(uniswapV3PositionManager),
                 operation: 0,
                 targetSelector: uniswapPositionManager.collect.selector
             })
@@ -153,7 +171,7 @@ contract TestUniswapV3 is TestBaseFund, TestBaseProtocol, BaseUniswapV3, TokenMi
             HookConfig({
                 operator: operator,
                 target: UNI_V3_SWAP_ROUTER_ADDRESS,
-                beforeTrxHook: address(uniswapV3Hooks),
+                beforeTrxHook: address(uniswapV3CallValidator),
                 afterTrxHook: address(0),
                 operation: 0,
                 targetSelector: uniswapRouter.exactInputSingle.selector
@@ -163,7 +181,7 @@ contract TestUniswapV3 is TestBaseFund, TestBaseProtocol, BaseUniswapV3, TokenMi
             HookConfig({
                 operator: operator,
                 target: UNI_V3_SWAP_ROUTER_ADDRESS,
-                beforeTrxHook: address(uniswapV3Hooks),
+                beforeTrxHook: address(uniswapV3CallValidator),
                 afterTrxHook: address(0),
                 operation: 0,
                 targetSelector: uniswapRouter.exactOutputSingle.selector
@@ -195,7 +213,7 @@ contract TestUniswapV3 is TestBaseFund, TestBaseProtocol, BaseUniswapV3, TokenMi
 
     modifier enableAsset(address asset) {
         vm.startPrank(address(fund));
-        uniswapV3Hooks.enableAsset(asset);
+        uniswapV3CallValidator.enableAsset(asset);
         vm.stopPrank();
         _;
     }
@@ -372,7 +390,7 @@ contract TestUniswapV3 is TestBaseFund, TestBaseProtocol, BaseUniswapV3, TokenMi
         });
 
         vm.prank(operator, operator);
-        vm.expectRevert(UniswapV3Hooks_OnlyWhitelistedTokens.selector);
+        vm.expectRevert(UniswapV3CallValidator_OnlyWhitelistedTokens.selector);
         transactionModule.execute(calls);
     }
 
@@ -407,7 +425,7 @@ contract TestUniswapV3 is TestBaseFund, TestBaseProtocol, BaseUniswapV3, TokenMi
         });
 
         vm.prank(operator, operator);
-        vm.expectRevert(UniswapV3Hooks_FundMustBeRecipient.selector);
+        vm.expectRevert(UniswapV3CallValidator_FundMustBeRecipient.selector);
         transactionModule.execute(calls);
     }
 
@@ -503,7 +521,7 @@ contract TestUniswapV3 is TestBaseFund, TestBaseProtocol, BaseUniswapV3, TokenMi
         });
 
         vm.prank(operator, operator);
-        vm.expectRevert(UniswapV3Hooks_OnlyWhitelistedTokens.selector);
+        vm.expectRevert(UniswapV3CallValidator_OnlyWhitelistedTokens.selector);
         transactionModule.execute(increaseLiquidityCalls);
     }
 
@@ -544,7 +562,7 @@ contract TestUniswapV3 is TestBaseFund, TestBaseProtocol, BaseUniswapV3, TokenMi
         calls[0] = _increase_liquidity_call(nextPositionId);
 
         vm.prank(operator, operator);
-        vm.expectRevert(UniswapV3Hooks_InvalidPosition.selector);
+        vm.expectRevert(UniswapV3CallValidator_InvalidPosition.selector);
         transactionModule.execute(calls);
     }
 
@@ -622,7 +640,7 @@ contract TestUniswapV3 is TestBaseFund, TestBaseProtocol, BaseUniswapV3, TokenMi
         calls[0] = _decrease_liquidity_call(nextPositionId);
 
         vm.prank(operator, operator);
-        vm.expectRevert(UniswapV3Hooks_OnlyWhitelistedTokens.selector);
+        vm.expectRevert(UniswapV3CallValidator_OnlyWhitelistedTokens.selector);
         transactionModule.execute(calls);
     }
 
@@ -663,7 +681,7 @@ contract TestUniswapV3 is TestBaseFund, TestBaseProtocol, BaseUniswapV3, TokenMi
         calls[0] = _decrease_liquidity_call(nextPositionId);
 
         vm.prank(operator, operator);
-        vm.expectRevert(UniswapV3Hooks_InvalidPosition.selector);
+        vm.expectRevert(UniswapV3CallValidator_InvalidPosition.selector);
         transactionModule.execute(calls);
     }
 
@@ -724,6 +742,45 @@ contract TestUniswapV3 is TestBaseFund, TestBaseProtocol, BaseUniswapV3, TokenMi
         );
     }
 
+    function test_increase_liquidity_of_empty_position_reopens_position()
+        public
+        approvePositionManagerAllowance(address(fund))
+        enableAsset(ARB_USDC)
+        enableAsset(ARB_USDCe)
+    {
+        assertFalse(fund.hasOpenPositions());
+        Transaction[] memory calls = new Transaction[](1);
+        calls[0] = _mint_call();
+
+        vm.prank(operator, operator);
+        transactionModule.execute(calls);
+
+        assertTrue(fund.hasOpenPositions());
+
+        (,,,,,,, uint128 liquidity,,,,) = uniswapPositionManager.positions(nextPositionId);
+
+        calls[0] = _decrease_liquidity_call(nextPositionId, liquidity);
+
+        vm.prank(operator, operator);
+        transactionModule.execute(calls);
+
+        assertTrue(fund.hasOpenPositions());
+
+        calls[0] = _collect_call(nextPositionId);
+
+        vm.prank(operator, operator);
+        transactionModule.execute(calls);
+
+        assertFalse(fund.hasOpenPositions());
+
+        calls[0] = _increase_liquidity_call(nextPositionId);
+
+        vm.prank(operator, operator);
+        transactionModule.execute(calls);
+
+        assertTrue(fund.hasOpenPositions());
+    }
+
     function test_cannot_collect_position_not_owned_by_fund() public {
         address attacker = makeAddr("Attacker");
 
@@ -755,7 +812,7 @@ contract TestUniswapV3 is TestBaseFund, TestBaseProtocol, BaseUniswapV3, TokenMi
         calls[0] = _collect_call(nextPositionId);
 
         vm.prank(operator, operator);
-        vm.expectRevert(UniswapV3Hooks_InvalidPosition.selector);
+        vm.expectRevert(UniswapV3CallValidator_InvalidPosition.selector);
         transactionModule.execute(calls);
     }
 
@@ -820,7 +877,7 @@ contract TestUniswapV3 is TestBaseFund, TestBaseProtocol, BaseUniswapV3, TokenMi
         });
 
         vm.prank(operator, operator);
-        vm.expectRevert(UniswapV3Hooks_OnlyWhitelistedTokens.selector);
+        vm.expectRevert(UniswapV3CallValidator_OnlyWhitelistedTokens.selector);
         transactionModule.execute(calls);
     }
 
@@ -851,7 +908,7 @@ contract TestUniswapV3 is TestBaseFund, TestBaseProtocol, BaseUniswapV3, TokenMi
         });
 
         vm.prank(operator, operator);
-        vm.expectRevert(UniswapV3Hooks_FundMustBeRecipient.selector);
+        vm.expectRevert(UniswapV3CallValidator_FundMustBeRecipient.selector);
         transactionModule.execute(calls);
     }
 
@@ -918,7 +975,7 @@ contract TestUniswapV3 is TestBaseFund, TestBaseProtocol, BaseUniswapV3, TokenMi
         });
 
         vm.prank(operator, operator);
-        vm.expectRevert(UniswapV3Hooks_OnlyWhitelistedTokens.selector);
+        vm.expectRevert(UniswapV3CallValidator_OnlyWhitelistedTokens.selector);
         transactionModule.execute(calls);
     }
 
@@ -950,20 +1007,24 @@ contract TestUniswapV3 is TestBaseFund, TestBaseProtocol, BaseUniswapV3, TokenMi
         });
 
         vm.prank(operator, operator);
-        vm.expectRevert(UniswapV3Hooks_FundMustBeRecipient.selector);
+        vm.expectRevert(UniswapV3CallValidator_FundMustBeRecipient.selector);
         transactionModule.execute(calls);
     }
 
     function test_enable_disable_asset() public {
         vm.prank(address(fund));
-        uniswapV3Hooks.enableAsset(address(ARB_USDC));
+        uniswapV3CallValidator.enableAsset(address(ARB_USDC));
 
-        assertTrue(uniswapV3Hooks.assetWhitelist(address(ARB_USDC)), "Asset not whitelisted");
+        assertTrue(
+            uniswapV3CallValidator.assetWhitelist(address(ARB_USDC)), "Asset not whitelisted"
+        );
 
         vm.prank(address(fund));
-        uniswapV3Hooks.disableAsset(address(ARB_USDC));
+        uniswapV3CallValidator.disableAsset(address(ARB_USDC));
 
-        assertTrue(!uniswapV3Hooks.assetWhitelist(address(ARB_USDC)), "Asset still whitelisted");
+        assertTrue(
+            !uniswapV3CallValidator.assetWhitelist(address(ARB_USDC)), "Asset still whitelisted"
+        );
     }
 
     function test_only_fund_can_enable_asset(address attacker) public {
@@ -971,6 +1032,6 @@ contract TestUniswapV3 is TestBaseFund, TestBaseProtocol, BaseUniswapV3, TokenMi
 
         vm.expectRevert(Errors.OnlyFund.selector);
         vm.prank(attacker);
-        uniswapV3Hooks.enableAsset(address(ARB_USDC));
+        uniswapV3CallValidator.enableAsset(address(ARB_USDC));
     }
 }

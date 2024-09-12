@@ -18,7 +18,7 @@ deploy-transaction-module:
 	DEPLOYMENT_CHAIN=arb forge script script/$(SCRIPT).s.sol:$(SCRIPT) --broadcast --rpc-url ${ARBI_RPC_URL} --sig "deployTransactionModule()" --optimizer-runs 10000000 -vvvv -l --mnemonic-indexes 1
 
 deploy-uniswap-v3-hooks:
-	DEPLOYMENT_CHAIN=arb forge script script/$(SCRIPT).s.sol:$(SCRIPT) --broadcast --rpc-url ${ARBI_RPC_URL} --sig "deployUniswapV3Hooks()" --optimizer-runs 10000000 -vvvv -l --mnemonic-indexes 1
+	DEPLOYMENT_CHAIN=arb forge script script/$(SCRIPT).s.sol:$(SCRIPT) --broadcast --rpc-url ${ARBI_RPC_URL} --sig "deployUniswapV3CallValidator()" --optimizer-runs 10000000 -vvvv -l --mnemonic-indexes 1
 
 configure-uniswap-v3-assets:
 	DEPLOYMENT_CHAIN=arb forge script script/$(SCRIPT).s.sol:$(SCRIPT) --broadcast --rpc-url ${ARBI_RPC_URL} --sig "configureUniswapAssets()" --optimizer-runs 10000 -vvvv -l --mnemonic-indexes 1
