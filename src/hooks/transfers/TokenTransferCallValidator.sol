@@ -47,21 +47,21 @@ library TransferWhitelistLib {
     }
 }
 
-error TokenTransferHooks_TransferNotAllowed();
+error TokenTransferCallValidator_TransferNotAllowed();
 
-error TokenTransferHooks_DataMustBeEmpty();
+error TokenTransferCallValidator_DataMustBeEmpty();
 
-event TokenTransferHooks_TransferEnabled(
+event TokenTransferCallValidator_TransferEnabled(
     address token, address recipient, address sender, bytes4 selector
 );
 
-event TokenTransferHooks_TransferDisabled(
+event TokenTransferCallValidator_TransferDisabled(
     address token, address recipient, address sender, bytes4 selector
 );
 
 bytes4 constant NATIVE_ETH_TRANSFER_SELECTOR = bytes4(0);
 
-contract TokenTransferHooks is BaseHook, IBeforeTransaction {
+contract TokenTransferCallValidator is BaseHook, IBeforeTransaction {
     using TransferWhitelistLib for mapping(bytes32 => bool);
 
     /// @dev pointer = keccak256(abi.encode(token, recipient, sender, selector))
@@ -86,7 +86,7 @@ contract TokenTransferHooks is BaseHook, IBeforeTransaction {
                     target, recipient, address(fund), IERC20.transfer.selector
                 )
             ) {
-                revert TokenTransferHooks_TransferNotAllowed();
+                revert TokenTransferCallValidator_TransferNotAllowed();
             }
         } else if (selector == IERC20.transferFrom.selector) {
             /// decode the sender, recipient and amount from the data
@@ -97,11 +97,11 @@ contract TokenTransferHooks is BaseHook, IBeforeTransaction {
             if (
                 !transferWhitelist.contains(target, recipient, sender, IERC20.transferFrom.selector)
             ) {
-                revert TokenTransferHooks_TransferNotAllowed();
+                revert TokenTransferCallValidator_TransferNotAllowed();
             }
         } else if (selector == NATIVE_ETH_TRANSFER_SELECTOR) {
             if (value == 0) revert Errors.Hook_InvalidValue();
-            if (data.length > 0) revert TokenTransferHooks_DataMustBeEmpty();
+            if (data.length > 0) revert TokenTransferCallValidator_DataMustBeEmpty();
 
             /// @notice the target is the recipient of the native asset (eth)
             if (
@@ -109,7 +109,7 @@ contract TokenTransferHooks is BaseHook, IBeforeTransaction {
                     NATIVE_ASSET, target, address(fund), NATIVE_ETH_TRANSFER_SELECTOR
                 )
             ) {
-                revert TokenTransferHooks_TransferNotAllowed();
+                revert TokenTransferCallValidator_TransferNotAllowed();
             }
         } else {
             revert Errors.Hook_InvalidTargetSelector();
@@ -129,7 +129,7 @@ contract TokenTransferHooks is BaseHook, IBeforeTransaction {
 
         transferWhitelist.add(token, recipient, sender, selector);
 
-        emit TokenTransferHooks_TransferEnabled(token, recipient, sender, selector);
+        emit TokenTransferCallValidator_TransferEnabled(token, recipient, sender, selector);
     }
 
     function disableTransfer(address token, address recipient, address sender, bytes4 selector)
@@ -138,7 +138,7 @@ contract TokenTransferHooks is BaseHook, IBeforeTransaction {
     {
         transferWhitelist.remove(token, recipient, sender, selector);
 
-        emit TokenTransferHooks_TransferDisabled(token, recipient, sender, selector);
+        emit TokenTransferCallValidator_TransferDisabled(token, recipient, sender, selector);
     }
 
     function isTransferEnabled(address token, address recipient, address sender, bytes4 selector)
