@@ -36,7 +36,7 @@ configure-uniswap-v3: configure-uniswap-v3-assets set-uniswap-v3-hooks
 	@echo "Configured Uniswap V3"
 
 deploy-aave-v3-hooks:
-	DEPLOYMENT_CHAIN=arb forge script script/$(SCRIPT).s.sol:$(SCRIPT) --broadcast --rpc-url ${ARBI_RPC_URL} --sig "deployAaveV3Hooks()" --optimizer-runs 10000000 -vvvv -l --mnemonic-indexes 1
+	DEPLOYMENT_CHAIN=arb forge script script/$(SCRIPT).s.sol:$(SCRIPT) --broadcast --rpc-url ${ARBI_RPC_URL} --sig "deployAaveV3CallValidator()" --optimizer-runs 10000000 -vvvv -l --mnemonic-indexes 1
 
 configure-aave-v3-assets:
 	DEPLOYMENT_CHAIN=arb forge script script/$(SCRIPT).s.sol:$(SCRIPT) --broadcast --rpc-url ${ARBI_RPC_URL} --sig "configureAaveAssets()" --optimizer-runs 10000 -vvvv -l --mnemonic-indexes 1

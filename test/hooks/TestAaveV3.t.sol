@@ -7,7 +7,8 @@ import {SafeL2} from "@safe-contracts/SafeL2.sol";
 import {Safe} from "@safe-contracts/Safe.sol";
 import {HookRegistry} from "@src/modules/transact/HookRegistry.sol";
 import {TransactionModule} from "@src/modules/transact/TransactionModule.sol";
-import "@src/hooks/aaveV3/AaveV3Hooks.sol";
+import "@src/hooks/aaveV3/AaveV3CallValidator.sol";
+import "@src/hooks/aaveV3/AaveV3PositionManager.sol";
 import {HookConfig} from "@src/modules/transact/Hooks.sol";
 import {BaseAaveV3} from "@test/forked/BaseAaveV3.sol";
 import {TokenMinter} from "@test/forked/TokenMinter.sol";
@@ -25,8 +26,8 @@ contract TestAaveV3 is TestBaseFund, TestBaseProtocol, BaseAaveV3, TokenMinter {
     uint256 internal fundAdminPK;
     HookRegistry internal hookRegistry;
     TransactionModule internal transactionModule;
-    AaveV3Hooks internal aaveV3Hooks;
-
+    AaveV3CallValidator internal aaveV3CallValidator;
+    AaveV3PositionManager internal aaveV3PositionManager;
     address internal operator;
 
     uint256 internal arbitrumFork;
@@ -87,29 +88,46 @@ contract TestAaveV3 is TestBaseFund, TestBaseProtocol, BaseAaveV3, TokenMinter {
 
         assertEq(transactionModule.fund(), address(fund), "TransactionModule fund not set");
 
-        aaveV3Hooks = AaveV3Hooks(
+        aaveV3CallValidator = AaveV3CallValidator(
+            deployModule(
+                payable(address(fund)),
+                fundAdmin,
+                fundAdminPK,
+                bytes32("aaveV3CallValidator"),
+                0,
+                abi.encodePacked(
+                    type(AaveV3CallValidator).creationCode,
+                    abi.encode(address(fund), address(aaveV3Pool))
+                )
+            )
+        );
+
+        vm.label(address(aaveV3CallValidator), "AaveV3CallValidator");
+
+        aaveV3PositionManager = AaveV3PositionManager(
             deployModuleWithRoles(
                 payable(address(fund)),
                 fundAdmin,
                 fundAdminPK,
-                bytes32("aaveV3Hooks"),
+                bytes32("aaveV3PositionManager"),
                 0,
                 abi.encodePacked(
-                    type(AaveV3Hooks).creationCode, abi.encode(address(fund), address(aaveV3Pool))
+                    type(AaveV3PositionManager).creationCode,
+                    abi.encode(address(fund), address(aaveV3Pool))
                 ),
                 POSITION_OPENER_ROLE | POSITION_CLOSER_ROLE
             )
         );
 
-        vm.label(address(aaveV3Hooks), "AaveV3Hooks");
+        vm.label(address(aaveV3PositionManager), "AaveV3PositionManager");
 
         vm.startPrank(address(fund));
         hookRegistry.setHooks(
             HookConfig({
                 operator: operator,
                 target: address(aaveV3Pool),
-                beforeTrxHook: address(aaveV3Hooks),
-                afterTrxHook: address(0),
+                beforeTrxHook: address(aaveV3CallValidator),
+                afterTrxHook: address(aaveV3PositionManager),
                 operation: 0,
                 targetSelector: aaveV3Pool.supply.selector
             })
@@ -118,8 +136,8 @@ contract TestAaveV3 is TestBaseFund, TestBaseProtocol, BaseAaveV3, TokenMinter {
             HookConfig({
                 operator: operator,
                 target: address(aaveV3Pool),
-                beforeTrxHook: address(aaveV3Hooks),
-                afterTrxHook: address(aaveV3Hooks),
+                beforeTrxHook: address(aaveV3CallValidator),
+                afterTrxHook: address(aaveV3PositionManager),
                 operation: 0,
                 targetSelector: aaveV3Pool.withdraw.selector
             })
@@ -138,7 +156,7 @@ contract TestAaveV3 is TestBaseFund, TestBaseProtocol, BaseAaveV3, TokenMinter {
 
     modifier enableAsset(address asset) {
         vm.startPrank(address(fund));
-        aaveV3Hooks.enableAsset(asset);
+        aaveV3CallValidator.enableAsset(asset);
         vm.stopPrank();
         _;
     }
@@ -180,7 +198,7 @@ contract TestAaveV3 is TestBaseFund, TestBaseProtocol, BaseAaveV3, TokenMinter {
         });
 
         vm.prank(operator, operator);
-        vm.expectRevert(AaveV3Hooks_FundMustBeRecipient.selector);
+        vm.expectRevert(AaveV3CallValidator_FundMustBeRecipient.selector);
         transactionModule.execute(calls);
 
         assertEq(aUSDC.balanceOf(address(fund)), 0);
@@ -198,7 +216,7 @@ contract TestAaveV3 is TestBaseFund, TestBaseProtocol, BaseAaveV3, TokenMinter {
         });
 
         vm.prank(operator, operator);
-        vm.expectRevert(AaveV3Hooks_OnlyWhitelistedTokens.selector);
+        vm.expectRevert(AaveV3CallValidator_OnlyWhitelistedTokens.selector);
         transactionModule.execute(calls);
 
         assertEq(aUSDC.balanceOf(address(fund)), 0);
@@ -252,7 +270,7 @@ contract TestAaveV3 is TestBaseFund, TestBaseProtocol, BaseAaveV3, TokenMinter {
         });
 
         vm.prank(operator, operator);
-        vm.expectRevert(AaveV3Hooks_OnlyWhitelistedTokens.selector);
+        vm.expectRevert(AaveV3CallValidator_OnlyWhitelistedTokens.selector);
         transactionModule.execute(calls);
 
         assertEq(aUSDC.balanceOf(address(fund)), 0);
@@ -274,7 +292,7 @@ contract TestAaveV3 is TestBaseFund, TestBaseProtocol, BaseAaveV3, TokenMinter {
         });
 
         vm.prank(operator, operator);
-        vm.expectRevert(AaveV3Hooks_FundMustBeRecipient.selector);
+        vm.expectRevert(AaveV3CallValidator_FundMustBeRecipient.selector);
         transactionModule.execute(calls);
 
         assertEq(aUSDC.balanceOf(address(fund)), 0);
@@ -283,14 +301,16 @@ contract TestAaveV3 is TestBaseFund, TestBaseProtocol, BaseAaveV3, TokenMinter {
 
     function test_enable_disable_asset() public {
         vm.prank(address(fund));
-        aaveV3Hooks.enableAsset(address(ARB_USDC));
+        aaveV3CallValidator.enableAsset(address(ARB_USDC));
 
-        assertTrue(aaveV3Hooks.assetWhitelist(address(ARB_USDC)), "Asset not whitelisted");
+        assertTrue(aaveV3CallValidator.assetWhitelist(address(ARB_USDC)), "Asset not whitelisted");
 
         vm.prank(address(fund));
-        aaveV3Hooks.disableAsset(address(ARB_USDC));
+        aaveV3CallValidator.disableAsset(address(ARB_USDC));
 
-        assertTrue(!aaveV3Hooks.assetWhitelist(address(ARB_USDC)), "Asset still whitelisted");
+        assertTrue(
+            !aaveV3CallValidator.assetWhitelist(address(ARB_USDC)), "Asset still whitelisted"
+        );
     }
 
     function test_only_fund_can_enable_asset(address attacker) public {
@@ -298,6 +318,6 @@ contract TestAaveV3 is TestBaseFund, TestBaseProtocol, BaseAaveV3, TokenMinter {
 
         vm.expectRevert(Errors.OnlyFund.selector);
         vm.prank(attacker);
-        aaveV3Hooks.enableAsset(address(ARB_USDC));
+        aaveV3CallValidator.enableAsset(address(ARB_USDC));
     }
 }
