@@ -33,7 +33,7 @@ contract AaveV3CallValidator is BaseHook, IBeforeTransaction {
         uint8 operation,
         uint256,
         bytes calldata data
-    ) external override onlyFund expectOperation(operation, CALL) {
+    ) external view override onlyFund expectOperation(operation, CALL) {
         if (target != address(aaveV3Pool)) {
             revert Errors.Hook_InvalidTargetAddress();
         }

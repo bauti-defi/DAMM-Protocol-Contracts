@@ -78,7 +78,7 @@ contract TokenTransferCallValidator is BaseHook, IBeforeTransaction {
     ) external view override onlyFund expectOperation(operation, CALL) {
         if (selector == IERC20.transfer.selector) {
             /// decode the recipient and amount from the data
-            (address recipient, uint256 _amount) = abi.decode(data, (address, uint256));
+            (address recipient,) = abi.decode(data, (address, uint256));
 
             /// transfer must go to an authorized recipient
             if (
@@ -90,8 +90,7 @@ contract TokenTransferCallValidator is BaseHook, IBeforeTransaction {
             }
         } else if (selector == IERC20.transferFrom.selector) {
             /// decode the sender, recipient and amount from the data
-            (address sender, address recipient, uint256 _amount) =
-                abi.decode(data, (address, address, uint256));
+            (address sender, address recipient,) = abi.decode(data, (address, address, uint256));
 
             /// transfer must go to an authorized recipient
             if (
