@@ -100,7 +100,9 @@ contract TestFundValuation is TestBaseProtocol, TestBaseGnosis, TokenMinter {
                         payable(address(fund)),
                         address(oracleRouter),
                         address(fund),
-                        makeAddr("FeeRecipient")
+                        makeAddr("FeeRecipient"),
+                        /// accounts are not transferable
+                        false
                     )
                 )
             )

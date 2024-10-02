@@ -86,7 +86,9 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
                         address(oracleRouter),
                         address(fund),
                         /// fund is admin
-                        feeRecipient
+                        feeRecipient,
+                        /// accounts are not transferable
+                        false
                     )
                 )
             )

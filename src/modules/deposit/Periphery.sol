@@ -32,6 +32,9 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
     /// @dev used internally for yield accounting
     FundShareVault public immutable vault;
 
+    /// @dev whether the accounts are transferable
+    bool public immutable transferable;
+
     /// @dev the minter role
     address public admin;
 
@@ -53,7 +56,8 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         address fund_,
         address oracleRouter_,
         address admin_,
-        address feeRecipient_
+        address feeRecipient_,
+        bool transferable_
     ) ERC721(string.concat(vaultName_, " Account"), string.concat("ACC-", vaultSymbol_)) {
         if (fund_ == address(0)) {
             revert Errors.Deposit_InvalidConstructorParam();
@@ -72,7 +76,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         oracleRouter = IPriceOracle(oracleRouter_);
         admin = admin_;
         feeRecipient = feeRecipient_;
-
+        transferable = transferable_;
         unitOfAccount = new UnitOfAccount("Liquidity", "UNIT", decimals_);
         vault = new FundShareVault(address(unitOfAccount), vaultName_, vaultSymbol_);
 
@@ -116,7 +120,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         if (profitDelta > 0) {
             unitOfAccount.mint(address(this), profitDelta.abs());
 
-            /// we transfer the profit (deducting the fee) into the vault
+            /// we transfer the profit into the vault
             /// this will distribute the profit to the vault's shareholders
             if (!unitOfAccount.transfer(address(vault), profitDelta.abs())) {
                 revert Errors.Deposit_AssetTransferFailed();
@@ -128,10 +132,11 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             unitOfAccount.burn(address(vault), profitDelta.abs());
         }
 
+        /// we must only fetch the price after we have updated the vault's total assets
         uint256 currentSharePrice = _price(isDeposit_);
 
         /// if there is profit
-        if (currentSharePrice > highWaterMarkPrice) {
+        if (profitDelta > 0 && currentSharePrice > highWaterMarkPrice) {
             /// take a fee only on the profit above the high water mark price
             /// notice price has precision baked in so we must divide by it to get the actual profit
             uint256 nominalFee = feeBps > 0
@@ -472,17 +477,17 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         emit PerformanceFeeUpdated(oldFee, bps_);
     }
 
-    function _setFeeRecipient(address recipient) private {
-        if (recipient == address(0)) {
+    function _setFeeRecipient(address recipient_) private {
+        if (recipient_ == address(0)) {
             revert Errors.Deposit_InvalidFeeRecipient();
         }
 
         address previous = feeRecipient;
 
         /// update the fee recipient
-        feeRecipient = recipient;
+        feeRecipient = recipient_;
 
-        emit FeeRecipientUpdated(recipient, previous);
+        emit FeeRecipientUpdated(recipient_, previous);
     }
 
     function setFeeRecipient(address recipient_) external onlyFund {
@@ -531,10 +536,13 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
 
     /// @notice restricting the transfer makes this a soulbound token
     function transferFrom(address from_, address to_, uint256 tokenId_) public override {
-        revert Errors.Deposit_AccountNotTransferable();
+        if (!transferable) revert Errors.Deposit_AccountNotTransferable();
+
+        super.transferFrom(from_, to_, tokenId_);
     }
 
     function openAccount(CreateAccountParams calldata params_) public notPaused onlyAdmin {
+        /// @notice If `to` refers to a smart contract, it must implement {IERC721Receiver-onERC721Received}, which is called upon a safe transfer.
         _safeMint(params_.user, ++tokenId);
         accountInfo[tokenId] = UserAccountInfo({
             role: params_.role,
@@ -563,6 +571,8 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         }
         if (_ownerOf(accountId_) == address(0)) revert Errors.Deposit_AccountDoesNotExist();
         accountInfo[accountId_].state = AccountState.PAUSED;
+
+        emit AccountPaused(accountId_);
     }
 
     function unpauseAccount(uint256 accountId_) public notPaused onlyAdmin {
@@ -574,6 +584,8 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
 
         /// increase nonce to avoid replay attacks
         accountInfo[accountId_].nonce++;
+
+        emit AccountUnpaused(accountId_);
     }
 
     function getAccountInfo(uint256 accountId_) public view returns (UserAccountInfo memory) {
@@ -591,6 +603,10 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
 
     function getNextTokenId() public view returns (uint256) {
         return tokenId + 1;
+    }
+
+    function fundIsOpen() external view returns (bool) {
+        return !fund.hasOpenPositions();
     }
 
     function pause() external onlyFund {

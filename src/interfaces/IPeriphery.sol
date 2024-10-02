@@ -20,6 +20,10 @@ interface IPeriphery {
 
     event AssetEnabled(address asset, AssetPolicy policy);
 
+    event AccountPaused(uint256 accountId);
+
+    event AccountUnpaused(uint256 accountId);
+
     event AssetDisabled(address asset);
 
     event AdminUpdated(address oldAdmin, address newAdmin);
@@ -44,6 +48,7 @@ interface IPeriphery {
     function oracleRouter() external returns (IPriceOracle);
     function paused() external returns (bool);
     function admin() external returns (address);
+    function transferable() external returns (bool);
     function feeBps() external returns (uint256);
     function feeRecipient() external returns (address);
     function highWaterMarkPrice() external returns (uint256);
@@ -64,4 +69,5 @@ interface IPeriphery {
     function unpauseAccount(uint256 accountId) external;
     function openAccount(CreateAccountParams calldata params) external;
     function getAccountNonce(uint256 accountId) external returns (uint256);
+    function fundIsOpen() external returns (bool);
 }
