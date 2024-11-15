@@ -164,7 +164,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
     modifier whitelistUser(address user_, uint256 ttl_, Role role_) {
         vm.startPrank(address(fund));
         periphery.openAccount(
-            CreateAccountParams({user: user_, role: role_, ttl: ttl_, shareMintLimit: 0})
+            CreateAccountParams({user: user_, role: role_, ttl: ttl_, shareMintLimit: 0, feeBps: 0})
         );
         vm.stopPrank();
 

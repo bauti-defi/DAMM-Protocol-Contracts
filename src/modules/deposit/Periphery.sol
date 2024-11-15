@@ -7,6 +7,7 @@ import "@openzeppelin-contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin-contracts/utils/cryptography/MessageHashUtils.sol";
 import "@openzeppelin-contracts/utils/cryptography/SignatureChecker.sol";
 import "@openzeppelin-contracts/utils/math/SignedMath.sol";
+import "@openzeppelin-contracts/utils/math/SafeCast.sol";
 import "@solmate/utils/SafeTransferLib.sol";
 import "@solady/utils/ReentrancyGuard.sol";
 import "@src/libs/Constants.sol";
@@ -19,6 +20,7 @@ import {FundShareVault} from "./FundShareVault.sol";
 
 contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
     using SafeTransferLib for ERC20;
+    using SafeCast for uint256;
     using MessageHashUtils for bytes;
     using Math for uint256;
     using SignedMath for int256;
@@ -38,10 +40,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
     /// @dev the minter role
     address public admin;
 
-    uint256 public feeBps = 0;
     address public feeRecipient;
-    uint256 public highWaterMarkPrice;
-    uint256 public previousMarkPrice;
 
     mapping(address asset => AssetPolicy policy) private assetPolicy;
     mapping(uint256 tokenId => UserAccountInfo account) private accountInfo;
@@ -99,23 +98,14 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         _;
     }
 
-    function _price(bool isDeposit_) private view returns (uint256) {
-        return isDeposit_
-            ? vault.previewMint(10 ** vault.decimals())
-            : vault.previewRedeem(10 ** vault.decimals());
-    }
-
-    /// @dev A few things must happen here
-    /// 1. Calculate the profit delta between the fund and the vault
-    /// 2. Update the vault's total assets to match the fund's total assets
-    /// 3. If there is profit above the high water mark, take a fee
-    /// 4. Update the high water mark if the current price is higher
-    /// 5. Invariants check
-    modifier update(bool isDeposit_) {
+    /// @dev This modifier updates the balances of the vault and the fund
+    /// this ensures that the vault's total assets are always equal to the fund's total assets
+    /// if this invariant is violated, we are fucked.
+    modifier updateBalances() {
         uint256 assetsInFund = oracleRouter.getQuote(0, address(fund), address(unitOfAccount));
         uint256 assetsInVault = vault.totalAssets();
 
-        int256 profitDelta = int256(assetsInFund) - int256(assetsInVault);
+        int256 profitDelta = assetsInFund.toInt256() - assetsInVault.toInt256();
 
         if (profitDelta > 0) {
             unitOfAccount.mint(address(this), profitDelta.abs());
@@ -132,40 +122,6 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             unitOfAccount.burn(address(vault), profitDelta.abs());
         }
 
-        /// we must only fetch the price after we have updated the vault's total assets
-        uint256 currentSharePrice = _price(isDeposit_);
-
-        /// if there is profit
-        if (profitDelta > 0 && currentSharePrice > highWaterMarkPrice) {
-            /// take a fee only on the profit above the high water mark price
-            /// notice price has precision baked in so we must divide by it to get the actual profit
-            uint256 nominalFee = feeBps > 0
-                ? profitDelta.abs().mulDiv(
-                    feeBps * (currentSharePrice - highWaterMarkPrice),
-                    BP_DIVISOR * (currentSharePrice - previousMarkPrice)
-                )
-                : 0;
-
-            /// we will burn, mint, deposit as to not affect the vault's total assets
-            /// and respect its underlying math calculations
-            if (nominalFee > 0) {
-                /// we burn the fee that was deposited into the vault
-                unitOfAccount.burn(address(vault), nominalFee);
-
-                /// we mint the fee to the periphery
-                unitOfAccount.mint(address(this), nominalFee);
-
-                /// we deposit the fee into the vault on behalf of the fee recipient
-                vault.deposit(nominalFee, feeRecipient);
-            }
-        }
-
-        /// update internal price
-        previousMarkPrice = currentSharePrice;
-        if (previousMarkPrice > highWaterMarkPrice) {
-            highWaterMarkPrice = previousMarkPrice;
-        }
-
         _;
 
         /// invariants for 'some' peace of mind
@@ -179,11 +135,20 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         }
     }
 
+    /// @dev this modifier ensures that the account info is zeroed out if the user has no shares outstanding
+    modifier zeroOutAccountInfo(uint256 accountId_) {
+        _;
+        if (accountInfo[accountId_].totalSharesOutstanding == 0) {
+            accountInfo[accountId_].cumulativeSharesMinted = 0;
+            accountInfo[accountId_].cumulativeUnitsDeposited = 0;
+        }
+    }
+
     function deposit(SignedDepositIntent calldata order)
         public
         notPaused
         nonReentrant
-        update(true)
+        updateBalances
         returns (uint256 sharesOut)
     {
         address minter = _ownerOf(order.intent.deposit.accountId);
@@ -225,7 +190,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         public
         notPaused
         nonReentrant
-        update(true)
+        updateBalances
         returns (uint256 sharesOut)
     {
         address minter = _ownerOf(order.accountId);
@@ -302,20 +267,28 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         /// make sure the user hasn't exceeded their share mint limit
         /// shareMintLimit == 0 means no limit
         if (
-            account.shareMintLimit != 0 && account.sharesMinted + sharesOut > account.shareMintLimit
+            account.shareMintLimit != 0
+                && account.totalSharesOutstanding + sharesOut > account.shareMintLimit
         ) {
             revert Errors.Deposit_ShareMintLimitExceeded();
         }
 
-        /// update the user's minted shares
-        if (account.shareMintLimit != 0) accountInfo[order.accountId].sharesMinted += sharesOut;
+        /// update the user's cumulative units deposited
+        accountInfo[order.accountId].cumulativeUnitsDeposited += liquidity;
+
+        /// update the user's total shares outstanding
+        accountInfo[order.accountId].totalSharesOutstanding += sharesOut;
+
+        /// update the user's cumulative shares minted
+        accountInfo[order.accountId].cumulativeSharesMinted += sharesOut;
     }
 
     function withdraw(SignedWithdrawIntent calldata order)
         public
         notPaused
         nonReentrant
-        update(false)
+        updateBalances
+        zeroOutAccountInfo(order.intent.withdraw.accountId)
         returns (uint256 assetAmountOut)
     {
         address burner = _ownerOf(order.intent.withdraw.accountId);
@@ -366,7 +339,8 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         public
         notPaused
         nonReentrant
-        update(false)
+        updateBalances
+        zeroOutAccountInfo(order.accountId)
         returns (uint256 assetAmountOut)
     {
         address burner = _ownerOf(order.accountId);
@@ -412,19 +386,50 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
 
         uint256 sharesToBurn = order.shares;
 
-        /// if shares to burn is 0, then burn all shares owned by user
         if (sharesToBurn == 0) {
+            revert Errors.Deposit_InsufficientWithdrawal();
+        }
+
+        /// if shares to burn is max uint256, then burn all shares owned by user
+        if (sharesToBurn == type(uint256).max) {
             sharesToBurn = vault.balanceOf(user);
         }
 
         /// make sure the user has not exceeded their share burn limit
-        if (account.shareMintLimit != 0 && account.sharesMinted < sharesToBurn) {
+        if (account.shareMintLimit != 0 && account.totalSharesOutstanding < sharesToBurn) {
             revert Errors.Deposit_ShareBurnLimitExceeded();
         }
 
-        /// update the user's minted shares
+        /// update the user's total shares outstanding
         if (account.shareMintLimit != 0) {
-            accountInfo[order.accountId].sharesMinted -= sharesToBurn;
+            accountInfo[order.accountId].totalSharesOutstanding -= sharesToBurn;
+        }
+
+        uint256 performanceInTermsOfUnitOfAccount;
+
+        /// only take fee if the fee is greater than 0
+        if (account.feeBps > 0) {
+            uint8 _vaultDecimals = vault.decimals();
+
+            /// use precision for calculations
+            uint256 averageShareBuyPriceInUnitOfAccount =
+                account.cumulativeUnitsDeposited.mulDiv(PRECISION, account.cumulativeSharesMinted);
+            uint256 currentSharePriceInUnitOfAccount =
+                vault.previewRedeem(10 ** _vaultDecimals).mulDiv(PRECISION, 10 ** _vaultDecimals);
+
+            /// @notice removing precision from the output
+            uint256 netPerformanceInTermsOfUnitOfAccount = currentSharePriceInUnitOfAccount
+                > averageShareBuyPriceInUnitOfAccount
+                ? sharesToBurn.mulDiv(
+                    currentSharePriceInUnitOfAccount - averageShareBuyPriceInUnitOfAccount, PRECISION
+                )
+                : 0;
+
+            /// skim the fee from the net performance
+            if (netPerformanceInTermsOfUnitOfAccount > 0) {
+                performanceInTermsOfUnitOfAccount =
+                    netPerformanceInTermsOfUnitOfAccount.mulDiv(account.feeBps, BP_DIVISOR);
+            }
         }
 
         /// burn vault shares in exchange for liquidity (unit of account) tokens
@@ -435,6 +440,11 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             revert Errors.Deposit_InsufficientWithdrawal();
         }
 
+        if (performanceInTermsOfUnitOfAccount > 0) {
+            liquidity -= performanceInTermsOfUnitOfAccount;
+            vault.deposit(performanceInTermsOfUnitOfAccount, feeRecipient);
+        }
+
         /// burn liquidity from periphery
         unitOfAccount.burn(address(this), liquidity);
 
@@ -442,6 +452,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         assetAmountOut = oracleRouter.getQuote(liquidity, address(unitOfAccount), order.asset);
 
         /// make sure slippage is acceptable
+        /// TODO: make this use type(uint256).max instead of 0
         ///@notice if minAmountOut is 0, then slippage is not checked
         if (order.minAmountOut != 0 && assetAmountOut < order.minAmountOut) {
             revert Errors.Deposit_SlippageLimitExceeded();
@@ -465,16 +476,6 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
 
     function getAccountNonce(uint256 accountId_) external view returns (uint256) {
         return accountInfo[accountId_].nonce;
-    }
-
-    function setFeeBps(uint256 bps_) external notPaused onlyFund {
-        if (bps_ >= BP_DIVISOR) {
-            revert Errors.Deposit_InvalidPerformanceFee();
-        }
-        uint256 oldFee = feeBps;
-        feeBps = bps_;
-
-        emit PerformanceFeeUpdated(oldFee, bps_);
     }
 
     function _setFeeRecipient(address recipient_) private {
@@ -541,20 +542,42 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         super.transferFrom(from_, to_, tokenId_);
     }
 
-    function openAccount(CreateAccountParams calldata params_) public notPaused onlyAdmin {
+    function openAccount(CreateAccountParams calldata params_)
+        public
+        notPaused
+        nonReentrant
+        onlyAdmin
+        returns (uint256 nextTokenId)
+    {
+        if (params_.feeBps >= BP_DIVISOR) {
+            revert Errors.Deposit_InvalidPerformanceFee();
+        }
+
+        unchecked {
+            nextTokenId = ++tokenId;
+        }
+
         /// @notice If `to` refers to a smart contract, it must implement {IERC721Receiver-onERC721Received}, which is called upon a safe transfer.
-        _safeMint(params_.user, ++tokenId);
-        accountInfo[tokenId] = UserAccountInfo({
+        _safeMint(params_.user, nextTokenId);
+
+        accountInfo[nextTokenId] = UserAccountInfo({
             role: params_.role,
             state: AccountState.ACTIVE,
             expirationTimestamp: block.timestamp + params_.ttl,
             nonce: 0,
+            feeBps: params_.feeBps,
             shareMintLimit: params_.shareMintLimit,
-            sharesMinted: 0
+            cumulativeSharesMinted: 0,
+            cumulativeUnitsDeposited: 0,
+            totalSharesOutstanding: 0
         });
 
         emit AccountOpened(
-            tokenId, params_.role, block.timestamp + params_.ttl, params_.shareMintLimit
+            nextTokenId,
+            params_.role,
+            block.timestamp + params_.ttl,
+            params_.shareMintLimit,
+            params_.feeBps
         );
     }
 

@@ -56,6 +56,6 @@ contract FundShareVault is ERC4626 {
     }
 
     function _decimalsOffset() internal pure override returns (uint8) {
-        return 1;
+        return 0;
     }
 }

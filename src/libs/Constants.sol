@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.0;
 
-address constant NATIVE_ASSET = address(0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF);
+/// @dev follows EIP-5211 https://eips.ethereum.org/EIPS/eip-5211
+address constant NATIVE_ASSET = address(0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE);
 
 uint256 constant BP_DIVISOR = 10_000;
+
+uint256 constant PRECISION = 1e18;
 
 // FundCallbackHandler
 uint256 constant NULL_ROLE = 1 << 0;
