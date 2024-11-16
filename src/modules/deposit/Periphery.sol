@@ -105,16 +105,13 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         uint256 assetsInFund = oracleRouter.getQuote(0, address(fund), address(unitOfAccount));
         uint256 assetsInVault = vault.totalAssets();
 
+        /// @notice assetsInFund is part of [0, uint256.max]
         int256 profitDelta = assetsInFund.toInt256() - assetsInVault.toInt256();
 
         if (profitDelta > 0) {
-            unitOfAccount.mint(address(this), profitDelta.abs());
-
             /// we transfer the profit into the vault
             /// this will distribute the profit to the vault's shareholders
-            if (!unitOfAccount.transfer(address(vault), profitDelta.abs())) {
-                revert Errors.Deposit_AssetTransferFailed();
-            }
+            unitOfAccount.mint(address(vault), profitDelta.abs());
         } else if (profitDelta < 0) {
             /// if the fund has lost value, we need to account for it
             /// so we decrease the vault's total assets to match the fund's total assets

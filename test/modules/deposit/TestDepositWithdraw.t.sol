@@ -362,13 +362,13 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
         );
 
         /// @notice you wont get exact amount out because of vault inflation attack protection
-        // assertApproxEqRel(mockToken1.balanceOf(claimer), 46 * mock1Unit, 0.1e18);
-        // assertApproxEqRel(mockToken1.balanceOf(feeRecipient), 4 * mock1Unit, 0.1e18);
-        // assertEq(mockToken1.balanceOf(address(fund)), 4);
+        assertApproxEqRel(mockToken1.balanceOf(claimer), 46 * mock1Unit, 0.1e18);
+        assertApproxEqRel(mockToken1.balanceOf(feeRecipient), 4 * mock1Unit, 0.1e18);
+        assertEq(mockToken1.balanceOf(address(fund)), 4);
 
-        // assertEq(periphery.vault().balanceOf(feeRecipient), 0);
-        // assertEq(periphery.vault().balanceOf(alice), 0);
-        // assertEq(mockToken1.balanceOf(address(fund)), periphery.vault().totalAssets());
+        assertEq(periphery.vault().balanceOf(feeRecipient), 0);
+        assertEq(periphery.vault().balanceOf(alice), 0);
+        assertEq(mockToken1.balanceOf(address(fund)), periphery.vault().totalAssets());
     }
 
     function test_deposit_withdraw_complex_WITH_FEE() public approveAll(alice) approveAll(bob) {
