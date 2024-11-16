@@ -248,7 +248,7 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
                 user: alice,
                 role: Role.USER,
                 ttl: 100000000,
-                shareMintLimit: 0,
+                shareMintLimit: type(uint256).max,
                 feeBps: 0
             })
         );
@@ -257,7 +257,7 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
                 user: bob,
                 role: Role.USER,
                 ttl: 100000000,
-                shareMintLimit: 0,
+                shareMintLimit: type(uint256).max,
                 feeBps: 0
             })
         );
@@ -307,7 +307,7 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
                 user: alice,
                 role: Role.USER,
                 ttl: 100000000,
-                shareMintLimit: 0,
+                shareMintLimit: type(uint256).max,
                 feeBps: 1_000
             })
         );
@@ -316,7 +316,7 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
                 user: feeRecipient,
                 role: Role.USER,
                 ttl: 100000000,
-                shareMintLimit: 0,
+                shareMintLimit: type(uint256).max,
                 feeBps: 0
             })
         );
@@ -378,7 +378,7 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
                 user: alice,
                 role: Role.USER,
                 ttl: 100000000,
-                shareMintLimit: 0,
+                shareMintLimit: type(uint256).max,
                 feeBps: 1000
             })
         );
@@ -387,7 +387,7 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
                 user: bob,
                 role: Role.USER,
                 ttl: 100000000,
-                shareMintLimit: 0,
+                shareMintLimit: type(uint256).max,
                 feeBps: 1000
             })
         );
@@ -465,7 +465,7 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
                 user: alice,
                 role: Role.USER,
                 ttl: 100000000,
-                shareMintLimit: 0,
+                shareMintLimit: type(uint256).max,
                 feeBps: 0
             })
         );
@@ -504,7 +504,7 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
                 user: alice,
                 role: Role.USER,
                 ttl: 100000000,
-                shareMintLimit: 0,
+                shareMintLimit: type(uint256).max,
                 feeBps: 0
             })
         );

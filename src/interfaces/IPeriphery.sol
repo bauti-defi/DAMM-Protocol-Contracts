@@ -56,7 +56,7 @@ interface IPeriphery {
     function withdraw(SignedWithdrawIntent calldata order)
         external
         returns (uint256 assetAmountOut);
-    function getNextTokenId() external returns (uint256);
+    function peekNextTokenId() external returns (uint256);
     function setFeeRecipient(address newRecipient) external;
     function enableAsset(address asset, AssetPolicy memory policy) external;
     function disableAsset(address asset) external;

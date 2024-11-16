@@ -265,11 +265,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         }
 
         /// make sure the user hasn't exceeded their share mint limit
-        /// shareMintLimit == 0 means no limit
-        if (
-            account.shareMintLimit != 0
-                && account.totalSharesOutstanding + sharesOut > account.shareMintLimit
-        ) {
+        if (account.totalSharesOutstanding + sharesOut > account.shareMintLimit) {
             revert Errors.Deposit_ShareMintLimitExceeded();
         }
 
@@ -395,13 +391,13 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             sharesToBurn = vault.balanceOf(user);
         }
 
-        /// make sure the user has not exceeded their share burn limit
-        if (account.shareMintLimit != 0 && account.totalSharesOutstanding < sharesToBurn) {
-            revert Errors.Deposit_ShareBurnLimitExceeded();
-        }
-
         /// update the user's total shares outstanding
-        if (account.shareMintLimit != 0) {
+        if (account.shareMintLimit != type(uint256).max) {
+            /// make sure the user has not exceeded their share burn limit
+            if (account.totalSharesOutstanding < sharesToBurn) {
+                revert Errors.Deposit_ShareBurnLimitExceeded();
+            }
+
             accountInfo[order.accountId].totalSharesOutstanding -= sharesToBurn;
         }
 
@@ -549,8 +545,20 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         onlyAdmin
         returns (uint256 nextTokenId)
     {
+        if (params_.user == address(0)) {
+            revert Errors.Deposit_InvalidUser();
+        }
         if (params_.feeBps >= BP_DIVISOR) {
             revert Errors.Deposit_InvalidPerformanceFee();
+        }
+        if (params_.role == Role.NONE) {
+            revert Errors.Deposit_InvalidRole();
+        }
+        if (params_.ttl == 0) {
+            revert Errors.Deposit_InvalidTTL();
+        }
+        if (params_.shareMintLimit == 0) {
+            revert Errors.Deposit_InvalidShareMintLimit();
         }
 
         unchecked {
@@ -624,7 +632,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         accountInfo[accountId_].nonce += increment_ > 1 ? increment_ : 1;
     }
 
-    function getNextTokenId() public view returns (uint256) {
+    function peekNextTokenId() public view returns (uint256) {
         return tokenId + 1;
     }
 
