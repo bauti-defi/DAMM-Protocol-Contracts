@@ -40,6 +40,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
     /// @dev the minter role
     address public admin;
 
+    /// @dev the recipient of performance fee
     address public feeRecipient;
 
     mapping(address asset => AssetPolicy policy) private assetPolicy;
@@ -109,7 +110,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         int256 profitDelta = assetsInFund.toInt256() - assetsInVault.toInt256();
 
         if (profitDelta > 0) {
-            /// we transfer the profit into the vault
+            /// we transfer the mint into the vault
             /// this will distribute the profit to the vault's shareholders
             unitOfAccount.mint(address(vault), profitDelta.abs());
         } else if (profitDelta < 0) {
@@ -165,7 +166,18 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
 
         if (order.intent.chaindId != block.chainid) revert Errors.Deposit_InvalidChain();
 
-        sharesOut = _deposit(order.intent.deposit, minter);
+        AssetPolicy memory policy = assetPolicy[order.intent.deposit.asset];
+        UserAccountInfo memory account = accountInfo[order.intent.deposit.accountId];
+
+        _validateAccountPolicy(policy, account, true);
+
+        sharesOut = _deposit(
+            order.intent.deposit,
+            minter,
+            policy.minimumDeposit,
+            account.totalSharesOutstanding,
+            account.shareMintLimit
+        );
 
         /// pay the relayer if required
         if (order.intent.relayerTip > 0) {
@@ -199,35 +211,54 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             revert Errors.Deposit_OnlyAccountOwner();
         }
 
-        sharesOut = _deposit(order, minter);
+        AssetPolicy memory policy = assetPolicy[order.asset];
+        UserAccountInfo memory account = accountInfo[order.accountId];
+
+        _validateAccountPolicy(policy, account, true);
+
+        sharesOut = _deposit(
+            order,
+            minter,
+            policy.minimumDeposit,
+            account.totalSharesOutstanding,
+            account.shareMintLimit
+        );
 
         emit Deposit(order.accountId, order.asset, order.amount, sharesOut, 0);
     }
 
-    function _deposit(DepositOrder calldata order, address user)
-        private
-        returns (uint256 sharesOut)
-    {
-        AssetPolicy memory policy = assetPolicy[order.asset];
-
-        if (order.deadline < block.timestamp) {
-            revert Errors.Deposit_OrderExpired();
-        }
-
-        UserAccountInfo memory account = accountInfo[order.accountId];
-
+    function _validateAccountPolicy(
+        AssetPolicy memory policy,
+        UserAccountInfo memory account,
+        bool isDeposit
+    ) private {
         if (!account.isActive()) revert Errors.Deposit_AccountNotActive();
 
         if (account.isExpired()) {
             revert Errors.Deposit_AccountExpired();
         }
 
-        if (!policy.canDeposit || !policy.enabled) {
+        if (
+            (!policy.canDeposit && isDeposit) || (!policy.canWithdraw && !isDeposit)
+                || !policy.enabled
+        ) {
             revert Errors.Deposit_AssetUnavailable();
         }
 
         if (policy.permissioned && !account.isSuperUser()) {
             revert Errors.Deposit_OnlySuperUser();
+        }
+    }
+
+    function _deposit(
+        DepositOrder calldata order,
+        address user,
+        uint256 minimumDeposit,
+        uint256 totalSharesOutstanding,
+        uint256 shareMintLimit
+    ) private returns (uint256 sharesOut) {
+        if (order.deadline < block.timestamp) {
+            revert Errors.Deposit_OrderExpired();
         }
 
         uint256 assetAmountIn = order.amount;
@@ -246,7 +277,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             oracleRouter.getQuote(assetAmountIn, order.asset, address(unitOfAccount));
 
         /// make sure the deposit is above the minimum
-        if (liquidity < policy.minimumDeposit) {
+        if (liquidity < minimumDeposit) {
             revert Errors.Deposit_InsufficientDeposit();
         }
 
@@ -262,7 +293,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         }
 
         /// make sure the user hasn't exceeded their share mint limit
-        if (account.totalSharesOutstanding + sharesOut > account.shareMintLimit) {
+        if (totalSharesOutstanding + sharesOut > shareMintLimit) {
             revert Errors.Deposit_ShareMintLimitExceeded();
         }
 
@@ -300,8 +331,21 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
 
         if (order.intent.chaindId != block.chainid) revert Errors.Deposit_InvalidChain();
 
-        /// withdraw liquidity from vault
-        assetAmountOut = _withdraw(order.intent.withdraw, burner);
+        AssetPolicy memory policy = assetPolicy[order.intent.withdraw.asset];
+        UserAccountInfo memory account = accountInfo[order.intent.withdraw.accountId];
+
+        _validateAccountPolicy(policy, account, false);
+
+        assetAmountOut = _withdraw(
+            order.intent.withdraw,
+            burner,
+            policy.minimumWithdrawal,
+            account.totalSharesOutstanding,
+            account.shareMintLimit,
+            account.cumulativeUnitsDeposited,
+            account.cumulativeSharesMinted,
+            account.feeBps
+        );
 
         /// pay the relayer if required
         if (order.intent.relayerTip > 0) {
@@ -345,7 +389,21 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             revert Errors.Deposit_OnlyAccountOwner();
         }
 
-        assetAmountOut = _withdraw(order, burner);
+        AssetPolicy memory policy = assetPolicy[order.asset];
+        UserAccountInfo memory account = accountInfo[order.accountId];
+
+        _validateAccountPolicy(policy, account, false);
+
+        assetAmountOut = _withdraw(
+            order,
+            burner,
+            policy.minimumWithdrawal,
+            account.totalSharesOutstanding,
+            account.shareMintLimit,
+            account.cumulativeUnitsDeposited,
+            account.cumulativeSharesMinted,
+            account.feeBps
+        );
 
         /// transfer asset from fund to receiver
         _transferAssetFromFund(order.asset, order.to, assetAmountOut);
@@ -353,29 +411,17 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         emit Withdraw(order.accountId, order.asset, order.shares, assetAmountOut, 0);
     }
 
-    function _withdraw(WithdrawOrder calldata order, address user)
-        private
-        returns (uint256 assetAmountOut)
-    {
+    function _withdraw(
+        WithdrawOrder calldata order,
+        address user,
+        uint256 minimumWithdrawal,
+        uint256 totalSharesOutstanding,
+        uint256 shareMintLimit,
+        uint256 cumulativeUnitsDeposited,
+        uint256 cumulativeSharesMinted,
+        uint256 feeBps
+    ) private returns (uint256 assetAmountOut) {
         if (order.deadline < block.timestamp) revert Errors.Deposit_OrderExpired();
-
-        AssetPolicy memory policy = assetPolicy[order.asset];
-
-        if (!policy.canWithdraw || !policy.enabled) {
-            revert Errors.Deposit_AssetUnavailable();
-        }
-
-        UserAccountInfo memory account = accountInfo[order.accountId];
-
-        if (policy.permissioned && !account.isSuperUser()) {
-            revert Errors.Deposit_OnlySuperUser();
-        }
-
-        if (!account.isActive()) revert Errors.Deposit_AccountNotActive();
-
-        if (account.isExpired()) {
-            revert Errors.Deposit_AccountExpired();
-        }
 
         uint256 sharesToBurn = order.shares;
 
@@ -389,9 +435,9 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         }
 
         /// update the user's total shares outstanding
-        if (account.shareMintLimit != type(uint256).max) {
+        if (shareMintLimit != type(uint256).max) {
             /// make sure the user has not exceeded their share burn limit
-            if (account.totalSharesOutstanding < sharesToBurn) {
+            if (totalSharesOutstanding < sharesToBurn) {
                 revert Errors.Deposit_ShareBurnLimitExceeded();
             }
 
@@ -401,12 +447,12 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         uint256 performanceInTermsOfUnitOfAccount;
 
         /// only take fee if the fee is greater than 0
-        if (account.feeBps > 0) {
+        if (feeBps > 0) {
             uint8 _vaultDecimals = vault.decimals();
 
             /// use precision for calculations
             uint256 averageShareBuyPriceInUnitOfAccount =
-                account.cumulativeUnitsDeposited.mulDiv(PRECISION, account.cumulativeSharesMinted);
+                cumulativeUnitsDeposited.mulDiv(PRECISION, cumulativeSharesMinted);
             uint256 currentSharePriceInUnitOfAccount =
                 vault.previewRedeem(10 ** _vaultDecimals).mulDiv(PRECISION, 10 ** _vaultDecimals);
 
@@ -421,7 +467,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             /// skim the fee from the net performance
             if (netPerformanceInTermsOfUnitOfAccount > 0) {
                 performanceInTermsOfUnitOfAccount =
-                    netPerformanceInTermsOfUnitOfAccount.mulDiv(account.feeBps, BP_DIVISOR);
+                    netPerformanceInTermsOfUnitOfAccount.mulDiv(feeBps, BP_DIVISOR);
             }
         }
 
@@ -429,7 +475,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         uint256 liquidity = vault.redeem(sharesToBurn, address(this), user);
 
         /// make sure the withdrawal is above the minimum
-        if (liquidity < policy.minimumWithdrawal) {
+        if (liquidity < minimumWithdrawal) {
             revert Errors.Deposit_InsufficientWithdrawal();
         }
 
