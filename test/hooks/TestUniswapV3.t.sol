@@ -54,7 +54,8 @@ contract TestUniswapV3 is TestBaseFund, TestBaseProtocol, BaseUniswapV3, TokenMi
         address[] memory admins = new address[](1);
         admins[0] = fundAdmin;
 
-        fund = fundFactory.deployFund(address(safeProxyFactory), address(safeSingleton), admins, 1);
+        fund =
+            fundFactory.deployFund(address(safeProxyFactory), address(safeSingleton), admins, 1, 1);
         assertTrue(address(fund) != address(0), "Failed to deploy fund");
         assertTrue(fund.isOwner(fundAdmin), "Fund admin not owner");
 

@@ -95,6 +95,7 @@ library Errors {
 
     /// FundFactory errors
     error FundFactory_DeploymentLockViolated();
+    error FundFactory_OnlyDelegateCall();
 
     /// FundValuationOracle
     error FundValuationOracle_FundNotFullyDivested();

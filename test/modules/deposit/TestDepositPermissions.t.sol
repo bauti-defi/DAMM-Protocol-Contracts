@@ -56,7 +56,8 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         address[] memory admins = new address[](1);
         admins[0] = fundAdmin;
 
-        fund = fundFactory.deployFund(address(safeProxyFactory), address(safeSingleton), admins, 1);
+        fund =
+            fundFactory.deployFund(address(safeProxyFactory), address(safeSingleton), admins, 1, 1);
         vm.label(address(fund), "Fund");
 
         require(address(fund).balance == 0, "Fund should not have balance");
@@ -164,7 +165,13 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
     modifier whitelistUser(address user_, uint256 ttl_, Role role_) {
         vm.startPrank(address(fund));
         periphery.openAccount(
-            CreateAccountParams({user: user_, role: role_, ttl: ttl_, shareMintLimit: 0, feeBps: 0})
+            CreateAccountParams({
+                user: user_,
+                role: role_,
+                ttl: ttl_,
+                shareMintLimit: type(uint256).max,
+                feeBps: 0
+            })
         );
         vm.stopPrank();
 
@@ -417,14 +424,15 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         vm.prank(relayer);
         periphery.deposit(dOrder);
 
-        SignedWithdrawIntent memory wOrder =
-            _signWithdrawIntent(_withdrawIntent(2, bob, bob, address(mockToken2), 0, 1), bobPK);
+        SignedWithdrawIntent memory wOrder = _signWithdrawIntent(
+            _withdrawIntent(2, bob, bob, address(mockToken2), type(uint256).max, 1), bobPK
+        );
 
         vm.prank(relayer);
         periphery.withdraw(wOrder);
 
         wOrder = _signWithdrawIntent(
-            _withdrawIntent(1, alice, alice, address(mockToken2), 0, 0), alicePK
+            _withdrawIntent(1, alice, alice, address(mockToken2), type(uint256).max, 0), alicePK
         );
 
         vm.prank(relayer);
@@ -434,9 +442,9 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
 
     function test_only_non_expired_account_can_deposit_withdraw(uint256 timestamp)
         public
-        whitelistUser(alice, 0, Role.USER)
+        whitelistUser(alice, 1, Role.USER)
     {
-        vm.assume(timestamp > 0);
+        vm.assume(timestamp > 1);
         vm.assume(timestamp < 100000000 * 2);
 
         vm.warp(timestamp);

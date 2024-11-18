@@ -13,7 +13,11 @@ interface IFundFactory {
     );
 
     function fundDeploymentCallback() external;
-    function deployFund(address safeProxyFactory, address safeSingleton, address[] memory, uint256)
-        external
-        returns (IFund);
+    function deployFund(
+        address safeProxyFactory,
+        address safeSingleton,
+        address[] memory,
+        uint256 nonce,
+        uint256 threshold
+    ) external returns (IFund);
 }

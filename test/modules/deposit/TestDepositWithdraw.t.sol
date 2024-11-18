@@ -56,7 +56,8 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
         address[] memory admins = new address[](1);
         admins[0] = fundAdmin;
 
-        fund = fundFactory.deployFund(address(safeProxyFactory), address(safeSingleton), admins, 1);
+        fund =
+            fundFactory.deployFund(address(safeProxyFactory), address(safeSingleton), admins, 1, 1);
         vm.label(address(fund), "Fund");
 
         require(address(fund).balance == 0, "Fund should not have balance");

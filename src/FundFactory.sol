@@ -15,15 +15,33 @@ interface ISafeProxyFactory {
 
 /// @dev Factory contract for deploying funds
 contract FundFactory is IFundFactory {
+    address private immutable self;
+
     /// @dev variable declaration order is important for delegate call back in to work
     bool private deploying;
-    uint256 private nonce;
 
     modifier lock() {
         if (deploying) revert Errors.FundFactory_DeploymentLockViolated();
         deploying = true;
         _;
         deploying = false;
+    }
+
+    modifier isDelegateCall() {
+        if (address(this) == self) revert Errors.FundFactory_OnlyDelegateCall();
+        _;
+    }
+
+    constructor() {
+        self = address(this);
+    }
+
+    /// @notice calling this as a fund will break it. only call as a safe
+    function convertSafeToFund() external lock isDelegateCall {
+        /// instantiate fresh callback handler for each fund
+        FundCallbackHandler handler = new FundCallbackHandler(address(this));
+        /// set the fallback handler on the fund
+        IFund(address(this)).setFallbackHandler(address(handler));
     }
 
     /// this should be a delegate call from the fund right after creation.
@@ -40,6 +58,7 @@ contract FundFactory is IFundFactory {
         address safeProxyFactory,
         address safeSingleton,
         address[] memory admins,
+        uint256 nonce,
         uint256 threshold
     ) internal lock returns (IFund) {
         /// create callback payload
@@ -70,7 +89,7 @@ contract FundFactory is IFundFactory {
         address payable fund = payable(
             address(
                 ISafeProxyFactory(safeProxyFactory).createProxyWithNonce(
-                    safeSingleton, initializerPayload, ++nonce
+                    safeSingleton, initializerPayload, nonce
                 )
             )
         );
@@ -82,10 +101,11 @@ contract FundFactory is IFundFactory {
         address safeProxyFactory,
         address safeSingleton,
         address[] memory admins,
+        uint256 nonce,
         uint256 threshold
     ) external returns (IFund fund) {
         /// deploy the fund
-        fund = _deployFund(safeProxyFactory, safeSingleton, admins, threshold);
+        fund = _deployFund(safeProxyFactory, safeSingleton, admins, nonce, threshold);
 
         emit FundDeployed(address(fund), msg.sender, admins, threshold, safeSingleton);
     }
