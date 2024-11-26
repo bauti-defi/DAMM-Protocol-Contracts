@@ -50,7 +50,6 @@ interface IPeriphery {
     function oracleRouter() external returns (IPriceOracle);
     function paused() external returns (bool);
     function admin() external returns (address);
-    function transferable() external returns (bool);
     function feeRecipient() external returns (address);
     function deposit(SignedDepositIntent calldata order) external returns (uint256 sharesOut);
     function withdraw(SignedWithdrawIntent calldata order)

@@ -34,9 +34,6 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
     /// @dev used internally for yield accounting
     FundShareVault public immutable vault;
 
-    /// @dev whether the accounts are transferable
-    bool public immutable transferable;
-
     /// @dev the minter role
     address public admin;
 
@@ -56,8 +53,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         address fund_,
         address oracleRouter_,
         address admin_,
-        address feeRecipient_,
-        bool transferable_
+        address feeRecipient_
     ) ERC721(string.concat(vaultName_, " Account"), string.concat("ACC-", vaultSymbol_)) {
         if (fund_ == address(0)) {
             revert Errors.Deposit_InvalidConstructorParam();
@@ -76,7 +72,6 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         oracleRouter = IPriceOracle(oracleRouter_);
         admin = admin_;
         feeRecipient = feeRecipient_;
-        transferable = transferable_;
         unitOfAccount = new UnitOfAccount("Liquidity", "UNIT", decimals_);
         vault = new FundShareVault(address(unitOfAccount), vaultName_, vaultSymbol_);
 
@@ -169,7 +164,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         AssetPolicy memory policy = assetPolicy[order.intent.deposit.asset];
         UserAccountInfo memory account = accountInfo[order.intent.deposit.accountId];
 
-        _validateAccountPolicy(policy, account, true);
+        _validateAccountAssetPolicy(policy, account, true);
 
         sharesOut = _deposit(
             order.intent.deposit,
@@ -214,7 +209,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         AssetPolicy memory policy = assetPolicy[order.asset];
         UserAccountInfo memory account = accountInfo[order.accountId];
 
-        _validateAccountPolicy(policy, account, true);
+        _validateAccountAssetPolicy(policy, account, true);
 
         sharesOut = _deposit(
             order,
@@ -227,14 +222,14 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         emit Deposit(order.accountId, order.asset, order.amount, sharesOut, 0);
     }
 
-    function _validateAccountPolicy(
+    function _validateAccountAssetPolicy(
         AssetPolicy memory policy,
         UserAccountInfo memory account,
         bool isDeposit
-    ) private {
+    ) private view {
         if (!account.isActive()) revert Errors.Deposit_AccountNotActive();
 
-        if (account.isExpired()) {
+        if (account.isExpired() && isDeposit) {
             revert Errors.Deposit_AccountExpired();
         }
 
@@ -264,8 +259,12 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         uint256 assetAmountIn = order.amount;
         ERC20 assetToken = ERC20(order.asset);
 
-        /// if amount is 0, then deposit the user's entire balance
         if (assetAmountIn == 0) {
+            revert Errors.Deposit_InsufficientDeposit();
+        }
+
+        /// if amount is type(uint256).max, then deposit the user's entire balance
+        if (assetAmountIn == type(uint256).max) {
             assetAmountIn = assetToken.balanceOf(user);
         }
 
@@ -334,7 +333,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         AssetPolicy memory policy = assetPolicy[order.intent.withdraw.asset];
         UserAccountInfo memory account = accountInfo[order.intent.withdraw.accountId];
 
-        _validateAccountPolicy(policy, account, false);
+        _validateAccountAssetPolicy(policy, account, false);
 
         assetAmountOut = _withdraw(
             order.intent.withdraw,
@@ -392,7 +391,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         AssetPolicy memory policy = assetPolicy[order.asset];
         UserAccountInfo memory account = accountInfo[order.accountId];
 
-        _validateAccountPolicy(policy, account, false);
+        _validateAccountAssetPolicy(policy, account, false);
 
         assetAmountOut = _withdraw(
             order,
@@ -576,7 +575,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
 
     /// @notice restricting the transfer makes this a soulbound token
     function transferFrom(address from_, address to_, uint256 tokenId_) public override {
-        if (!transferable) revert Errors.Deposit_AccountNotTransferable();
+        if (!accountInfo[tokenId_].transferable) revert Errors.Deposit_AccountNotTransferable();
 
         super.transferFrom(from_, to_, tokenId_);
     }
@@ -612,6 +611,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         _safeMint(params_.user, nextTokenId);
 
         accountInfo[nextTokenId] = UserAccountInfo({
+            transferable: params_.transferable,
             role: params_.role,
             state: AccountState.ACTIVE,
             expirationTimestamp: block.timestamp + params_.ttl,
