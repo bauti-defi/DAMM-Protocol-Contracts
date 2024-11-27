@@ -11,10 +11,12 @@ interface IPeriphery {
     event Unpaused();
 
     event AccountOpened(
-        uint256 indexed accountId, Role role, uint256 expirationTimestamp, uint256 shareMintLimit
+        uint256 indexed accountId,
+        Role role,
+        uint256 expirationTimestamp,
+        uint256 shareMintLimit,
+        uint256 feeBps
     );
-
-    event PerformanceFeeUpdated(uint256 oldFee, uint256 newFee);
 
     event FeeRecipientUpdated(address oldRecipient, address newRecipient);
 
@@ -48,17 +50,12 @@ interface IPeriphery {
     function oracleRouter() external returns (IPriceOracle);
     function paused() external returns (bool);
     function admin() external returns (address);
-    function transferable() external returns (bool);
-    function feeBps() external returns (uint256);
     function feeRecipient() external returns (address);
-    function highWaterMarkPrice() external returns (uint256);
-    function previousMarkPrice() external returns (uint256);
     function deposit(SignedDepositIntent calldata order) external returns (uint256 sharesOut);
     function withdraw(SignedWithdrawIntent calldata order)
         external
         returns (uint256 assetAmountOut);
-    function setFeeBps(uint256 newFeeBps) external;
-    function getNextTokenId() external returns (uint256);
+    function peekNextTokenId() external returns (uint256);
     function setFeeRecipient(address newRecipient) external;
     function enableAsset(address asset, AssetPolicy memory policy) external;
     function disableAsset(address asset) external;
@@ -67,7 +64,7 @@ interface IPeriphery {
     function getAccountInfo(uint256 accountId) external returns (UserAccountInfo memory);
     function pauseAccount(uint256 accountId) external;
     function unpauseAccount(uint256 accountId) external;
-    function openAccount(CreateAccountParams calldata params) external;
+    function openAccount(CreateAccountParams calldata params) external returns (uint256);
     function getAccountNonce(uint256 accountId) external returns (uint256);
     function fundIsOpen() external returns (bool);
 }

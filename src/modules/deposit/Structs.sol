@@ -68,17 +68,23 @@ struct AssetPolicy {
 
 struct UserAccountInfo {
     Role role;
+    bool transferable;
     AccountState state;
+    uint256 feeBps;
     uint256 expirationTimestamp;
     uint256 nonce;
     uint256 shareMintLimit;
-    uint256 sharesMinted;
+    uint256 cumulativeSharesMinted;
+    uint256 cumulativeUnitsDeposited;
+    uint256 totalSharesOutstanding;
 }
 
 struct CreateAccountParams {
     uint256 ttl;
     uint256 shareMintLimit;
+    uint256 feeBps;
     address user;
+    bool transferable;
     Role role;
 }
 

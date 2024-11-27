@@ -56,7 +56,8 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         address[] memory admins = new address[](1);
         admins[0] = fundAdmin;
 
-        fund = fundFactory.deployFund(address(safeProxyFactory), address(safeSingleton), admins, 1);
+        fund =
+            fundFactory.deployFund(address(safeProxyFactory), address(safeSingleton), admins, 1, 1);
         vm.label(address(fund), "Fund");
 
         require(address(fund).balance == 0, "Fund should not have balance");
@@ -86,9 +87,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
                         address(oracleRouter),
                         address(fund),
                         /// fund is admin
-                        feeRecipient,
-                        /// accounts are not transferable
-                        false
+                        feeRecipient
                     )
                 )
             )
@@ -161,10 +160,26 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         mockToken1.mint(alice, 100_000_000 * mock1Unit);
     }
 
+    modifier approveAll(address user) {
+        vm.startPrank(user);
+        mockToken1.approve(address(periphery), type(uint256).max);
+        periphery.vault().approve(address(periphery), type(uint256).max);
+        vm.stopPrank();
+
+        _;
+    }
+
     modifier whitelistUser(address user_, uint256 ttl_, Role role_) {
         vm.startPrank(address(fund));
         periphery.openAccount(
-            CreateAccountParams({user: user_, role: role_, ttl: ttl_, shareMintLimit: 0})
+            CreateAccountParams({
+                transferable: false,
+                user: user_,
+                role: role_,
+                ttl: ttl_,
+                shareMintLimit: type(uint256).max,
+                feeBps: 0
+            })
         );
         vm.stopPrank();
 
@@ -417,14 +432,15 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         vm.prank(relayer);
         periphery.deposit(dOrder);
 
-        SignedWithdrawIntent memory wOrder =
-            _signWithdrawIntent(_withdrawIntent(2, bob, bob, address(mockToken2), 0, 1), bobPK);
+        SignedWithdrawIntent memory wOrder = _signWithdrawIntent(
+            _withdrawIntent(2, bob, bob, address(mockToken2), type(uint256).max, 1), bobPK
+        );
 
         vm.prank(relayer);
         periphery.withdraw(wOrder);
 
         wOrder = _signWithdrawIntent(
-            _withdrawIntent(1, alice, alice, address(mockToken2), 0, 0), alicePK
+            _withdrawIntent(1, alice, alice, address(mockToken2), type(uint256).max, 0), alicePK
         );
 
         vm.prank(relayer);
@@ -432,11 +448,12 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         periphery.withdraw(wOrder);
     }
 
-    function test_only_non_expired_account_can_deposit_withdraw(uint256 timestamp)
+    function test_only_non_expired_account_can_deposit(uint256 timestamp)
         public
-        whitelistUser(alice, 0, Role.USER)
+        whitelistUser(alice, 1, Role.USER)
+        approveAll(alice)
     {
-        vm.assume(timestamp > 0);
+        vm.assume(timestamp > 1);
         vm.assume(timestamp < 100000000 * 2);
 
         vm.warp(timestamp);
@@ -447,14 +464,34 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_AccountExpired.selector);
         periphery.deposit(dOrder);
+    }
+
+    function test_expired_account_can_withdraw()
+        public
+        whitelistUser(alice, 1000, Role.USER)
+        approveAll(alice)
+    {
+        SignedDepositIntent memory dOrder =
+            _signDepositIntent(_depositIntent(1, alice, address(mockToken1), mock1Unit, 0), alicePK);
+
+        vm.prank(relayer);
+        periphery.deposit(dOrder);
+
+        assertTrue(periphery.vault().balanceOf(alice) > 0);
+        assertFalse(periphery.getAccountInfo(1).isExpired());
+
+        vm.warp(100000000 * 2);
+
+        assertTrue(periphery.getAccountInfo(1).isExpired());
 
         SignedWithdrawIntent memory wOrder = _signWithdrawIntent(
-            _withdrawIntent(1, alice, alice, address(mockToken1), mock1Unit, 0), alicePK
+            _withdrawIntent(1, alice, alice, address(mockToken1), type(uint256).max, 1), alicePK
         );
 
         vm.prank(relayer);
-        vm.expectRevert(Errors.Deposit_AccountExpired.selector);
         periphery.withdraw(wOrder);
+
+        assertTrue(periphery.vault().balanceOf(alice) == 0);
     }
 
     function test_only_allowed_assets_can_be_deposited_or_withdrawn(address asset)

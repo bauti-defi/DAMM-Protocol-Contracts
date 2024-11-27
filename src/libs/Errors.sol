@@ -67,12 +67,16 @@ library Errors {
     error Deposit_OnlyPeriphery();
     error Deposit_OnlyAccountOwner();
 
-    /// Fee errors
+    /// parameter errors
     error Deposit_InvalidPerformanceFee();
     error Deposit_InvalidFeeRecipient();
+    error Deposit_InvalidRole();
+    error Deposit_InvalidTTL();
+    error Deposit_InvalidShareMintLimit();
 
     /// Admin errors
     error Deposit_InvalidAdmin();
+    error Deposit_InvalidUser();
 
     /// Module errors
     error Deposit_ModulePaused();
@@ -91,6 +95,7 @@ library Errors {
 
     /// FundFactory errors
     error FundFactory_DeploymentLockViolated();
+    error FundFactory_OnlyDelegateCall();
 
     /// FundValuationOracle
     error FundValuationOracle_FundNotFullyDivested();
