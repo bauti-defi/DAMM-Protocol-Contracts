@@ -118,7 +118,7 @@ contract FundCallbackHandler is
     function setAssetOfInterest(address _asset) external override onlyFund returns (bool result) {
         result = assetsOfInterest.add(_asset);
 
-        emit AssetOfInterestSet(_asset);
+        if (result) emit AssetOfInterestSet(_asset);
     }
 
     function removeAssetOfInterest(address _asset)
@@ -129,7 +129,7 @@ contract FundCallbackHandler is
     {
         result = assetsOfInterest.remove(_asset);
 
-        emit AssetOfInterestRemoved(_asset);
+        if (result) emit AssetOfInterestRemoved(_asset);
     }
 
     function isAssetOfInterest(address asset) external view override returns (bool) {

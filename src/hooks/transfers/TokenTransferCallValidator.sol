@@ -7,46 +7,6 @@ import "@src/libs/Errors.sol";
 import {BaseHook} from "@src/hooks/BaseHook.sol";
 import "@src/libs/Constants.sol";
 
-library TransferWhitelistLib {
-    function pointer(address token, address recipient, address sender, bytes4 selector)
-        internal
-        pure
-        returns (bytes32)
-    {
-        return keccak256(abi.encode(token, recipient, sender, selector));
-    }
-
-    function contains(
-        mapping(bytes32 => bool) storage transferWhitelist,
-        address token,
-        address recipient,
-        address sender,
-        bytes4 selector
-    ) internal view returns (bool) {
-        return transferWhitelist[pointer(token, recipient, sender, selector)];
-    }
-
-    function add(
-        mapping(bytes32 => bool) storage transferWhitelist,
-        address token,
-        address recipient,
-        address sender,
-        bytes4 selector
-    ) internal {
-        transferWhitelist[pointer(token, recipient, sender, selector)] = true;
-    }
-
-    function remove(
-        mapping(bytes32 => bool) storage transferWhitelist,
-        address token,
-        address recipient,
-        address sender,
-        bytes4 selector
-    ) internal {
-        transferWhitelist[pointer(token, recipient, sender, selector)] = false;
-    }
-}
-
 error TokenTransferCallValidator_TransferNotAllowed();
 
 error TokenTransferCallValidator_DataMustBeEmpty();
@@ -62,8 +22,6 @@ event TokenTransferCallValidator_TransferDisabled(
 bytes4 constant NATIVE_ETH_TRANSFER_SELECTOR = bytes4(0);
 
 contract TokenTransferCallValidator is BaseHook, IBeforeTransaction {
-    using TransferWhitelistLib for mapping(bytes32 => bool);
-
     /// @dev pointer = keccak256(abi.encode(token, recipient, sender, selector))
     mapping(bytes32 pointer => bool enabled) private transferWhitelist;
 
@@ -82,9 +40,9 @@ contract TokenTransferCallValidator is BaseHook, IBeforeTransaction {
 
             /// transfer must go to an authorized recipient
             if (
-                !transferWhitelist.contains(
+                !transferWhitelist[_pointer(
                     target, recipient, address(fund), IERC20.transfer.selector
-                )
+                )]
             ) {
                 revert TokenTransferCallValidator_TransferNotAllowed();
             }
@@ -94,7 +52,7 @@ contract TokenTransferCallValidator is BaseHook, IBeforeTransaction {
 
             /// transfer must go to an authorized recipient
             if (
-                !transferWhitelist.contains(target, recipient, sender, IERC20.transferFrom.selector)
+                !transferWhitelist[_pointer(target, recipient, sender, IERC20.transferFrom.selector)]
             ) {
                 revert TokenTransferCallValidator_TransferNotAllowed();
             }
@@ -104,15 +62,23 @@ contract TokenTransferCallValidator is BaseHook, IBeforeTransaction {
 
             /// @notice the target is the recipient of the native asset (eth)
             if (
-                !transferWhitelist.contains(
+                !transferWhitelist[_pointer(
                     NATIVE_ASSET, target, address(fund), NATIVE_ETH_TRANSFER_SELECTOR
-                )
+                )]
             ) {
                 revert TokenTransferCallValidator_TransferNotAllowed();
             }
         } else {
             revert Errors.Hook_InvalidTargetSelector();
         }
+    }
+
+    function _pointer(address token, address recipient, address sender, bytes4 selector)
+        private
+        pure
+        returns (bytes32)
+    {
+        return keccak256(abi.encode(token, recipient, sender, selector));
     }
 
     function enableTransfer(address token, address recipient, address sender, bytes4 selector)
@@ -126,7 +92,7 @@ contract TokenTransferCallValidator is BaseHook, IBeforeTransaction {
             revert Errors.Hook_InvalidTargetSelector();
         }
 
-        transferWhitelist.add(token, recipient, sender, selector);
+        transferWhitelist[_pointer(token, recipient, sender, selector)] = true;
 
         emit TokenTransferCallValidator_TransferEnabled(token, recipient, sender, selector);
     }
@@ -135,7 +101,7 @@ contract TokenTransferCallValidator is BaseHook, IBeforeTransaction {
         external
         onlyFund
     {
-        transferWhitelist.remove(token, recipient, sender, selector);
+        transferWhitelist[_pointer(token, recipient, sender, selector)] = false;
 
         emit TokenTransferCallValidator_TransferDisabled(token, recipient, sender, selector);
     }
@@ -145,7 +111,7 @@ contract TokenTransferCallValidator is BaseHook, IBeforeTransaction {
         view
         returns (bool)
     {
-        return transferWhitelist.contains(token, recipient, sender, selector);
+        return transferWhitelist[_pointer(token, recipient, sender, selector)];
     }
 
     function supportsInterface(bytes4 interfaceId) public view override returns (bool) {
