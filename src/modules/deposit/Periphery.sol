@@ -96,36 +96,12 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
 
     /// @dev This modifier updates the balances of the vault and the fund
     /// this ensures that the vault's total assets are always equal to the fund's total assets
-    /// if this invariant is violated, we are fucked.
-    modifier updateBalances() {
-        uint256 assetsInFund = oracleRouter.getQuote(0, address(fund), address(unitOfAccount));
-        uint256 assetsInVault = vault.totalAssets();
-
-        /// @notice assetsInFund is part of [0, uint256.max]
-        int256 profitDelta = assetsInFund.toInt256() - assetsInVault.toInt256();
-
-        if (profitDelta > 0) {
-            /// we transfer the mint into the vault
-            /// this will distribute the profit to the vault's shareholders
-            unitOfAccount.mint(address(vault), profitDelta.abs());
-        } else if (profitDelta < 0) {
-            /// if the fund has lost value, we need to account for it
-            /// so we decrease the vault's total assets to match the fund's total assets
-            /// by burning the loss
-            unitOfAccount.burn(address(vault), profitDelta.abs());
-        }
+    modifier rebalanceVault() {
+        _updateVaultBalance();
 
         _;
 
-        /// invariants for 'some' peace of mind
-        assetsInFund = oracleRouter.getQuote(0, address(fund), address(unitOfAccount));
-        assetsInVault = vault.totalAssets();
-        if (unitOfAccount.totalSupply() != assetsInVault) {
-            revert Errors.Deposit_SupplyInvariantViolated();
-        }
-        if (assetsInFund != assetsInVault) {
-            revert Errors.Deposit_AssetInvariantViolated();
-        }
+        _updateVaultBalance();
     }
 
     /// @dev this modifier ensures that the account info is zeroed out if the user has no shares outstanding
@@ -141,7 +117,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         public
         notPaused
         nonReentrant
-        updateBalances
+        rebalanceVault
         returns (uint256 sharesOut)
     {
         address minter = _ownerOf(order.intent.deposit.accountId);
@@ -166,6 +142,20 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
 
         _validateAccountAssetPolicy(policy, account, true);
 
+        /// pay the relayer if required
+        if (order.intent.relayerTip > 0) {
+            ERC20(order.intent.deposit.asset).safeTransferFrom(
+                minter, msg.sender, order.intent.relayerTip
+            );
+        }
+
+        /// bribe the fund if required
+        if (order.intent.bribe > 0) {
+            ERC20(order.intent.deposit.asset).safeTransferFrom(
+                minter, address(fund), order.intent.bribe
+            );
+        }
+
         sharesOut = _deposit(
             order.intent.deposit,
             minter,
@@ -174,19 +164,13 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             account.shareMintLimit
         );
 
-        /// pay the relayer if required
-        if (order.intent.relayerTip > 0) {
-            ERC20(order.intent.deposit.asset).safeTransferFrom(
-                minter, msg.sender, order.intent.relayerTip
-            );
-        }
-
         emit Deposit(
             order.intent.deposit.accountId,
             order.intent.deposit.asset,
             order.intent.deposit.amount,
             sharesOut,
-            order.intent.relayerTip
+            order.intent.relayerTip,
+            order.intent.bribe
         );
     }
 
@@ -194,7 +178,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         public
         notPaused
         nonReentrant
-        updateBalances
+        rebalanceVault
         returns (uint256 sharesOut)
     {
         address minter = _ownerOf(order.accountId);
@@ -219,30 +203,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             account.shareMintLimit
         );
 
-        emit Deposit(order.accountId, order.asset, order.amount, sharesOut, 0);
-    }
-
-    function _validateAccountAssetPolicy(
-        AssetPolicy memory policy,
-        UserAccountInfo memory account,
-        bool isDeposit
-    ) private view {
-        if (!account.isActive()) revert Errors.Deposit_AccountNotActive();
-
-        if (account.isExpired() && isDeposit) {
-            revert Errors.Deposit_AccountExpired();
-        }
-
-        if (
-            (!policy.canDeposit && isDeposit) || (!policy.canWithdraw && !isDeposit)
-                || !policy.enabled
-        ) {
-            revert Errors.Deposit_AssetUnavailable();
-        }
-
-        if (policy.permissioned && !account.isSuperUser()) {
-            revert Errors.Deposit_OnlySuperUser();
-        }
+        emit Deposit(order.accountId, order.asset, order.amount, sharesOut, 0, 0);
     }
 
     function _deposit(
@@ -310,7 +271,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         public
         notPaused
         nonReentrant
-        updateBalances
+        rebalanceVault
         zeroOutAccountInfo(order.intent.withdraw.accountId)
         returns (uint256 assetAmountOut)
     {
@@ -346,6 +307,12 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             account.feeBps
         );
 
+        /// check that we can pay the bribe to the fund
+        if (order.intent.bribe > 0 && order.intent.bribe > assetAmountOut - order.intent.relayerTip)
+        {
+            revert Errors.Deposit_InsufficientAmount();
+        }
+
         /// pay the relayer if required
         if (order.intent.relayerTip > 0) {
             if (order.intent.relayerTip >= assetAmountOut) {
@@ -359,7 +326,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         _transferAssetFromFund(
             order.intent.withdraw.asset,
             order.intent.withdraw.to,
-            assetAmountOut - order.intent.relayerTip
+            assetAmountOut - order.intent.relayerTip - order.intent.bribe
         );
 
         emit Withdraw(
@@ -367,7 +334,8 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             order.intent.withdraw.asset,
             order.intent.withdraw.shares,
             assetAmountOut,
-            order.intent.relayerTip
+            order.intent.relayerTip,
+            order.intent.bribe
         );
     }
 
@@ -375,7 +343,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         public
         notPaused
         nonReentrant
-        updateBalances
+        rebalanceVault
         zeroOutAccountInfo(order.accountId)
         returns (uint256 assetAmountOut)
     {
@@ -407,7 +375,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         /// transfer asset from fund to receiver
         _transferAssetFromFund(order.asset, order.to, assetAmountOut);
 
-        emit Withdraw(order.accountId, order.asset, order.shares, assetAmountOut, 0);
+        emit Withdraw(order.accountId, order.asset, order.shares, assetAmountOut, 0, 0);
     }
 
     function _withdraw(
@@ -509,6 +477,48 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         /// check transfer was successful
         if (!success || (returnData.length > 0 && !abi.decode(returnData, (bool)))) {
             revert Errors.Deposit_AssetTransferFailed();
+        }
+    }
+
+    function _validateAccountAssetPolicy(
+        AssetPolicy memory policy,
+        UserAccountInfo memory account,
+        bool isDeposit
+    ) private view {
+        if (!account.isActive()) revert Errors.Deposit_AccountNotActive();
+
+        if (account.isExpired() && isDeposit) {
+            revert Errors.Deposit_AccountExpired();
+        }
+
+        if (
+            (!policy.canDeposit && isDeposit) || (!policy.canWithdraw && !isDeposit)
+                || !policy.enabled
+        ) {
+            revert Errors.Deposit_AssetUnavailable();
+        }
+
+        if (policy.permissioned && !account.isSuperUser()) {
+            revert Errors.Deposit_OnlySuperUser();
+        }
+    }
+
+    function _updateVaultBalance() private {
+        uint256 assetsInFund = oracleRouter.getQuote(0, address(fund), address(unitOfAccount));
+        uint256 assetsInVault = vault.totalAssets();
+
+        /// @notice assetsInFund is part of [0, uint256.max]
+        int256 profitDelta = assetsInFund.toInt256() - assetsInVault.toInt256();
+
+        if (profitDelta > 0) {
+            /// we transfer the mint into the vault
+            /// this will distribute the profit to the vault's shareholders
+            unitOfAccount.mint(address(vault), profitDelta.abs());
+        } else if (profitDelta < 0) {
+            /// if the fund has lost value, we need to account for it
+            /// so we decrease the vault's total assets to match the fund's total assets
+            /// by burning the loss
+            unitOfAccount.burn(address(vault), profitDelta.abs());
         }
     }
 

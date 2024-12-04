@@ -41,10 +41,6 @@ library Errors {
     error Deposit_ShareMintLimitExceeded();
     error Deposit_ShareBurnLimitExceeded();
 
-    /// Supply invariant errors
-    error Deposit_SupplyInvariantViolated();
-    error Deposit_AssetInvariantViolated();
-
     /// Asset policy errors
     error Deposit_InvalidAssetPolicy();
 

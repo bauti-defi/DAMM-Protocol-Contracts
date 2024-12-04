@@ -5,6 +5,7 @@ struct DepositIntent {
     DepositOrder deposit;
     uint256 chaindId;
     uint256 relayerTip;
+    uint256 bribe;
     uint256 nonce;
 }
 
@@ -35,6 +36,7 @@ struct WithdrawIntent {
     WithdrawOrder withdraw;
     uint256 chaindId;
     uint256 relayerTip;
+    uint256 bribe;
     uint256 nonce;
 }
 
