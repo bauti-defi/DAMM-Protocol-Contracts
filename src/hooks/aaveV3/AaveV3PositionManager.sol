@@ -15,15 +15,17 @@ error AaveV3PositionManager_ATokenBalanceCheckFailed();
 
 contract AaveV3PositionManager is AaveV3Base, IAfterTransaction {
     bytes4 constant ERC20_BALANCE_OF_SELECTOR = IERC20.balanceOf.selector;
+    bytes4 constant DEPOSIT_FLAG = bytes4(keccak256("DEPOSIT"));
+    bytes4 constant LEVERAGE_FLAG = bytes4(keccak256("LEVERAGE"));
 
     constructor(address _fund, address _aaveV3Pool) AaveV3Base(_fund, _aaveV3Pool) {}
 
-    function createPositionPointer(address asset, bytes4 selector)
-        internal
+    function createPositionPointer(address asset, bytes4 flag)
+        private
         pure
         returns (bytes32 pointer)
     {
-        pointer = keccak256(abi.encodePacked(asset, selector, type(IPool).interfaceId));
+        pointer = keccak256(abi.encodePacked(asset, flag, type(IPool).interfaceId));
     }
 
     function getATokenFundBalance(address asset) private view returns (uint256) {
@@ -60,22 +62,22 @@ contract AaveV3PositionManager is AaveV3Base, IAfterTransaction {
             /// if the balance is 0, then the position should be closed
             if (balance == 0) {
                 /// @notice this is a no-op if the position is already closed
-                fund.onPositionClosed(createPositionPointer(asset, selector));
+                fund.onPositionClosed(createPositionPointer(asset, DEPOSIT_FLAG));
             } else {
-                fund.onPositionOpened(createPositionPointer(asset, selector));
+                fund.onPositionOpened(createPositionPointer(asset, DEPOSIT_FLAG));
             }
-            /// check if user has been using any reserve for borrowing or supply
+            /// check if user has been using any reserve for borrowing
             /// if there is debt => position is still open
             /// if there is no debt => position is closed
         } else if (
             selector == L1_BORROW_SELECTOR || selector == L1_REPAY_SELECTOR
                 || selector == L1_REPAY_WITH_ATOKENS_SELECTOR
         ) {
-            if (UserConfiguration.isEmpty(aaveV3Pool.getUserConfiguration(address(fund)))) {
-                /// @notice this is a no-op if the position is already closed
-                fund.onPositionClosed(createPositionPointer(asset, selector));
+            if (UserConfiguration.isBorrowingAny(aaveV3Pool.getUserConfiguration(address(fund)))) {
+                fund.onPositionOpened(createPositionPointer(asset, LEVERAGE_FLAG));
             } else {
-                fund.onPositionOpened(createPositionPointer(asset, selector));
+                /// @notice this is a no-op if the position is already closed
+                fund.onPositionClosed(createPositionPointer(asset, LEVERAGE_FLAG));
             }
         }
     }
