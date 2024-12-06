@@ -202,12 +202,14 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
         uint256 userPK,
         address token,
         uint256 amount,
-        uint256 relayerTip
+        uint256 relayerTip,
+        uint256 bribe
     ) internal view returns (SignedDepositIntent memory) {
         DepositIntent memory intent = DepositIntent({
             deposit: _depositOrder(accountId, user, token, amount),
             chaindId: block.chainid,
             relayerTip: relayerTip,
+            bribe: bribe,
             nonce: periphery.getAccountNonce(accountId)
         });
 
@@ -238,12 +240,14 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
         address to,
         address asset,
         uint256 shares,
-        uint256 relayerTip
+        uint256 relayerTip,
+        uint256 bribe
     ) internal view returns (SignedWithdrawIntent memory) {
         WithdrawIntent memory intent = WithdrawIntent({
             withdraw: _withdrawOrder(accountId, to, asset, shares),
             chaindId: block.chainid,
             relayerTip: relayerTip,
+            bribe: bribe,
             nonce: periphery.getAccountNonce(accountId)
         });
 
@@ -287,7 +291,7 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
         // Alice deposits 10
         if (useIntent) {
             periphery.deposit(
-                _depositIntent(1, alice, alicePK, address(mockToken1), 10 * mock1Unit, 0)
+                _depositIntent(1, alice, alicePK, address(mockToken1), 10 * mock1Unit, 0, 0)
             );
         } else {
             vm.prank(alice);
@@ -297,7 +301,7 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
         // Bob deposits 0 (all balance)
         if (useIntent) {
             periphery.deposit(
-                _depositIntent(2, bob, bobPK, address(mockToken1), type(uint256).max, 0)
+                _depositIntent(2, bob, bobPK, address(mockToken1), type(uint256).max, 0, 0)
             );
         } else {
             vm.prank(bob);
@@ -310,7 +314,7 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
         // Alice direct withdraws, no intent
         if (useIntent) {
             periphery.withdraw(
-                _withdrawIntent(1, alicePK, alice, address(mockToken1), type(uint256).max, 0)
+                _withdrawIntent(1, alicePK, alice, address(mockToken1), type(uint256).max, 0, 0)
             );
         } else {
             vm.prank(alice);
@@ -320,7 +324,7 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
         // Bob withdraws, no intent
         if (useIntent) {
             periphery.withdraw(
-                _withdrawIntent(2, bobPK, bob, address(mockToken1), type(uint256).max, 0)
+                _withdrawIntent(2, bobPK, bob, address(mockToken1), type(uint256).max, 0, 0)
             );
         } else {
             vm.prank(bob);
@@ -367,7 +371,7 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
         /// alice deposits 10
         if (useIntent) {
             periphery.deposit(
-                _depositIntent(1, alice, alicePK, address(mockToken1), 10 * mock1Unit, 0)
+                _depositIntent(1, alice, alicePK, address(mockToken1), 10 * mock1Unit, 0, 0)
             );
         } else {
             vm.prank(alice);
@@ -388,7 +392,7 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
         /// alice withdraws everything she is owed => 46
         if (useIntent) {
             periphery.withdraw(
-                _withdrawIntent(1, alicePK, claimer, address(mockToken1), type(uint256).max, 0)
+                _withdrawIntent(1, alicePK, claimer, address(mockToken1), type(uint256).max, 0, 0)
             );
         } else {
             vm.prank(alice);
@@ -403,7 +407,7 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
             vm.prank(relayer);
             periphery.withdraw(
                 _withdrawIntent(
-                    2, feeRecipientPK, feeRecipient, address(mockToken1), type(uint256).max, 0
+                    2, feeRecipientPK, feeRecipient, address(mockToken1), type(uint256).max, 0, 0
                 )
             );
         } else {
@@ -440,7 +444,7 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
         mockToken1.mint(alice, 20 * mock1Unit);
         vm.startPrank(relayer);
         periphery.deposit(
-            _depositIntent(1, alice, alicePK, address(mockToken1), 10 * mock1Unit, 10)
+            _depositIntent(1, alice, alicePK, address(mockToken1), 10 * mock1Unit, 10, 0)
         );
         vm.stopPrank();
 
@@ -450,12 +454,55 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
 
         vm.startPrank(relayer);
         periphery.withdraw(
-            _withdrawIntent(1, alicePK, alice, address(mockToken1), type(uint256).max, 10)
+            _withdrawIntent(1, alicePK, alice, address(mockToken1), type(uint256).max, 10, 0)
         );
         vm.stopPrank();
 
         assertEq(mockToken1.balanceOf(address(fund)), 0);
         assertEq(mockToken1.balanceOf(alice), 20 * mock1Unit - 20);
+        assertEq(mockToken1.balanceOf(relayer), 20);
+    }
+
+    function test_deposit_withdraw_with_bribe() public approveAll(alice) {
+        vm.startPrank(address(fund));
+        periphery.openAccount(
+            CreateAccountParams({
+                transferable: false,
+                user: alice,
+                role: Role.USER,
+                ttl: 100000000,
+                shareMintLimit: type(uint256).max,
+                feeBps: 0
+            })
+        );
+        vm.stopPrank();
+
+        mockToken1.mint(alice, 50 * mock1Unit);
+
+        vm.startPrank(relayer);
+        periphery.deposit(
+            _depositIntent(
+                1, alice, alicePK, address(mockToken1), 10 * mock1Unit, 10, 1 * mock1Unit
+            )
+        );
+        vm.stopPrank();
+
+        assertEq(mockToken1.balanceOf(address(fund)), 11 * mock1Unit);
+        assertApproxEqRel(mockToken1.balanceOf(alice), 39 * mock1Unit, 0.1e18);
+        assertEq(mockToken1.balanceOf(relayer), 10);
+
+        vm.startPrank(relayer);
+        periphery.withdraw(
+            _withdrawIntent(
+                1, alicePK, alice, address(mockToken1), type(uint256).max, 10, 1 * mock1Unit
+            )
+        );
+        vm.stopPrank();
+
+        /// this should actually be 2 * mock1Unit, not 1 * mock1Unit
+        /// but since there is one depositor it makes sense
+        assertApproxEqRel(mockToken1.balanceOf(address(fund)), 1 * mock1Unit, 0.1e18);
+        assertApproxEqRel(mockToken1.balanceOf(alice), 49 * mock1Unit, 0.1e18);
         assertEq(mockToken1.balanceOf(relayer), 20);
     }
 }

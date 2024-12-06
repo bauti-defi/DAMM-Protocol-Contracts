@@ -204,6 +204,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
             }),
             chaindId: block.chainid,
             relayerTip: 0,
+            bribe: 0,
             nonce: nonce
         });
     }
@@ -238,6 +239,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
             }),
             chaindId: block.chainid,
             relayerTip: 0,
+            bribe: 0,
             nonce: nonce
         });
     }

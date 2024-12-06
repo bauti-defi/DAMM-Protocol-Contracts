@@ -16,6 +16,8 @@ import {IERC20} from "@openzeppelin-contracts/token/ERC20/IERC20.sol";
 import {Enum} from "@safe-contracts/common/Enum.sol";
 import {console2} from "@forge-std/Test.sol";
 import "@src/modules/transact/Structs.sol";
+import {UserConfiguration} from
+    "@aave-v3-core/protocol/libraries/configuration/UserConfiguration.sol";
 
 contract TestAaveV3 is TestBaseFund, TestBaseProtocol, BaseAaveV3, TokenMinter {
     uint256 constant BIG_NUMBER = 10 ** 12;
@@ -143,6 +145,36 @@ contract TestAaveV3 is TestBaseFund, TestBaseProtocol, BaseAaveV3, TokenMinter {
                 targetSelector: aaveV3Pool.withdraw.selector
             })
         );
+        hookRegistry.setHooks(
+            HookConfig({
+                operator: operator,
+                target: address(aaveV3Pool),
+                beforeTrxHook: address(aaveV3CallValidator),
+                afterTrxHook: address(aaveV3PositionManager),
+                operation: 0,
+                targetSelector: aaveV3Pool.borrow.selector
+            })
+        );
+        hookRegistry.setHooks(
+            HookConfig({
+                operator: operator,
+                target: address(aaveV3Pool),
+                beforeTrxHook: address(aaveV3CallValidator),
+                afterTrxHook: address(aaveV3PositionManager),
+                operation: 0,
+                targetSelector: aaveV3Pool.repay.selector
+            })
+        );
+        hookRegistry.setHooks(
+            HookConfig({
+                operator: operator,
+                target: address(aaveV3Pool),
+                beforeTrxHook: address(aaveV3CallValidator),
+                afterTrxHook: address(aaveV3PositionManager),
+                operation: 0,
+                targetSelector: aaveV3Pool.repayWithATokens.selector
+            })
+        );
         vm.stopPrank();
 
         mintUSDC(address(fund), BIG_NUMBER);
@@ -258,6 +290,218 @@ contract TestAaveV3 is TestBaseFund, TestBaseProtocol, BaseAaveV3, TokenMinter {
         assertFalse(fund.hasOpenPositions());
         assertEq(aUSDC.balanceOf(address(fund)), 0);
         assertEq(USDC.balanceOf(address(fund)), BIG_NUMBER);
+    }
+
+    function test_supply_borrow_repay() public withAllowance(USDC) enableAsset(address(ARB_USDC)) {
+        assertEq(aUSDC.balanceOf(address(fund)), 0);
+        assertFalse(fund.hasOpenPositions());
+
+        Transaction[] memory calls = new Transaction[](3);
+
+        calls[0] = Transaction({
+            target: address(aaveV3Pool),
+            value: 0,
+            targetSelector: aaveV3Pool.supply.selector,
+            data: abi.encode(ARB_USDC, 1000, address(fund), uint16(0)),
+            operation: uint8(Enum.Operation.Call)
+        });
+        calls[1] = Transaction({
+            target: address(aaveV3Pool),
+            value: 0,
+            targetSelector: aaveV3Pool.borrow.selector,
+            data: abi.encode(ARB_USDC, 10, 2, uint16(0), address(fund)),
+            operation: uint8(Enum.Operation.Call)
+        });
+        calls[2] = Transaction({
+            target: address(aaveV3Pool),
+            value: 0,
+            targetSelector: aaveV3Pool.borrow.selector,
+            data: abi.encode(ARB_USDC, 10, 2, uint16(0), address(fund)),
+            operation: uint8(Enum.Operation.Call)
+        });
+
+        vm.prank(operator, operator);
+        transactionModule.execute(calls);
+
+        assertTrue(fund.hasOpenPositions());
+        /// check positions exist by pointer
+        assertTrue(
+            fund.holdsPosition(
+                keccak256(
+                    abi.encodePacked(
+                        ARB_USDC, bytes4(keccak256("LEVERAGE")), type(IPool).interfaceId
+                    )
+                )
+            )
+        );
+        assertTrue(
+            fund.holdsPosition(
+                keccak256(
+                    abi.encodePacked(
+                        ARB_USDC, bytes4(keccak256("DEPOSIT")), type(IPool).interfaceId
+                    )
+                )
+            )
+        );
+
+        /// partial repay
+        calls = new Transaction[](1);
+        calls[0] = Transaction({
+            target: address(aaveV3Pool),
+            value: 0,
+            targetSelector: aaveV3Pool.repay.selector,
+            data: abi.encode(ARB_USDC, 10, 2, address(fund)),
+            operation: uint8(Enum.Operation.Call)
+        });
+
+        vm.prank(operator, operator);
+        transactionModule.execute(calls);
+
+        assertTrue(fund.hasOpenPositions());
+        assertTrue(UserConfiguration.isBorrowingAny(aaveV3Pool.getUserConfiguration(address(fund))));
+        /// check positions exist by pointer
+        assertTrue(
+            fund.holdsPosition(
+                keccak256(
+                    abi.encodePacked(
+                        ARB_USDC, bytes4(keccak256("LEVERAGE")), type(IPool).interfaceId
+                    )
+                )
+            )
+        );
+        assertTrue(
+            fund.holdsPosition(
+                keccak256(
+                    abi.encodePacked(
+                        ARB_USDC, bytes4(keccak256("DEPOSIT")), type(IPool).interfaceId
+                    )
+                )
+            )
+        );
+
+        /// full repay
+        calls = new Transaction[](1);
+        calls[0] = Transaction({
+            target: address(aaveV3Pool),
+            value: 0,
+            targetSelector: aaveV3Pool.repay.selector,
+            data: abi.encode(ARB_USDC, type(uint256).max, 2, address(fund)),
+            operation: uint8(Enum.Operation.Call)
+        });
+
+        vm.prank(operator, operator);
+        transactionModule.execute(calls);
+
+        assertTrue(fund.hasOpenPositions());
+        assertFalse(
+            UserConfiguration.isBorrowingAny(aaveV3Pool.getUserConfiguration(address(fund)))
+        );
+        /// check positions exist by pointer
+        assertFalse(
+            fund.holdsPosition(
+                keccak256(
+                    abi.encodePacked(
+                        ARB_USDC, bytes4(keccak256("LEVERAGE")), type(IPool).interfaceId
+                    )
+                )
+            )
+        );
+        assertTrue(
+            fund.holdsPosition(
+                keccak256(
+                    abi.encodePacked(
+                        ARB_USDC, bytes4(keccak256("DEPOSIT")), type(IPool).interfaceId
+                    )
+                )
+            )
+        );
+    }
+
+    function test_supply_borrow_repay_with_atoken()
+        public
+        withAllowance(USDC)
+        enableAsset(address(ARB_USDC))
+    {
+        assertEq(aUSDC.balanceOf(address(fund)), 0);
+        assertFalse(fund.hasOpenPositions());
+
+        Transaction[] memory calls = new Transaction[](2);
+
+        calls[0] = Transaction({
+            target: address(aaveV3Pool),
+            value: 0,
+            targetSelector: aaveV3Pool.supply.selector,
+            data: abi.encode(ARB_USDC, 1000, address(fund), uint16(0)),
+            operation: uint8(Enum.Operation.Call)
+        });
+        calls[1] = Transaction({
+            target: address(aaveV3Pool),
+            value: 0,
+            targetSelector: aaveV3Pool.borrow.selector,
+            data: abi.encode(ARB_USDC, 50, 2, uint16(0), address(fund)),
+            operation: uint8(Enum.Operation.Call)
+        });
+
+        vm.prank(operator, operator);
+        transactionModule.execute(calls);
+
+        assertTrue(fund.hasOpenPositions());
+        /// check positions exist by pointer
+        assertTrue(
+            fund.holdsPosition(
+                keccak256(
+                    abi.encodePacked(
+                        ARB_USDC, bytes4(keccak256("LEVERAGE")), type(IPool).interfaceId
+                    )
+                )
+            )
+        );
+        assertTrue(
+            fund.holdsPosition(
+                keccak256(
+                    abi.encodePacked(
+                        ARB_USDC, bytes4(keccak256("DEPOSIT")), type(IPool).interfaceId
+                    )
+                )
+            )
+        );
+
+        /// full repay with atoken
+        calls = new Transaction[](1);
+        calls[0] = Transaction({
+            target: address(aaveV3Pool),
+            value: 0,
+            targetSelector: aaveV3Pool.repayWithATokens.selector,
+            data: abi.encode(ARB_USDC, type(uint256).max, 2),
+            operation: uint8(Enum.Operation.Call)
+        });
+
+        vm.prank(operator, operator);
+        transactionModule.execute(calls);
+
+        assertTrue(fund.hasOpenPositions());
+        assertFalse(
+            UserConfiguration.isBorrowingAny(aaveV3Pool.getUserConfiguration(address(fund)))
+        );
+        /// check positions exist by pointer
+        assertTrue(
+            fund.holdsPosition(
+                keccak256(
+                    abi.encodePacked(
+                        ARB_USDC, bytes4(keccak256("DEPOSIT")), type(IPool).interfaceId
+                    )
+                )
+            )
+        );
+        assertFalse(
+            fund.holdsPosition(
+                keccak256(
+                    abi.encodePacked(
+                        ARB_USDC, bytes4(keccak256("LEVERAGE")), type(IPool).interfaceId
+                    )
+                )
+            )
+        );
     }
 
     function test_cannot_withdraw_unauthorized_asset() public withAllowance(USDC) {

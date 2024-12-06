@@ -35,7 +35,8 @@ interface IPeriphery {
         address asset,
         uint256 assetAmountIn,
         uint256 sharesOut,
-        uint256 relayerFee
+        uint256 relayerFee,
+        uint256 bribe
     );
 
     event Withdraw(
@@ -43,7 +44,8 @@ interface IPeriphery {
         address asset,
         uint256 sharesIn,
         uint256 assetAmountOut,
-        uint256 relayerFee
+        uint256 relayerFee,
+        uint256 bribe
     );
 
     function fund() external returns (IFund);
