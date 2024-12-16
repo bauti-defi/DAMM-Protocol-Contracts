@@ -8,8 +8,6 @@ import "@gmx/callback/IOrderCallbackReceiver.sol";
 import {IExchangeRouter, IBaseOrderUtils} from "@gmx/router/IExchangeRouter.sol";
 import "@src/libs/Constants.sol";
 
-error GMXPerpHook_InvalidSelector();
-error GMXPerpHook_InvalidTarget();
 error GMXPerpHook_InvalidInteraction();
 error GMXPerpHook_InvalidCaller();
 error GMXPerpHook_UnsupportedAction();
@@ -54,7 +52,7 @@ contract GMXPerpHook is BaseHook, IBeforeTransaction, IAfterTransaction, IOrderC
         bytes calldata data
     ) external view override onlyFund expectOperation(operation, CALL) {
         if (target != gmxRouter) {
-            revert GMXPerpHook_InvalidTarget();
+            revert Errors.Hook_InvalidTargetAddress();
         }
 
         if (selector == IExchangeRouter.createOrder.selector) {
@@ -64,7 +62,7 @@ contract GMXPerpHook is BaseHook, IBeforeTransaction, IAfterTransaction, IOrderC
         } else if (selector == IExchangeRouter.updateOrder.selector) {
             _validateUpdateOrder(data);
         } else {
-            revert GMXPerpHook_InvalidSelector();
+            revert Errors.Hook_InvalidTargetSelector();
         }
     }
 
