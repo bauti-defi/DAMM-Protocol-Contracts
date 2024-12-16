@@ -17,7 +17,7 @@ error GMXPerpHook_InvalidOrderReceiver();
 error GMXPerpHook_InvalidOrderCancellationReceiver();
 error GMXPerpHook_InvalidCallbackContract();
 
-event GMXPerpHook_GmxInteractionEnabled(
+event GMXPerpHookGMXPerpHook_InteractionEnabled(
     address market,
     address initialCollateralToken,
     address[] swapPath,
@@ -27,7 +27,7 @@ event GMXPerpHook_GmxInteractionEnabled(
     bytes32 interactionIdentifier
 );
 
-event GMXPerpHook_GmxInteractionDisabled(bytes32 interactionIdentifier);
+event GMXPerpHook_InteractionDisabled(bytes32 interactionIdentifier);
 
 contract GMXPerpHook is BaseHook, IBeforeTransaction, IAfterTransaction, IOrderCallbackReceiver {
     mapping(bytes32 key => bool enabled) public gmxInteractionWhitelist;
@@ -192,7 +192,7 @@ contract GMXPerpHook is BaseHook, IBeforeTransaction, IAfterTransaction, IOrderC
 
         gmxInteractionWhitelist[interactionIdentifier] = true;
 
-        emit GMXPerpHook_GmxInteractionEnabled(
+        emit GMXPerpHookGMXPerpHook_InteractionEnabled(
             market,
             initialCollateralToken,
             swapPath,
@@ -206,6 +206,6 @@ contract GMXPerpHook is BaseHook, IBeforeTransaction, IAfterTransaction, IOrderC
     function disableGmxInteraction(bytes32 interactionIdentifier) external onlyFund {
         gmxInteractionWhitelist[interactionIdentifier] = false;
 
-        emit GMXPerpHook_GmxInteractionDisabled(interactionIdentifier);
+        emit GMXPerpHook_InteractionDisabled(interactionIdentifier);
     }
 }
