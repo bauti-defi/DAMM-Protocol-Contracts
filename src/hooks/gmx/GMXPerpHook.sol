@@ -29,12 +29,6 @@ event GMXPerpHook_GmxInteractionEnabled(
 
 event GMXPerpHook_GmxInteractionDisabled(bytes32 interactionIdentifier);
 
-/// @dev possible updateOrder params:
-/// - key
-
-/// @dev possible cancelOrder params:
-/// - key
-
 contract GMXPerpHook is BaseHook, IBeforeTransaction, IAfterTransaction, IOrderCallbackReceiver {
     mapping(bytes32 key => bool enabled) public gmxInteractionWhitelist;
     address public immutable gmxRouter;
