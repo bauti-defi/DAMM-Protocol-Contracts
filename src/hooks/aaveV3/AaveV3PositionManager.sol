@@ -25,7 +25,7 @@ contract AaveV3PositionManager is AaveV3Base, IAfterTransaction {
         pure
         returns (bytes32 pointer)
     {
-        pointer = keccak256(abi.encodePacked(asset, flag, type(IPool).interfaceId));
+        pointer = keccak256(abi.encode(asset, flag, type(IPool).interfaceId));
     }
 
     function getATokenFundBalance(address asset) private view returns (uint256) {
