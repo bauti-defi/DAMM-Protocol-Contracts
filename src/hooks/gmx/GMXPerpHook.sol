@@ -5,13 +5,15 @@ import {BaseHook} from "@src/hooks/BaseHook.sol";
 import {IBeforeTransaction, IAfterTransaction} from "@src/interfaces/ITransactionHooks.sol";
 import {Errors} from "@src/libs/Errors.sol";
 import "@gmx/callback/IOrderCallbackReceiver.sol";
-import {IExchangeRouter, IBaseOrderUtils} from "@gmx/router/IExchangeRouter.sol";
+import {
+    IExchangeRouter, IBaseOrderUtils, IGMXRouter
+} from "@src/interfaces/external/IGMXRouter.sol";
 import "@src/libs/Constants.sol";
 
 error GMXPerpHook_InvalidInteraction();
 error GMXPerpHook_InvalidCaller();
 error GMXPerpHook_UnsupportedAction();
-error GMXPerpHook_InvalidOrderReceiver();
+error GMXPerpHook_InvalidReceiver();
 error GMXPerpHook_InvalidOrderCancellationReceiver();
 error GMXPerpHook_InvalidCallbackContract();
 
@@ -56,11 +58,13 @@ contract GMXPerpHook is BaseHook, IBeforeTransaction, IAfterTransaction, IOrderC
         }
 
         if (selector == IExchangeRouter.createOrder.selector) {
-            _validateCreateOrder(data);
+            _parseAndValidateCreateOrder(data);
         } else if (selector == IExchangeRouter.cancelOrder.selector) {
-            _validateCancelOrder(data);
+            _parseAndValidatePositionKey(data);
         } else if (selector == IExchangeRouter.updateOrder.selector) {
-            _validateUpdateOrder(data);
+            _parseAndValidatePositionKey(data);
+        } else if (selector == IGMXRouter.claimFundingFees.selector) {
+            _parseAndValidateClaimFunding(data);
         } else {
             revert Errors.Hook_InvalidTargetSelector();
         }
@@ -71,7 +75,7 @@ contract GMXPerpHook is BaseHook, IBeforeTransaction, IAfterTransaction, IOrderC
         bytes4 selector,
         uint8 operation,
         uint256,
-        bytes calldata data,
+        bytes calldata,
         bytes calldata returnData
     ) external override onlyFund expectOperation(operation, CALL) {
         if (selector == IExchangeRouter.createOrder.selector) {
@@ -130,12 +134,12 @@ contract GMXPerpHook is BaseHook, IBeforeTransaction, IAfterTransaction, IOrderC
         );
     }
 
-    function _validateCreateOrder(bytes calldata data) internal view {
+    function _parseAndValidateCreateOrder(bytes calldata data) internal view {
         IBaseOrderUtils.CreateOrderParams memory params =
             abi.decode(data, (IBaseOrderUtils.CreateOrderParams));
 
         if (params.addresses.receiver != address(fund)) {
-            revert GMXPerpHook_InvalidOrderReceiver();
+            revert GMXPerpHook_InvalidReceiver();
         }
 
         if (params.addresses.cancellationReceiver != address(fund)) {
@@ -160,7 +164,7 @@ contract GMXPerpHook is BaseHook, IBeforeTransaction, IAfterTransaction, IOrderC
         }
     }
 
-    function _validateCancelOrder(bytes calldata data) internal view {
+    function _parseAndValidatePositionKey(bytes calldata data) internal view {
         bytes32 key = abi.decode(data, (bytes32));
 
         if (!fund.holdsPosition(_positionPointer(key))) {
@@ -168,11 +172,12 @@ contract GMXPerpHook is BaseHook, IBeforeTransaction, IAfterTransaction, IOrderC
         }
     }
 
-    function _validateUpdateOrder(bytes calldata data) internal view {
-        bytes32 key = abi.decode(data, (bytes32));
+    function _parseAndValidateClaimFunding(bytes calldata data) internal view {
+        (address[] memory markets, address[] memory tokens, address receiver) =
+            abi.decode(data, (address[], address[], address));
 
-        if (!fund.holdsPosition(_positionPointer(key))) {
-            revert GMXPerpHook_InvalidInteraction();
+        if (receiver != address(fund)) {
+            revert GMXPerpHook_InvalidReceiver();
         }
     }
 
