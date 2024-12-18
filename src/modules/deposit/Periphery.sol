@@ -638,7 +638,8 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             params_.role,
             block.timestamp + params_.ttl,
             params_.shareMintLimit,
-            params_.feeBps
+            params_.feeBps,
+            params_.transferable
         );
     }
 

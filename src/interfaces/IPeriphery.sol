@@ -15,7 +15,8 @@ interface IPeriphery {
         Role role,
         uint256 expirationTimestamp,
         uint256 shareMintLimit,
-        uint256 feeBps
+        uint256 feeBps,
+        bool transferable
     );
 
     event FeeRecipientUpdated(address oldRecipient, address newRecipient);
