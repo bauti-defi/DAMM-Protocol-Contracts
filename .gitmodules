@@ -22,3 +22,6 @@
 [submodule "lib/solady"]
 	path = lib/solady
 	url = https://github.com/Vectorized/solady
+[submodule "lib/gmx-synthetics-fork"]
+	path = lib/gmx-synthetics-fork
+	url = https://github.com/bauti-defi/gmx-synthetics-fork

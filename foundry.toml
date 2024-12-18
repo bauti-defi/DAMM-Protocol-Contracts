@@ -21,6 +21,7 @@ remappings = [
     "@solmate/=lib/solmate/src/",
     "@euler-price-oracle/=lib/euler-price-oracle/src/",
     "@solady/=lib/solady/src/",
+    "@gmx/=lib/gmx-synthetics-fork/contracts/",
 
     
     ### @dev These imports are so we can compile the uniswapv3 periphery contracts inside tests
@@ -28,9 +29,10 @@ remappings = [
     "@openzeppelin/contracts/=lib/v3-periphery/node_modules/@openzeppelin/contracts/",
     #####
     ### @dev This import is so we can compile the euler price oracle contracts inside tests
-    "ethereum-vault-connector/=lib/euler-price-oracle/lib/ethereum-vault-connector/src/"
+    "ethereum-vault-connector/=lib/euler-price-oracle/lib/ethereum-vault-connector/src/",
     #####
-]
+    "@openzeppelin-contracts-gmx/contracts/=lib/gmx-synthetics-fork/node_modules/@openzeppelin-contracts-gmx/"
+] 
 
 fs_permissions = [{ access = "read", path = "./"}]
 
