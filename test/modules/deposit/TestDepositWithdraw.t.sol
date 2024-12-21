@@ -270,7 +270,7 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
                 role: Role.USER,
                 ttl: 100000000,
                 shareMintLimit: type(uint256).max,
-                feeBps: 0
+                brokerPerformanceFeeInBps: 0
             })
         );
         periphery.openAccount(
@@ -280,7 +280,7 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
                 role: Role.USER,
                 ttl: 100000000,
                 shareMintLimit: type(uint256).max,
-                feeBps: 0
+                brokerPerformanceFeeInBps: 0
             })
         );
         vm.stopPrank();
@@ -351,7 +351,7 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
                 role: Role.USER,
                 ttl: 100000000,
                 shareMintLimit: type(uint256).max,
-                feeBps: 1_000
+                brokerPerformanceFeeInBps: 1_000
             })
         );
         periphery.openAccount(
@@ -361,7 +361,7 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
                 role: Role.USER,
                 ttl: 100000000,
                 shareMintLimit: type(uint256).max,
-                feeBps: 0
+                brokerPerformanceFeeInBps: 0
             })
         );
         vm.stopPrank();
@@ -436,7 +436,7 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
                 role: Role.USER,
                 ttl: 100000000,
                 shareMintLimit: type(uint256).max,
-                feeBps: 1_000
+                brokerPerformanceFeeInBps: 1_000
             })
         );
         vm.stopPrank();
@@ -472,7 +472,7 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
                 role: Role.USER,
                 ttl: 100000000,
                 shareMintLimit: type(uint256).max,
-                feeBps: 0
+                brokerPerformanceFeeInBps: 0
             })
         );
         vm.stopPrank();

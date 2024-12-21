@@ -168,7 +168,9 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             minter,
             policy.minimumDeposit,
             account.totalSharesOutstanding,
-            account.shareMintLimit
+            account.shareMintLimit,
+            account.brokerEntranceFeeInBps,
+            account.protocolEntranceFeeInBps
         );
 
         emit Deposit(
@@ -211,7 +213,9 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             minter,
             policy.minimumDeposit,
             account.totalSharesOutstanding,
-            account.shareMintLimit
+            account.shareMintLimit,
+            account.brokerEntranceFeeInBps,
+            account.protocolEntranceFeeInBps
         );
 
         emit Deposit(order.accountId, order.asset, order.amount, sharesOut, 0, 0);
@@ -219,10 +223,12 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
 
     function _deposit(
         DepositOrder calldata order,
-        address user,
+        address broker,
         uint256 minimumDeposit,
         uint256 totalSharesOutstanding,
-        uint256 shareMintLimit
+        uint256 shareMintLimit,
+        uint256 brokerEntranceFeeInBps,
+        uint256 protocolEntranceFeeInBps
     ) private returns (uint256 sharesOut) {
         if (order.deadline < block.timestamp) {
             revert Errors.Deposit_OrderExpired();
@@ -237,11 +243,11 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
 
         /// if amount is type(uint256).max, then deposit the user's entire balance
         if (assetAmountIn == type(uint256).max) {
-            assetAmountIn = assetToken.balanceOf(user);
+            assetAmountIn = assetToken.balanceOf(broker);
         }
 
         /// transfer asset from user to fund
-        assetToken.safeTransferFrom(user, address(fund), assetAmountIn);
+        assetToken.safeTransferFrom(broker, address(fund), assetAmountIn);
 
         /// calculate how much liquidity for this amount of deposited asset
         uint256 liquidity =
@@ -255,8 +261,8 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         /// mint liquidity to periphery
         unitOfAccount.mint(address(this), liquidity);
 
-        /// mint shares to user using the liquidity that was just minted to periphery
-        sharesOut = vault.deposit(liquidity, order.recipient);
+        /// mint shares to the periphery using the liquidity that was just minted
+        sharesOut = vault.deposit(liquidity, address(this));
 
         /// lets make sure slippage is acceptable
         if (sharesOut < order.minSharesOut) {
@@ -267,6 +273,21 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         if (totalSharesOutstanding + sharesOut > shareMintLimit) {
             revert Errors.Deposit_ShareMintLimitExceeded();
         }
+
+        /// take the broker entrance fees
+        if (brokerEntranceFeeInBps > 0) {
+            vault.transfer(broker, sharesOut.fullMulDivUp(brokerEntranceFeeInBps, BP_DIVISOR));
+        }
+
+        /// take the protocol entrance fees
+        if (protocolEntranceFeeInBps > 0) {
+            vault.transfer(
+                feeRecipient, sharesOut.fullMulDivUp(protocolEntranceFeeInBps, BP_DIVISOR)
+            );
+        }
+
+        /// forward the remaining shares to the user
+        vault.transfer(order.recipient, vault.balanceOf(address(this)));
 
         /// update the user's cumulative units deposited
         accountInfo[order.accountId].cumulativeUnitsDeposited += liquidity;
@@ -315,7 +336,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             account.shareMintLimit,
             account.cumulativeUnitsDeposited,
             account.cumulativeSharesMinted,
-            account.feeBps
+            account.brokerPerformanceFeeInBps
         );
 
         /// check that we can pay the bribe to the fund
@@ -380,7 +401,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             account.shareMintLimit,
             account.cumulativeUnitsDeposited,
             account.cumulativeSharesMinted,
-            account.feeBps
+            account.brokerPerformanceFeeInBps
         );
 
         /// transfer asset from fund to receiver
@@ -397,7 +418,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         uint256 shareMintLimit,
         uint256 cumulativeUnitsDeposited,
         uint256 cumulativeSharesMinted,
-        uint256 feeBps
+        uint256 brokerPerformanceFeeInBps
     ) private returns (uint256 assetAmountOut) {
         if (order.deadline < block.timestamp) revert Errors.Deposit_OrderExpired();
 
@@ -425,7 +446,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         uint256 performanceInTermsOfUnitOfAccount;
 
         /// only take fee if the fee is greater than 0
-        if (feeBps > 0) {
+        if (brokerPerformanceFeeInBps > 0) {
             uint8 _vaultDecimals = vault.decimals();
 
             /// use precision for calculations
@@ -444,8 +465,9 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
 
             /// skim the fee from the net performance
             if (netPerformanceInTermsOfUnitOfAccount > 0) {
-                performanceInTermsOfUnitOfAccount =
-                    netPerformanceInTermsOfUnitOfAccount.mulDiv(feeBps, BP_DIVISOR);
+                performanceInTermsOfUnitOfAccount = netPerformanceInTermsOfUnitOfAccount.mulDiv(
+                    brokerPerformanceFeeInBps, BP_DIVISOR
+                );
             }
         }
 
@@ -630,7 +652,8 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         if (params_.user == address(0)) {
             revert Errors.Deposit_InvalidUser();
         }
-        if (params_.feeBps >= BP_DIVISOR) {
+        /// TODO: make sure all fees are summed are less than BP_DIVISOR
+        if (params_.brokerPerformanceFeeInBps >= BP_DIVISOR) {
             revert Errors.Deposit_InvalidPerformanceFee();
         }
         if (params_.role == Role.NONE) {
@@ -656,11 +679,16 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             state: AccountState.ACTIVE,
             expirationTimestamp: block.timestamp + params_.ttl,
             nonce: 0,
-            feeBps: params_.feeBps,
+            brokerPerformanceFeeInBps: params_.brokerPerformanceFeeInBps,
             shareMintLimit: params_.shareMintLimit,
             cumulativeSharesMinted: 0,
             cumulativeUnitsDeposited: 0,
-            totalSharesOutstanding: 0
+            totalSharesOutstanding: 0,
+            protocolPerformanceFeeInBps: 0,
+            brokerEntranceFeeInBps: 0,
+            protocolEntranceFeeInBps: 0,
+            brokerExitFeeInBps: 0,
+            protocolExitFeeInBps: 0
         });
 
         emit AccountOpened(
@@ -668,7 +696,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             params_.role,
             block.timestamp + params_.ttl,
             params_.shareMintLimit,
-            params_.feeBps,
+            params_.brokerPerformanceFeeInBps,
             params_.transferable
         );
     }
