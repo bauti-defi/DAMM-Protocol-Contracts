@@ -2,12 +2,12 @@
 pragma solidity ^0.8.0;
 
 import "@solmate/tokens/ERC20.sol";
-import "@openzeppelin-contracts/utils/math/Math.sol";
 import "@openzeppelin-contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin-contracts/utils/cryptography/MessageHashUtils.sol";
 import "@openzeppelin-contracts/utils/cryptography/SignatureChecker.sol";
 import "@openzeppelin-contracts/utils/math/SignedMath.sol";
 import "@openzeppelin-contracts/utils/math/SafeCast.sol";
+import "@solady/utils/FixedPointMathLib.sol";
 import "@solmate/utils/SafeTransferLib.sol";
 import "@solady/utils/ReentrancyGuard.sol";
 import "@src/libs/Constants.sol";
@@ -22,8 +22,8 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
     using SafeTransferLib for ERC20;
     using SafeCast for uint256;
     using MessageHashUtils for bytes;
-    using Math for uint256;
     using SignedMath for int256;
+    using FixedPointMathLib for uint256;
 
     /// @dev the DAMM fund the periphery is associated with
     IFund public immutable fund;
@@ -39,6 +39,8 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
 
     /// @dev the recipient of performance fee
     address public feeRecipient;
+    uint256 private lastManagementFeeTimestamp;
+    uint256 public immutable managementFeeRateInBps;
 
     mapping(address asset => AssetPolicy policy) private assetPolicy;
     mapping(uint256 tokenId => UserAccountInfo account) private accountInfo;
@@ -54,7 +56,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         address oracleRouter_,
         address admin_,
         address feeRecipient_
-    ) ERC721(string.concat(vaultName_, " Account"), string.concat("ACC-", vaultSymbol_)) {
+    ) ERC721(vaultName_, vaultSymbol_) {
         if (fund_ == address(0)) {
             revert Errors.Deposit_InvalidConstructorParam();
         }
@@ -72,6 +74,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         oracleRouter = IPriceOracle(oracleRouter_);
         admin = admin_;
         feeRecipient = feeRecipient_;
+        lastManagementFeeTimestamp = block.timestamp;
         unitOfAccount = new UnitOfAccount("Liquidity", "UNIT", decimals_);
         vault = new FundShareVault(address(unitOfAccount), vaultName_, vaultSymbol_);
 
@@ -136,6 +139,24 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         }
 
         if (order.intent.chaindId != block.chainid) revert Errors.Deposit_InvalidChain();
+
+        /// The management fee should be charged before the deposit is processed
+        /// otherwise, the management fee will be charged on the deposit amount
+        uint256 timeDelta =
+            managementFeeRateInBps > 0 ? block.timestamp - lastManagementFeeTimestamp : 0;
+        if (timeDelta > 0) {
+            /// update the last management fee timestamp
+            lastManagementFeeTimestamp = block.timestamp;
+
+            /// calculate the annualized management fee rate
+            uint256 annualizedFeeRate =
+                managementFeeRateInBps.divWad(BP_DIVISOR) * timeDelta / 365 days;
+            /// calculate the management fee in shares, remove WAD precision
+            uint256 managementFeeInShares = vault.totalSupply().mulWad(annualizedFeeRate);
+
+            /// mint the management fee to the fee recipient
+            vault.mint(managementFeeInShares, feeRecipient);
+        }
 
         AssetPolicy memory policy = assetPolicy[order.intent.deposit.asset];
         UserAccountInfo memory account = accountInfo[order.intent.deposit.accountId];
