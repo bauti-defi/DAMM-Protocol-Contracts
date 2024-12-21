@@ -140,23 +140,9 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
 
         if (order.intent.chaindId != block.chainid) revert Errors.Deposit_InvalidChain();
 
-        /// The management fee should be charged before the deposit is processed
+        /// @notice The management fee should be charged before the deposit is processed
         /// otherwise, the management fee will be charged on the deposit amount
-        uint256 timeDelta =
-            managementFeeRateInBps > 0 ? block.timestamp - lastManagementFeeTimestamp : 0;
-        if (timeDelta > 0) {
-            /// update the last management fee timestamp
-            lastManagementFeeTimestamp = block.timestamp;
-
-            /// calculate the annualized management fee rate
-            uint256 annualizedFeeRate =
-                managementFeeRateInBps.divWad(BP_DIVISOR) * timeDelta / 365 days;
-            /// calculate the management fee in shares, remove WAD precision
-            uint256 managementFeeInShares = vault.totalSupply().mulWad(annualizedFeeRate);
-
-            /// mint the management fee to the fee recipient
-            vault.mint(managementFeeInShares, feeRecipient);
-        }
+        _takeManagementFee();
 
         AssetPolicy memory policy = assetPolicy[order.intent.deposit.asset];
         UserAccountInfo memory account = accountInfo[order.intent.deposit.accountId];
@@ -210,6 +196,10 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         if (minter != msg.sender) {
             revert Errors.Deposit_OnlyAccountOwner();
         }
+
+        /// @notice The management fee should be charged before the deposit is processed
+        /// otherwise, the management fee will be charged on the deposit amount
+        _takeManagementFee();
 
         AssetPolicy memory policy = assetPolicy[order.asset];
         UserAccountInfo memory account = accountInfo[order.accountId];
@@ -483,6 +473,24 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         ///@notice if minAmountOut is 0, then slippage is not checked
         if (order.minAmountOut != 0 && assetAmountOut < order.minAmountOut) {
             revert Errors.Deposit_SlippageLimitExceeded();
+        }
+    }
+
+    function _takeManagementFee() private {
+        uint256 timeDelta =
+            managementFeeRateInBps > 0 ? block.timestamp - lastManagementFeeTimestamp : 0;
+        if (timeDelta > 0) {
+            /// update the last management fee timestamp
+            lastManagementFeeTimestamp = block.timestamp;
+
+            /// calculate the annualized management fee rate
+            uint256 annualizedFeeRate =
+                managementFeeRateInBps.divWad(BP_DIVISOR) * timeDelta / 365 days;
+            /// calculate the management fee in shares, remove WAD precision
+            uint256 managementFeeInShares = vault.totalSupply().mulWad(annualizedFeeRate);
+
+            /// mint the management fee to the fee recipient
+            vault.mint(managementFeeInShares, feeRecipient);
         }
     }
 
