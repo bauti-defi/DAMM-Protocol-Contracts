@@ -487,7 +487,8 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             uint256 annualizedFeeRate =
                 managementFeeRateInBps.divWad(BP_DIVISOR) * timeDelta / 365 days;
             /// calculate the management fee in shares, remove WAD precision
-            uint256 managementFeeInShares = vault.totalSupply().mulWad(annualizedFeeRate);
+            /// @notice mulWapUp rounds up in favor of the fee recipient, deter fuckery.
+            uint256 managementFeeInShares = vault.totalSupply().mulWadUp(annualizedFeeRate);
 
             /// mint the management fee to the fee recipient
             vault.mint(managementFeeInShares, feeRecipient);
