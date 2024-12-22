@@ -330,13 +330,18 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
 
         assetAmountOut = _withdraw(
             order.intent.withdraw,
-            burner,
-            policy.minimumWithdrawal,
-            account.totalSharesOutstanding,
-            account.shareMintLimit,
-            account.cumulativeUnitsDeposited,
-            account.cumulativeSharesMinted,
-            account.brokerPerformanceFeeInBps
+            WithdrawParams({
+                broker: burner,
+                minimumWithdrawal: policy.minimumWithdrawal,
+                totalSharesOutstanding: account.totalSharesOutstanding,
+                shareMintLimit: account.shareMintLimit,
+                cumulativeUnitsDeposited: account.cumulativeUnitsDeposited,
+                cumulativeSharesMinted: account.cumulativeSharesMinted,
+                brokerPerformanceFeeInBps: account.brokerPerformanceFeeInBps,
+                brokerExitFeeInBps: account.brokerExitFeeInBps,
+                protocolExitFeeInBps: account.protocolExitFeeInBps,
+                protocolPerformanceFeeInBps: account.protocolPerformanceFeeInBps
+            })
         );
 
         /// check that we can pay the bribe to the fund
@@ -395,13 +400,18 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
 
         assetAmountOut = _withdraw(
             order,
-            burner,
-            policy.minimumWithdrawal,
-            account.totalSharesOutstanding,
-            account.shareMintLimit,
-            account.cumulativeUnitsDeposited,
-            account.cumulativeSharesMinted,
-            account.brokerPerformanceFeeInBps
+            WithdrawParams({
+                broker: burner,
+                minimumWithdrawal: policy.minimumWithdrawal,
+                totalSharesOutstanding: account.totalSharesOutstanding,
+                shareMintLimit: account.shareMintLimit,
+                cumulativeUnitsDeposited: account.cumulativeUnitsDeposited,
+                cumulativeSharesMinted: account.cumulativeSharesMinted,
+                brokerPerformanceFeeInBps: account.brokerPerformanceFeeInBps,
+                brokerExitFeeInBps: account.brokerExitFeeInBps,
+                protocolExitFeeInBps: account.protocolExitFeeInBps,
+                protocolPerformanceFeeInBps: account.protocolPerformanceFeeInBps
+            })
         );
 
         /// transfer asset from fund to receiver
@@ -410,16 +420,10 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         emit Withdraw(order.accountId, order.asset, order.shares, assetAmountOut, 0, 0);
     }
 
-    function _withdraw(
-        WithdrawOrder calldata order,
-        address user,
-        uint256 minimumWithdrawal,
-        uint256 totalSharesOutstanding,
-        uint256 shareMintLimit,
-        uint256 cumulativeUnitsDeposited,
-        uint256 cumulativeSharesMinted,
-        uint256 brokerPerformanceFeeInBps
-    ) private returns (uint256 assetAmountOut) {
+    function _withdraw(WithdrawOrder calldata order, WithdrawParams memory params)
+        private
+        returns (uint256 assetAmountOut)
+    {
         if (order.deadline < block.timestamp) revert Errors.Deposit_OrderExpired();
 
         uint256 sharesToBurn = order.shares;
@@ -430,59 +434,34 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
 
         /// if shares to burn is max uint256, then burn all shares owned by user
         if (sharesToBurn == type(uint256).max) {
-            sharesToBurn = vault.balanceOf(user);
+            sharesToBurn = vault.balanceOf(params.broker);
         }
 
-        /// update the user's total shares outstanding
-        if (shareMintLimit != type(uint256).max) {
-            /// make sure the user has not exceeded their share burn limit
-            if (totalSharesOutstanding < sharesToBurn) {
+        /// make sure the user has not exceeded their share burn limit
+        if (params.shareMintLimit != type(uint256).max) {
+            if (params.totalSharesOutstanding < sharesToBurn) {
                 revert Errors.Deposit_ShareBurnLimitExceeded();
-            }
-
-            accountInfo[order.accountId].totalSharesOutstanding -= sharesToBurn;
-        }
-
-        uint256 performanceInTermsOfUnitOfAccount;
-
-        /// only take fee if the fee is greater than 0
-        if (brokerPerformanceFeeInBps > 0) {
-            uint8 _vaultDecimals = vault.decimals();
-
-            /// use precision for calculations
-            uint256 averageShareBuyPriceInUnitOfAccount =
-                cumulativeUnitsDeposited.mulDiv(PRECISION, cumulativeSharesMinted);
-            uint256 currentSharePriceInUnitOfAccount =
-                vault.previewRedeem(10 ** _vaultDecimals).mulDiv(PRECISION, 10 ** _vaultDecimals);
-
-            /// @notice removing precision from the output
-            uint256 netPerformanceInTermsOfUnitOfAccount = currentSharePriceInUnitOfAccount
-                > averageShareBuyPriceInUnitOfAccount
-                ? sharesToBurn.mulDiv(
-                    currentSharePriceInUnitOfAccount - averageShareBuyPriceInUnitOfAccount, PRECISION
-                )
-                : 0;
-
-            /// skim the fee from the net performance
-            if (netPerformanceInTermsOfUnitOfAccount > 0) {
-                performanceInTermsOfUnitOfAccount = netPerformanceInTermsOfUnitOfAccount.mulDiv(
-                    brokerPerformanceFeeInBps, BP_DIVISOR
-                );
             }
         }
 
         /// burn vault shares in exchange for liquidity (unit of account) tokens
-        uint256 liquidity = vault.redeem(sharesToBurn, address(this), user);
+        uint256 liquidity = vault.redeem(sharesToBurn, address(this), params.broker);
 
         /// make sure the withdrawal is above the minimum
-        if (liquidity < minimumWithdrawal) {
+        if (liquidity < params.minimumWithdrawal) {
             revert Errors.Deposit_InsufficientWithdrawal();
         }
 
-        if (performanceInTermsOfUnitOfAccount > 0) {
-            liquidity -= performanceInTermsOfUnitOfAccount;
-            vault.deposit(performanceInTermsOfUnitOfAccount, feeRecipient);
-        }
+        /// take the withdrawal fees, and return the net liquidity left for the user
+        /// @notice this will consume part of the liquidity that was redeemed
+        uint256 netFeesInTermsOfShares = _takeWithdrawalFee(params, sharesToBurn, liquidity);
+
+        /// update the user's total shares outstanding
+        accountInfo[order.accountId].totalSharesOutstanding -=
+            (sharesToBurn - netFeesInTermsOfShares);
+
+        /// get the net liquidity left after fees have been taken
+        liquidity = unitOfAccount.balanceOf(address(this));
 
         /// burn liquidity from periphery
         unitOfAccount.burn(address(this), liquidity);
@@ -496,6 +475,55 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         if (order.minAmountOut != 0 && assetAmountOut < order.minAmountOut) {
             revert Errors.Deposit_SlippageLimitExceeded();
         }
+    }
+
+    function _takeWithdrawalFee(
+        WithdrawParams memory params,
+        uint256 sharesToBurn,
+        uint256 liquidity
+    ) private returns (uint256 netFeesInTermsOfShares) {
+        uint256 netBrokerFee = 0;
+        uint256 netProtocolFee = 0;
+
+        /// first we must calculate the performance in terms of unit of account
+        /// peformance is the difference between the current share price and the average share buy price
+        /// if the current share price is greater than the average share buy price, then the performance is positive
+        /// if the current share price is less than the average share buy price, then the performance is negative
+        /// only take fee if the fee is greater than 0
+        uint8 _vaultDecimals = vault.decimals();
+        uint256 averageShareBuyPriceInUnitOfAccount =
+            params.cumulativeUnitsDeposited.divWad(params.cumulativeSharesMinted);
+        uint256 currentSharePriceInUnitOfAccount =
+            vault.previewRedeem(10 ** _vaultDecimals).divWad(10 ** _vaultDecimals);
+        uint256 netPerformanceInTermsOfUnitOfAccount = currentSharePriceInUnitOfAccount
+            > averageShareBuyPriceInUnitOfAccount
+            ? (currentSharePriceInUnitOfAccount - averageShareBuyPriceInUnitOfAccount).mulWadUp(
+                sharesToBurn
+            )
+            : 0;
+        if (netPerformanceInTermsOfUnitOfAccount > 0) {
+            if (params.protocolPerformanceFeeInBps > 0) {
+                netProtocolFee += netPerformanceInTermsOfUnitOfAccount.fullMulDivUp(
+                    params.protocolPerformanceFeeInBps, BP_DIVISOR
+                );
+            }
+            if (params.brokerPerformanceFeeInBps > 0) {
+                netBrokerFee += netPerformanceInTermsOfUnitOfAccount.fullMulDivUp(
+                    params.brokerPerformanceFeeInBps, BP_DIVISOR
+                );
+            }
+        }
+
+        /// now we take the exit fees
+        if (params.protocolExitFeeInBps > 0) {
+            netProtocolFee += liquidity.fullMulDivUp(params.protocolExitFeeInBps, BP_DIVISOR);
+        }
+        if (params.brokerExitFeeInBps > 0) {
+            netBrokerFee += liquidity.fullMulDivUp(params.brokerExitFeeInBps, BP_DIVISOR);
+        }
+
+        netFeesInTermsOfShares += vault.deposit(netProtocolFee, feeRecipient);
+        netFeesInTermsOfShares += vault.deposit(netBrokerFee, params.broker);
     }
 
     function _takeManagementFee() private {

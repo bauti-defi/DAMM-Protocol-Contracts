@@ -95,6 +95,20 @@ struct CreateAccountParams {
     Role role;
 }
 
+/// @dev This is to avoid stack too deep error
+struct WithdrawParams {
+    address broker;
+    uint256 minimumWithdrawal;
+    uint256 totalSharesOutstanding;
+    uint256 shareMintLimit;
+    uint256 cumulativeUnitsDeposited;
+    uint256 cumulativeSharesMinted;
+    uint256 brokerPerformanceFeeInBps;
+    uint256 brokerExitFeeInBps;
+    uint256 protocolExitFeeInBps;
+    uint256 protocolPerformanceFeeInBps;
+}
+
 library AccountLib {
     function isActive(UserAccountInfo memory account) internal pure returns (bool) {
         return account.state == AccountState.ACTIVE;
