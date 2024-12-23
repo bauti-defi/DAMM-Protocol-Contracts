@@ -629,7 +629,11 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             revert Errors.Deposit_InvalidManagementFeeRate();
         }
 
+        uint256 previous = managementFeeRateInBps;
+
         managementFeeRateInBps = rateInBps_;
+
+        emit ManagementFeeRateUpdated(previous, rateInBps_);
     }
 
     function _setAdmin(address admin_) private {
