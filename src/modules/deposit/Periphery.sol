@@ -38,7 +38,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
     address public admin;
 
     /// @dev the recipient of performance fee
-    address public feeRecipient;
+    address public protocolFeeRecipient;
     uint256 private lastManagementFeeTimestamp;
     uint256 public immutable managementFeeRateInBps;
 
@@ -55,7 +55,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         address fund_,
         address oracleRouter_,
         address admin_,
-        address feeRecipient_
+        address protocolFeeRecipient_
     ) ERC721(vaultName_, vaultSymbol_) {
         if (fund_ == address(0)) {
             revert Errors.Deposit_InvalidConstructorParam();
@@ -66,14 +66,14 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         if (admin_ == address(0)) {
             revert Errors.Deposit_InvalidConstructorParam();
         }
-        if (feeRecipient_ == address(0)) {
+        if (protocolFeeRecipient_ == address(0)) {
             revert Errors.Deposit_InvalidConstructorParam();
         }
 
         fund = IFund(fund_);
         oracleRouter = IPriceOracle(oracleRouter_);
         admin = admin_;
-        feeRecipient = feeRecipient_;
+        protocolFeeRecipient = protocolFeeRecipient_;
         lastManagementFeeTimestamp = block.timestamp;
         unitOfAccount = new UnitOfAccount("Liquidity", "UNIT", decimals_);
         vault = new FundShareVault(address(unitOfAccount), vaultName_, vaultSymbol_);
@@ -282,7 +282,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         /// take the protocol entrance fees
         if (protocolEntranceFeeInBps > 0) {
             vault.transfer(
-                feeRecipient, sharesOut.fullMulDivUp(protocolEntranceFeeInBps, BP_DIVISOR)
+                protocolFeeRecipient, sharesOut.fullMulDivUp(protocolEntranceFeeInBps, BP_DIVISOR)
             );
         }
 
@@ -362,7 +362,9 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
 
         /// transfer protocol fee to protocol
         if (netProtocolFee > 0) {
-            _transferAssetFromFund(order.intent.withdraw.asset, feeRecipient, netProtocolFee);
+            _transferAssetFromFund(
+                order.intent.withdraw.asset, protocolFeeRecipient, netProtocolFee
+            );
         }
 
         emit Withdraw(
@@ -414,7 +416,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
 
         /// transfer protocol fee to protocol
         if (netProtocolFee > 0) {
-            _transferAssetFromFund(order.asset, feeRecipient, netProtocolFee);
+            _transferAssetFromFund(order.asset, protocolFeeRecipient, netProtocolFee);
         }
 
         emit Withdraw(order.accountId, order.asset, order.shares, netAssetAmountOut, 0, 0);
@@ -566,7 +568,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             uint256 managementFeeInShares = vault.totalSupply().mulWadUp(annualizedFeeRate);
 
             /// mint the management fee to the fee recipient
-            vault.mint(managementFeeInShares, feeRecipient);
+            vault.mint(managementFeeInShares, protocolFeeRecipient);
         }
     }
 
@@ -631,21 +633,21 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         return accountInfo[accountId_].nonce;
     }
 
-    function _setFeeRecipient(address recipient_) private {
+    function _setProtocolFeeRecipient(address recipient_) private {
         if (recipient_ == address(0)) {
-            revert Errors.Deposit_InvalidFeeRecipient();
+            revert Errors.Deposit_InvalidProtocolFeeRecipient();
         }
 
-        address previous = feeRecipient;
+        address previous = protocolFeeRecipient;
 
         /// update the fee recipient
-        feeRecipient = recipient_;
+        protocolFeeRecipient = recipient_;
 
-        emit FeeRecipientUpdated(recipient_, previous);
+        emit ProtocolFeeRecipientUpdated(recipient_, previous);
     }
 
-    function setFeeRecipient(address recipient_) external onlyFund {
-        _setFeeRecipient(recipient_);
+    function setProtocolFeeRecipient(address recipient_) external onlyFund {
+        _setProtocolFeeRecipient(recipient_);
     }
 
     function _setAdmin(address admin_) private {

@@ -18,7 +18,7 @@ interface IPeriphery {
         bool transferable
     );
 
-    event FeeRecipientUpdated(address oldRecipient, address newRecipient);
+    event ProtocolFeeRecipientUpdated(address oldRecipient, address newRecipient);
 
     event AssetEnabled(address asset, AssetPolicy policy);
 
@@ -52,13 +52,13 @@ interface IPeriphery {
     function oracleRouter() external returns (IPriceOracle);
     function paused() external returns (bool);
     function admin() external returns (address);
-    function feeRecipient() external returns (address);
+    function protocolFeeRecipient() external returns (address);
     function deposit(SignedDepositIntent calldata order) external returns (uint256 sharesOut);
     function withdraw(SignedWithdrawIntent calldata order)
         external
         returns (uint256 assetAmountOut);
     function peekNextTokenId() external returns (uint256);
-    function setFeeRecipient(address newRecipient) external;
+    function setProtocolFeeRecipient(address newRecipient) external;
     function enableAsset(address asset, AssetPolicy memory policy) external;
     function disableAsset(address asset) external;
     function getAssetPolicy(address asset) external returns (AssetPolicy memory);

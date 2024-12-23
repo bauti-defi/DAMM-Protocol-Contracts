@@ -67,7 +67,7 @@ library Errors {
     error Deposit_InvalidPerformanceFee();
     error Deposit_InvalidEntranceFee();
     error Deposit_InvalidExitFee();
-    error Deposit_InvalidFeeRecipient();
+    error Deposit_InvalidProtocolFeeRecipient();
     error Deposit_InvalidRole();
     error Deposit_InvalidTTL();
     error Deposit_InvalidShareMintLimit();

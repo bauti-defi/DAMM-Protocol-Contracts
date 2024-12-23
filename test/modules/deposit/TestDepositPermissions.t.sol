@@ -627,12 +627,12 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
 
         vm.prank(attacker);
         vm.expectRevert(Errors.OnlyFund.selector);
-        periphery.setFeeRecipient(attacker);
+        periphery.setProtocolFeeRecipient(attacker);
 
         vm.prank(address(fund));
-        periphery.setFeeRecipient(attacker);
+        periphery.setProtocolFeeRecipient(attacker);
 
-        assertTrue(periphery.feeRecipient() == attacker);
+        assertTrue(periphery.protocolFeeRecipient() == attacker);
     }
 
     /// TODO: test share mint limit exceeded
