@@ -44,7 +44,7 @@ interface IPeriphery {
         uint256 indexed accountId,
         address asset,
         uint256 sharesIn,
-        uint256 assetAmountOut,
+        uint256 netAssetAmountOut,
         uint256 relayerFee,
         uint256 bribe
     );

@@ -338,11 +338,21 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
         assertEq(mockToken1.balanceOf(address(fund)), periphery.vault().totalAssets());
     }
 
-    function test_deposit_withdraw_all_WITH_FEE(bool useIntent)
-        public
-        approveAll(alice)
-        approveAll(feeRecipient)
-    {
+    function test_deposit_withdraw_all_WITH_FEE(
+        bool useIntent,
+        uint16 _depositAmount,
+        uint16 _profitAmount,
+        uint16 _brokerPerformanceFeeInBps
+    ) public approveAll(alice) approveAll(feeRecipient) {
+        vm.assume(_depositAmount > 10);
+        // vm.assume(_profitAmount > 0);
+        vm.assume(_brokerPerformanceFeeInBps > 0);
+        vm.assume(_brokerPerformanceFeeInBps < 10_000);
+
+        /// @notice we cast to uint256 because we want to test the max values
+        uint256 depositAmount = _depositAmount;
+        uint256 profitAmount = _profitAmount;
+
         vm.startPrank(address(fund));
         periphery.openAccount(
             CreateAccountParams({
@@ -351,43 +361,31 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
                 role: Role.USER,
                 ttl: 100000000,
                 shareMintLimit: type(uint256).max,
-                brokerPerformanceFeeInBps: 1_000
-            })
-        );
-        periphery.openAccount(
-            CreateAccountParams({
-                transferable: false,
-                user: feeRecipient,
-                role: Role.USER,
-                ttl: 100000000,
-                shareMintLimit: type(uint256).max,
-                brokerPerformanceFeeInBps: 0
+                brokerPerformanceFeeInBps: _brokerPerformanceFeeInBps
             })
         );
         vm.stopPrank();
 
-        mockToken1.mint(alice, 10 * mock1Unit);
+        mockToken1.mint(alice, depositAmount * mock1Unit);
 
         /// alice deposits 10
         if (useIntent) {
             periphery.deposit(
-                _depositIntent(1, alice, alicePK, address(mockToken1), 10 * mock1Unit, 0, 0)
+                _depositIntent(1, alice, alicePK, address(mockToken1), type(uint256).max, 0, 0)
             );
         } else {
             vm.prank(alice);
-            periphery.deposit(_depositOrder(1, alice, address(mockToken1), 10 * mock1Unit));
+            periphery.deposit(_depositOrder(1, alice, address(mockToken1), type(uint256).max));
         }
 
-        assertEq(periphery.vault().balanceOf(feeRecipient), 0);
-
-        /// simulate that the fund gains 40 units of mockToken1
-        mockToken1.mint(address(fund), 40 * mock1Unit);
-
-        assertEq(periphery.vault().balanceOf(feeRecipient), 0);
+        /// simulate that the fund makes profit
+        if (profitAmount > 0) {
+            mockToken1.mint(address(fund), profitAmount * mock1Unit);
+        }
 
         address claimer = makeAddr("Claimer");
 
-        assertEq(mockToken1.balanceOf(address(fund)), 50 * mock1Unit);
+        assertEq(mockToken1.balanceOf(address(fund)), (depositAmount + profitAmount) * mock1Unit);
 
         /// alice withdraws everything she is owed => 46
         if (useIntent) {
@@ -399,30 +397,21 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
             periphery.withdraw(_withdrawOrder(1, claimer, address(mockToken1), type(uint256).max));
         }
 
-        assertEq(periphery.vault().totalSupply(), periphery.vault().balanceOf(feeRecipient));
-        assertApproxEqRel(mockToken1.balanceOf(address(fund)), 4 * mock1Unit, 0.1e18);
-
-        /// fee recipient withdraws everything he is owed
-        if (useIntent) {
-            vm.prank(relayer);
-            periphery.withdraw(
-                _withdrawIntent(
-                    2, feeRecipientPK, feeRecipient, address(mockToken1), type(uint256).max, 0, 0
-                )
-            );
-        } else {
-            vm.prank(feeRecipient);
-            periphery.withdraw(
-                _withdrawOrder(2, feeRecipient, address(mockToken1), type(uint256).max)
-            );
-        }
+        uint256 profit = profitAmount > 0
+            ? profitAmount * mock1Unit * (10_000 - _brokerPerformanceFeeInBps) / 10_000
+            : 0;
+        uint256 brokerFee =
+            profitAmount > 0 ? profitAmount * mock1Unit * _brokerPerformanceFeeInBps / 10_000 : 0;
 
         /// @notice you wont get exact amount out because of vault inflation attack protection
-        assertApproxEqRel(mockToken1.balanceOf(claimer), 46 * mock1Unit, 0.1e18);
-        assertApproxEqRel(mockToken1.balanceOf(feeRecipient), 4 * mock1Unit, 0.1e18);
-        assertEq(mockToken1.balanceOf(address(fund)), 4);
+        assertApproxEqRel(
+            mockToken1.balanceOf(claimer),
+            depositAmount * mock1Unit + profit,
+            0.1e18,
+            "Claimer balance wrong"
+        );
+        assertApproxEqRel(mockToken1.balanceOf(alice), brokerFee, 0.1e18, "broker fee wrong");
 
-        assertEq(periphery.vault().balanceOf(feeRecipient), 0);
         assertEq(periphery.vault().balanceOf(alice), 0);
         assertEq(mockToken1.balanceOf(address(fund)), periphery.vault().totalAssets());
     }
