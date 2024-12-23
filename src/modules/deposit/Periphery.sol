@@ -607,7 +607,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         return accountInfo[accountId_].nonce;
     }
 
-    function _setProtocolFeeRecipient(address recipient_) private {
+    function setProtocolFeeRecipient(address recipient_) external onlyFund {
         if (recipient_ == address(0)) {
             revert Errors.Deposit_InvalidProtocolFeeRecipient();
         }
@@ -618,10 +618,6 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         protocolFeeRecipient = recipient_;
 
         emit ProtocolFeeRecipientUpdated(recipient_, previous);
-    }
-
-    function setProtocolFeeRecipient(address recipient_) external onlyFund {
-        _setProtocolFeeRecipient(recipient_);
     }
 
     function setManagementFeeRateInBps(uint256 rateInBps_) external onlyFund {
