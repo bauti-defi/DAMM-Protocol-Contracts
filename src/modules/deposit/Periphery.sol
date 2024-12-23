@@ -522,8 +522,8 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
 
     function _calculateWithdrawalFees(
         WithdrawParams memory params,
-        uint256 sharesToBurn,
-        uint256 liquidity
+        uint256 sharesBurnt,
+        uint256 liquidityRedeemed
     ) private returns (uint256 netBrokerFee, uint256 netProtocolFee) {
         /// first we must calculate the performance in terms of unit of account
         /// peformance is the difference between the current share price and the average share buy price
@@ -532,10 +532,10 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         /// only take fee if the fee is greater than 0
         uint256 averageShareBuyPriceInUnitOfAccount =
             params.cumulativeUnitsDeposited.divWad(params.cumulativeSharesMinted);
-        uint256 realizedSharePriceInUnitOfAccount = liquidity.divWad(sharesToBurn);
+        uint256 realizedSharePriceInUnitOfAccount = liquidityRedeemed.divWad(sharesBurnt);
         uint256 netPerformanceInTermsOfUnitOfAccount = realizedSharePriceInUnitOfAccount
             > averageShareBuyPriceInUnitOfAccount
-            ? (realizedSharePriceInUnitOfAccount - averageShareBuyPriceInUnitOfAccount) * sharesToBurn
+            ? (realizedSharePriceInUnitOfAccount - averageShareBuyPriceInUnitOfAccount) * sharesBurnt
             : 0;
 
         /// @notice netPerformance is scaled by WAD
@@ -554,15 +554,16 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
 
         /// now we take the exit fees
         if (params.protocolExitFeeInBps > 0) {
-            netProtocolFee += liquidity.fullMulDivUp(params.protocolExitFeeInBps, BP_DIVISOR);
+            netProtocolFee +=
+                liquidityRedeemed.fullMulDivUp(params.protocolExitFeeInBps, BP_DIVISOR);
         }
         if (params.brokerExitFeeInBps > 0) {
-            netBrokerFee += liquidity.fullMulDivUp(params.brokerExitFeeInBps, BP_DIVISOR);
+            netBrokerFee += liquidityRedeemed.fullMulDivUp(params.brokerExitFeeInBps, BP_DIVISOR);
         }
 
         emit LogThis(
-            sharesToBurn,
-            liquidity,
+            sharesBurnt,
+            liquidityRedeemed,
             averageShareBuyPriceInUnitOfAccount,
             realizedSharePriceInUnitOfAccount,
             netPerformanceInTermsOfUnitOfAccount,
