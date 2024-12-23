@@ -496,7 +496,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         /// @notice liquidity is priced in terms of unit of account
         /// @dev Invariant: 1 liquidity = 1 unit of account
         uint256 averageShareBuyPriceInUnitOfAccount =
-            account.cumulativeUnitsDeposited.divWad(account.cumulativeSharesMinted);
+            account.cumulativeUnitsDeposited.divWadUp(account.cumulativeSharesMinted);
         uint256 realizedSharePriceInUnitOfAccount = liquidityRedeemed.divWad(sharesBurnt);
         uint256 netPerformanceInTermsOfUnitOfAccount = realizedSharePriceInUnitOfAccount
             > averageShareBuyPriceInUnitOfAccount
