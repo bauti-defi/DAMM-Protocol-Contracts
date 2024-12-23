@@ -353,22 +353,15 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             _transferAssetFromFund(order.intent.withdraw.asset, msg.sender, order.intent.relayerTip);
         }
 
-        /// transfer asset from fund to receiver
-        _transferAssetFromFund(
-            order.intent.withdraw.asset, order.intent.withdraw.to, assetAmountOut
+        /// distribute the funds to the user, broker, and protocol
+        _distributeFunds(
+            order.intent.withdraw.asset,
+            order.intent.withdraw.to,
+            burner,
+            assetAmountOut,
+            netBrokerFee,
+            netProtocolFee
         );
-
-        /// transfer broker fee to broker
-        if (netBrokerFee > 0) {
-            _transferAssetFromFund(order.intent.withdraw.asset, burner, netBrokerFee);
-        }
-
-        /// transfer protocol fee to protocol
-        if (netProtocolFee > 0) {
-            _transferAssetFromFund(
-                order.intent.withdraw.asset, protocolFeeRecipient, netProtocolFee
-            );
-        }
 
         emit Withdraw(
             order.intent.withdraw.accountId,
@@ -407,18 +400,10 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
 
         assetAmountOut = netAssetAmountOut - netBrokerFee - netProtocolFee;
 
-        /// transfer asset from fund to receiver
-        _transferAssetFromFund(order.asset, order.to, assetAmountOut);
-
-        /// transfer broker fee to broker
-        if (netBrokerFee > 0) {
-            _transferAssetFromFund(order.asset, burner, netBrokerFee);
-        }
-
-        /// transfer protocol fee to protocol
-        if (netProtocolFee > 0) {
-            _transferAssetFromFund(order.asset, protocolFeeRecipient, netProtocolFee);
-        }
+        /// distribute the funds to the user, broker, and protocol
+        _distributeFunds(
+            order.asset, order.to, burner, assetAmountOut, netBrokerFee, netProtocolFee
+        );
 
         emit Withdraw(order.accountId, order.asset, order.shares, netAssetAmountOut, 0, 0);
     }
@@ -480,6 +465,23 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         ///@notice if minAmountOut is 0, then slippage is not checked
         if (order.minAmountOut != 0 && netAssetAmountOut < order.minAmountOut) {
             revert Errors.Deposit_SlippageLimitExceeded();
+        }
+    }
+
+    function _distributeFunds(
+        address asset,
+        address user,
+        address broker,
+        uint256 toUser,
+        uint256 toBroker,
+        uint256 toProtocol
+    ) private {
+        _transferAssetFromFund(asset, user, toUser);
+        if (toBroker > 0) {
+            _transferAssetFromFund(asset, broker, toBroker);
+        }
+        if (toProtocol > 0) {
+            _transferAssetFromFund(asset, protocolFeeRecipient, toProtocol);
         }
     }
 
