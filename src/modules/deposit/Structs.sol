@@ -90,6 +90,11 @@ struct CreateAccountParams {
     uint256 ttl;
     uint256 shareMintLimit;
     uint256 brokerPerformanceFeeInBps;
+    uint256 protocolPerformanceFeeInBps;
+    uint256 brokerEntranceFeeInBps;
+    uint256 protocolEntranceFeeInBps;
+    uint256 brokerExitFeeInBps;
+    uint256 protocolExitFeeInBps;
     address user;
     bool transferable;
     Role role;

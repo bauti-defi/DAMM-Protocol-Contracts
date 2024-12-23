@@ -87,7 +87,8 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
                         address(oracleRouter),
                         address(fund),
                         /// fund is admin
-                        feeRecipient
+                        feeRecipient,
+                        0
                     )
                 )
             )
@@ -178,7 +179,12 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
                 role: role_,
                 ttl: ttl_,
                 shareMintLimit: type(uint256).max,
-                brokerPerformanceFeeInBps: 0
+                brokerPerformanceFeeInBps: 0,
+                protocolPerformanceFeeInBps: 0,
+                brokerEntranceFeeInBps: 0,
+                protocolEntranceFeeInBps: 0,
+                brokerExitFeeInBps: 0,
+                protocolExitFeeInBps: 0
             })
         );
         vm.stopPrank();
@@ -622,12 +628,12 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
 
         vm.prank(attacker);
         vm.expectRevert(Errors.OnlyFund.selector);
-        periphery.setFeeRecipient(attacker);
+        periphery.setProtocolFeeRecipient(attacker);
 
         vm.prank(address(fund));
-        periphery.setFeeRecipient(attacker);
+        periphery.setProtocolFeeRecipient(attacker);
 
-        assertTrue(periphery.feeRecipient() == attacker);
+        assertTrue(periphery.protocolFeeRecipient() == attacker);
     }
 
     /// TODO: test share mint limit exceeded
