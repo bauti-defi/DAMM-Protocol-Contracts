@@ -72,19 +72,29 @@ struct UserAccountInfo {
     Role role;
     bool transferable;
     AccountState state;
-    uint256 feeBps;
     uint256 expirationTimestamp;
     uint256 nonce;
     uint256 shareMintLimit;
     uint256 cumulativeSharesMinted;
     uint256 cumulativeUnitsDeposited;
     uint256 totalSharesOutstanding;
+    uint256 brokerPerformanceFeeInBps;
+    uint256 protocolPerformanceFeeInBps;
+    uint256 brokerEntranceFeeInBps;
+    uint256 protocolEntranceFeeInBps;
+    uint256 brokerExitFeeInBps;
+    uint256 protocolExitFeeInBps;
 }
 
 struct CreateAccountParams {
     uint256 ttl;
     uint256 shareMintLimit;
-    uint256 feeBps;
+    uint256 brokerPerformanceFeeInBps;
+    uint256 protocolPerformanceFeeInBps;
+    uint256 brokerEntranceFeeInBps;
+    uint256 protocolEntranceFeeInBps;
+    uint256 brokerExitFeeInBps;
+    uint256 protocolExitFeeInBps;
     address user;
     bool transferable;
     Role role;

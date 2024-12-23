@@ -2,12 +2,12 @@
 pragma solidity ^0.8.0;
 
 import "@solmate/tokens/ERC20.sol";
-import "@openzeppelin-contracts/utils/math/Math.sol";
 import "@openzeppelin-contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin-contracts/utils/cryptography/MessageHashUtils.sol";
 import "@openzeppelin-contracts/utils/cryptography/SignatureChecker.sol";
 import "@openzeppelin-contracts/utils/math/SignedMath.sol";
 import "@openzeppelin-contracts/utils/math/SafeCast.sol";
+import "@solady/utils/FixedPointMathLib.sol";
 import "@solmate/utils/SafeTransferLib.sol";
 import "@solady/utils/ReentrancyGuard.sol";
 import "@src/libs/Constants.sol";
@@ -22,8 +22,8 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
     using SafeTransferLib for ERC20;
     using SafeCast for uint256;
     using MessageHashUtils for bytes;
-    using Math for uint256;
     using SignedMath for int256;
+    using FixedPointMathLib for uint256;
 
     /// @dev the DAMM fund the periphery is associated with
     IFund public immutable fund;
@@ -37,8 +37,10 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
     /// @dev the minter role
     address public admin;
 
-    /// @dev the recipient of performance fee
-    address public feeRecipient;
+    /// @dev the recipient of the protocol fees
+    address public protocolFeeRecipient;
+    uint256 private lastManagementFeeTimestamp;
+    uint256 public managementFeeRateInBps;
 
     mapping(address asset => AssetPolicy policy) private assetPolicy;
     mapping(uint256 tokenId => UserAccountInfo account) private accountInfo;
@@ -53,8 +55,9 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         address fund_,
         address oracleRouter_,
         address admin_,
-        address feeRecipient_
-    ) ERC721(string.concat(vaultName_, " Account"), string.concat("ACC-", vaultSymbol_)) {
+        address protocolFeeRecipient_,
+        uint256 managementFeeRateInBps_
+    ) ERC721(vaultName_, vaultSymbol_) {
         if (fund_ == address(0)) {
             revert Errors.Deposit_InvalidConstructorParam();
         }
@@ -64,14 +67,19 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         if (admin_ == address(0)) {
             revert Errors.Deposit_InvalidConstructorParam();
         }
-        if (feeRecipient_ == address(0)) {
+        if (protocolFeeRecipient_ == address(0)) {
+            revert Errors.Deposit_InvalidConstructorParam();
+        }
+        if (managementFeeRateInBps_ > BP_DIVISOR) {
             revert Errors.Deposit_InvalidConstructorParam();
         }
 
         fund = IFund(fund_);
         oracleRouter = IPriceOracle(oracleRouter_);
         admin = admin_;
-        feeRecipient = feeRecipient_;
+        protocolFeeRecipient = protocolFeeRecipient_;
+        managementFeeRateInBps = managementFeeRateInBps_;
+        lastManagementFeeTimestamp = block.timestamp;
         unitOfAccount = new UnitOfAccount("Liquidity", "UNIT", decimals_);
         vault = new FundShareVault(address(unitOfAccount), vaultName_, vaultSymbol_);
 
@@ -137,6 +145,10 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
 
         if (order.intent.chaindId != block.chainid) revert Errors.Deposit_InvalidChain();
 
+        /// @notice The management fee should be charged before the deposit is processed
+        /// otherwise, the management fee will be charged on the deposit amount
+        _takeManagementFee();
+
         AssetPolicy memory policy = assetPolicy[order.intent.deposit.asset];
         UserAccountInfo memory account = accountInfo[order.intent.deposit.accountId];
 
@@ -161,7 +173,9 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             minter,
             policy.minimumDeposit,
             account.totalSharesOutstanding,
-            account.shareMintLimit
+            account.shareMintLimit,
+            account.brokerEntranceFeeInBps,
+            account.protocolEntranceFeeInBps
         );
 
         emit Deposit(
@@ -190,6 +204,10 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             revert Errors.Deposit_OnlyAccountOwner();
         }
 
+        /// @notice The management fee should be charged before the deposit is processed
+        /// otherwise, the management fee will be charged on the deposit amount
+        _takeManagementFee();
+
         AssetPolicy memory policy = assetPolicy[order.asset];
         UserAccountInfo memory account = accountInfo[order.accountId];
 
@@ -200,7 +218,9 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             minter,
             policy.minimumDeposit,
             account.totalSharesOutstanding,
-            account.shareMintLimit
+            account.shareMintLimit,
+            account.brokerEntranceFeeInBps,
+            account.protocolEntranceFeeInBps
         );
 
         emit Deposit(order.accountId, order.asset, order.amount, sharesOut, 0, 0);
@@ -208,10 +228,12 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
 
     function _deposit(
         DepositOrder calldata order,
-        address user,
+        address broker,
         uint256 minimumDeposit,
         uint256 totalSharesOutstanding,
-        uint256 shareMintLimit
+        uint256 shareMintLimit,
+        uint256 brokerEntranceFeeInBps,
+        uint256 protocolEntranceFeeInBps
     ) private returns (uint256 sharesOut) {
         if (order.deadline < block.timestamp) {
             revert Errors.Deposit_OrderExpired();
@@ -226,26 +248,26 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
 
         /// if amount is type(uint256).max, then deposit the user's entire balance
         if (assetAmountIn == type(uint256).max) {
-            assetAmountIn = assetToken.balanceOf(user);
+            assetAmountIn = assetToken.balanceOf(broker);
+        }
+
+        /// make sure the deposit is above the minimum
+        if (assetAmountIn < minimumDeposit) {
+            revert Errors.Deposit_InsufficientDeposit();
         }
 
         /// transfer asset from user to fund
-        assetToken.safeTransferFrom(user, address(fund), assetAmountIn);
+        assetToken.safeTransferFrom(broker, address(fund), assetAmountIn);
 
         /// calculate how much liquidity for this amount of deposited asset
         uint256 liquidity =
             oracleRouter.getQuote(assetAmountIn, order.asset, address(unitOfAccount));
 
-        /// make sure the deposit is above the minimum
-        if (liquidity < minimumDeposit) {
-            revert Errors.Deposit_InsufficientDeposit();
-        }
-
         /// mint liquidity to periphery
         unitOfAccount.mint(address(this), liquidity);
 
-        /// mint shares to user using the liquidity that was just minted to periphery
-        sharesOut = vault.deposit(liquidity, order.recipient);
+        /// mint shares to the periphery using the liquidity that was just minted
+        sharesOut = vault.deposit(liquidity, address(this));
 
         /// lets make sure slippage is acceptable
         if (sharesOut < order.minSharesOut) {
@@ -256,6 +278,21 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         if (totalSharesOutstanding + sharesOut > shareMintLimit) {
             revert Errors.Deposit_ShareMintLimitExceeded();
         }
+
+        /// take the broker entrance fees
+        if (brokerEntranceFeeInBps > 0) {
+            vault.transfer(broker, sharesOut.fullMulDivUp(brokerEntranceFeeInBps, BP_DIVISOR));
+        }
+
+        /// take the protocol entrance fees
+        if (protocolEntranceFeeInBps > 0) {
+            vault.transfer(
+                protocolFeeRecipient, sharesOut.fullMulDivUp(protocolEntranceFeeInBps, BP_DIVISOR)
+            );
+        }
+
+        /// forward the remaining shares to the user
+        vault.transfer(order.recipient, vault.balanceOf(address(this)));
 
         /// update the user's cumulative units deposited
         accountInfo[order.accountId].cumulativeUnitsDeposited += liquidity;
@@ -296,44 +333,41 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
 
         _validateAccountAssetPolicy(policy, account, false);
 
-        assetAmountOut = _withdraw(
-            order.intent.withdraw,
-            burner,
-            policy.minimumWithdrawal,
-            account.totalSharesOutstanding,
-            account.shareMintLimit,
-            account.cumulativeUnitsDeposited,
-            account.cumulativeSharesMinted,
-            account.feeBps
-        );
+        (uint256 netAssetAmountOut, uint256 netBrokerFee, uint256 netProtocolFee) =
+            _withdraw(burner, order.intent.withdraw, account, policy.minimumWithdrawal);
 
-        /// check that we can pay the bribe to the fund
-        if (order.intent.bribe > 0 && order.intent.bribe > assetAmountOut - order.intent.relayerTip)
-        {
+        /// start calculating the amount of asset to transfer to the user
+        assetAmountOut = netAssetAmountOut - netBrokerFee - netProtocolFee;
+
+        /// check that we can pay the bribe and relay tip with the net asset amount out
+        if (assetAmountOut < order.intent.bribe + order.intent.relayerTip) {
             revert Errors.Deposit_InsufficientAmount();
         }
 
+        /// deduct the bribe and relay tip from the net asset amount out
+        /// @notice this will implicitly pay the bribe to the fund
+        assetAmountOut = assetAmountOut - order.intent.relayerTip - order.intent.bribe;
+
         /// pay the relayer if required
         if (order.intent.relayerTip > 0) {
-            if (order.intent.relayerTip >= assetAmountOut) {
-                revert Errors.Deposit_InsufficientAmount();
-            }
-
             _transferAssetFromFund(order.intent.withdraw.asset, msg.sender, order.intent.relayerTip);
         }
 
-        /// transfer asset from fund to receiver
-        _transferAssetFromFund(
+        /// distribute the funds to the user, broker, and protocol
+        _distributeFunds(
             order.intent.withdraw.asset,
             order.intent.withdraw.to,
-            assetAmountOut - order.intent.relayerTip - order.intent.bribe
+            burner,
+            assetAmountOut,
+            netBrokerFee,
+            netProtocolFee
         );
 
         emit Withdraw(
             order.intent.withdraw.accountId,
             order.intent.withdraw.asset,
             order.intent.withdraw.shares,
-            assetAmountOut,
+            netAssetAmountOut,
             order.intent.relayerTip,
             order.intent.bribe
         );
@@ -361,33 +395,25 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
 
         _validateAccountAssetPolicy(policy, account, false);
 
-        assetAmountOut = _withdraw(
-            order,
-            burner,
-            policy.minimumWithdrawal,
-            account.totalSharesOutstanding,
-            account.shareMintLimit,
-            account.cumulativeUnitsDeposited,
-            account.cumulativeSharesMinted,
-            account.feeBps
+        (uint256 netAssetAmountOut, uint256 netBrokerFee, uint256 netProtocolFee) =
+            _withdraw(burner, order, account, policy.minimumWithdrawal);
+
+        assetAmountOut = netAssetAmountOut - netBrokerFee - netProtocolFee;
+
+        /// distribute the funds to the user, broker, and protocol
+        _distributeFunds(
+            order.asset, order.to, burner, assetAmountOut, netBrokerFee, netProtocolFee
         );
 
-        /// transfer asset from fund to receiver
-        _transferAssetFromFund(order.asset, order.to, assetAmountOut);
-
-        emit Withdraw(order.accountId, order.asset, order.shares, assetAmountOut, 0, 0);
+        emit Withdraw(order.accountId, order.asset, order.shares, netAssetAmountOut, 0, 0);
     }
 
     function _withdraw(
+        address broker,
         WithdrawOrder calldata order,
-        address user,
-        uint256 minimumWithdrawal,
-        uint256 totalSharesOutstanding,
-        uint256 shareMintLimit,
-        uint256 cumulativeUnitsDeposited,
-        uint256 cumulativeSharesMinted,
-        uint256 feeBps
-    ) private returns (uint256 assetAmountOut) {
+        UserAccountInfo memory account,
+        uint256 minimumWithdrawal
+    ) private returns (uint256 netAssetAmountOut, uint256 netBrokerFee, uint256 netProtocolFee) {
         if (order.deadline < block.timestamp) revert Errors.Deposit_OrderExpired();
 
         uint256 sharesToBurn = order.shares;
@@ -398,70 +424,127 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
 
         /// if shares to burn is max uint256, then burn all shares owned by user
         if (sharesToBurn == type(uint256).max) {
-            sharesToBurn = vault.balanceOf(user);
+            sharesToBurn = vault.balanceOf(broker);
         }
 
-        /// update the user's total shares outstanding
-        if (shareMintLimit != type(uint256).max) {
-            /// make sure the user has not exceeded their share burn limit
-            if (totalSharesOutstanding < sharesToBurn) {
+        /// make sure the user has not exceeded their share burn limit
+        if (account.shareMintLimit != type(uint256).max) {
+            if (account.totalSharesOutstanding < sharesToBurn) {
                 revert Errors.Deposit_ShareBurnLimitExceeded();
             }
 
+            /// update the user's total shares outstanding
             accountInfo[order.accountId].totalSharesOutstanding -= sharesToBurn;
         }
 
-        uint256 performanceInTermsOfUnitOfAccount;
-
-        /// only take fee if the fee is greater than 0
-        if (feeBps > 0) {
-            uint8 _vaultDecimals = vault.decimals();
-
-            /// use precision for calculations
-            uint256 averageShareBuyPriceInUnitOfAccount =
-                cumulativeUnitsDeposited.mulDiv(PRECISION, cumulativeSharesMinted);
-            uint256 currentSharePriceInUnitOfAccount =
-                vault.previewRedeem(10 ** _vaultDecimals).mulDiv(PRECISION, 10 ** _vaultDecimals);
-
-            /// @notice removing precision from the output
-            uint256 netPerformanceInTermsOfUnitOfAccount = currentSharePriceInUnitOfAccount
-                > averageShareBuyPriceInUnitOfAccount
-                ? sharesToBurn.mulDiv(
-                    currentSharePriceInUnitOfAccount - averageShareBuyPriceInUnitOfAccount, PRECISION
-                )
-                : 0;
-
-            /// skim the fee from the net performance
-            if (netPerformanceInTermsOfUnitOfAccount > 0) {
-                performanceInTermsOfUnitOfAccount =
-                    netPerformanceInTermsOfUnitOfAccount.mulDiv(feeBps, BP_DIVISOR);
-            }
-        }
-
         /// burn vault shares in exchange for liquidity (unit of account) tokens
-        uint256 liquidity = vault.redeem(sharesToBurn, address(this), user);
-
-        /// make sure the withdrawal is above the minimum
-        if (liquidity < minimumWithdrawal) {
-            revert Errors.Deposit_InsufficientWithdrawal();
-        }
-
-        if (performanceInTermsOfUnitOfAccount > 0) {
-            liquidity -= performanceInTermsOfUnitOfAccount;
-            vault.deposit(performanceInTermsOfUnitOfAccount, feeRecipient);
-        }
+        uint256 liquidity = vault.redeem(sharesToBurn, address(this), broker);
 
         /// burn liquidity from periphery
         unitOfAccount.burn(address(this), liquidity);
 
+        /// take the withdrawal fees, and return the net liquidity left for the user
+        /// @notice this will consume part of the liquidity that was redeemed
+        (uint256 netBrokerFeeInLiquidity, uint256 netProtocolFeeInLiquidity) =
+            _calculateWithdrawalFees(account, sharesToBurn, liquidity);
+
         /// calculate how much asset for this amount of liquidity
-        assetAmountOut = oracleRouter.getQuote(liquidity, address(unitOfAccount), order.asset);
+        netAssetAmountOut = oracleRouter.getQuote(liquidity, address(unitOfAccount), order.asset);
+
+        /// make sure the withdrawal is above the minimum
+        if (netAssetAmountOut < minimumWithdrawal) {
+            revert Errors.Deposit_InsufficientWithdrawal();
+        }
+
+        /// convert the fees to asset amount
+        netBrokerFee = netBrokerFeeInLiquidity.divWadUp(liquidity).mulWadUp(netAssetAmountOut);
+        netProtocolFee = netProtocolFeeInLiquidity.divWadUp(liquidity).mulWadUp(netAssetAmountOut);
 
         /// make sure slippage is acceptable
         /// TODO: make this use type(uint256).max instead of 0
         ///@notice if minAmountOut is 0, then slippage is not checked
-        if (order.minAmountOut != 0 && assetAmountOut < order.minAmountOut) {
+        if (order.minAmountOut != 0 && netAssetAmountOut < order.minAmountOut) {
             revert Errors.Deposit_SlippageLimitExceeded();
+        }
+    }
+
+    function _distributeFunds(
+        address asset,
+        address user,
+        address broker,
+        uint256 toUser,
+        uint256 toBroker,
+        uint256 toProtocol
+    ) private {
+        _transferAssetFromFund(asset, user, toUser);
+        if (toBroker > 0) {
+            _transferAssetFromFund(asset, broker, toBroker);
+        }
+        if (toProtocol > 0) {
+            _transferAssetFromFund(asset, protocolFeeRecipient, toProtocol);
+        }
+    }
+
+    function _calculateWithdrawalFees(
+        UserAccountInfo memory account,
+        uint256 sharesBurnt,
+        uint256 liquidityRedeemed
+    ) private returns (uint256 netBrokerFee, uint256 netProtocolFee) {
+        /// first we must calculate the performance in terms of unit of account
+        /// peformance is the difference between the realized share price and the average share buy price
+        /// if the realized share price is greater than the average share buy price, then the performance is positive
+        /// if the realized share price is less than the average share buy price, then the performance is negative
+        /// only take fee if the performance is positive
+        /// @notice liquidity is priced in terms of unit of account
+        /// @dev Invariant: 1 liquidity = 1 unit of account
+        uint256 averageShareBuyPriceInUnitOfAccount =
+            account.cumulativeUnitsDeposited.divWadUp(account.cumulativeSharesMinted);
+        uint256 realizedSharePriceInUnitOfAccount = liquidityRedeemed.divWad(sharesBurnt);
+        uint256 netPerformanceInTermsOfUnitOfAccount = realizedSharePriceInUnitOfAccount
+            > averageShareBuyPriceInUnitOfAccount
+            ? (realizedSharePriceInUnitOfAccount - averageShareBuyPriceInUnitOfAccount) * sharesBurnt
+            : 0;
+
+        /// @notice netPerformance is scaled by WAD
+        if (netPerformanceInTermsOfUnitOfAccount > 0) {
+            if (account.protocolPerformanceFeeInBps > 0) {
+                netProtocolFee = netPerformanceInTermsOfUnitOfAccount.mulWadUp(
+                    account.protocolPerformanceFeeInBps
+                ) / BP_DIVISOR;
+            }
+            if (account.brokerPerformanceFeeInBps > 0) {
+                netBrokerFee = netPerformanceInTermsOfUnitOfAccount.mulWadUp(
+                    account.brokerPerformanceFeeInBps
+                ) / BP_DIVISOR;
+            }
+        }
+
+        /// Now take the exit fees. Exit fees are taken on the net withdrawal amount.
+        if (account.protocolExitFeeInBps > 0) {
+            netProtocolFee +=
+                liquidityRedeemed.fullMulDivUp(account.protocolExitFeeInBps, BP_DIVISOR);
+        }
+        if (account.brokerExitFeeInBps > 0) {
+            netBrokerFee += liquidityRedeemed.fullMulDivUp(account.brokerExitFeeInBps, BP_DIVISOR);
+        }
+    }
+
+    function _takeManagementFee() private {
+        uint256 timeDelta =
+            managementFeeRateInBps > 0 ? block.timestamp - lastManagementFeeTimestamp : 0;
+        if (timeDelta > 0) {
+            /// update the last management fee timestamp
+            lastManagementFeeTimestamp = block.timestamp;
+
+            /// calculate the annualized management fee rate
+            uint256 annualizedFeeRate =
+                managementFeeRateInBps.divWad(BP_DIVISOR) * timeDelta / 365 days;
+            /// calculate the management fee in shares, remove WAD precision
+            /// @notice mulWapUp rounds up in favor of the fee recipient, deter fuckery.
+            uint256 managementFeeInShares = vault.totalSupply().mulWadUp(annualizedFeeRate);
+
+            /// mint the management fee to the fee recipient
+            vault.mint(managementFeeInShares, protocolFeeRecipient);
         }
     }
 
@@ -526,21 +609,29 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         return accountInfo[accountId_].nonce;
     }
 
-    function _setFeeRecipient(address recipient_) private {
+    function setProtocolFeeRecipient(address recipient_) external onlyFund {
         if (recipient_ == address(0)) {
-            revert Errors.Deposit_InvalidFeeRecipient();
+            revert Errors.Deposit_InvalidProtocolFeeRecipient();
         }
 
-        address previous = feeRecipient;
+        address previous = protocolFeeRecipient;
 
         /// update the fee recipient
-        feeRecipient = recipient_;
+        protocolFeeRecipient = recipient_;
 
-        emit FeeRecipientUpdated(recipient_, previous);
+        emit ProtocolFeeRecipientUpdated(recipient_, previous);
     }
 
-    function setFeeRecipient(address recipient_) external onlyFund {
-        _setFeeRecipient(recipient_);
+    function setManagementFeeRateInBps(uint256 rateInBps_) external onlyFund {
+        if (rateInBps_ > BP_DIVISOR) {
+            revert Errors.Deposit_InvalidManagementFeeRate();
+        }
+
+        uint256 previous = managementFeeRateInBps;
+
+        managementFeeRateInBps = rateInBps_;
+
+        emit ManagementFeeRateUpdated(previous, rateInBps_);
     }
 
     function _setAdmin(address admin_) private {
@@ -600,8 +691,14 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         if (params_.user == address(0)) {
             revert Errors.Deposit_InvalidUser();
         }
-        if (params_.feeBps >= BP_DIVISOR) {
+        if (params_.brokerPerformanceFeeInBps + params_.protocolPerformanceFeeInBps >= BP_DIVISOR) {
             revert Errors.Deposit_InvalidPerformanceFee();
+        }
+        if (params_.brokerEntranceFeeInBps + params_.protocolEntranceFeeInBps >= BP_DIVISOR) {
+            revert Errors.Deposit_InvalidEntranceFee();
+        }
+        if (params_.brokerExitFeeInBps + params_.protocolExitFeeInBps >= BP_DIVISOR) {
+            revert Errors.Deposit_InvalidExitFee();
         }
         if (params_.role == Role.NONE) {
             revert Errors.Deposit_InvalidRole();
@@ -626,11 +723,16 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             state: AccountState.ACTIVE,
             expirationTimestamp: block.timestamp + params_.ttl,
             nonce: 0,
-            feeBps: params_.feeBps,
+            brokerPerformanceFeeInBps: params_.brokerPerformanceFeeInBps,
             shareMintLimit: params_.shareMintLimit,
             cumulativeSharesMinted: 0,
             cumulativeUnitsDeposited: 0,
-            totalSharesOutstanding: 0
+            totalSharesOutstanding: 0,
+            protocolPerformanceFeeInBps: params_.protocolPerformanceFeeInBps,
+            brokerEntranceFeeInBps: params_.brokerEntranceFeeInBps,
+            protocolEntranceFeeInBps: params_.protocolEntranceFeeInBps,
+            brokerExitFeeInBps: params_.brokerExitFeeInBps,
+            protocolExitFeeInBps: params_.protocolExitFeeInBps
         });
 
         emit AccountOpened(
@@ -638,7 +740,6 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             params_.role,
             block.timestamp + params_.ttl,
             params_.shareMintLimit,
-            params_.feeBps,
             params_.transferable
         );
     }

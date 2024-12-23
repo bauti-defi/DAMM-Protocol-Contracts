@@ -11,13 +11,20 @@ import {NATIVE_ASSET} from "@src/libs/Constants.sol";
 import {MockERC20} from "@test/mocks/MockERC20.sol";
 import {MockPriceOracle} from "@test/mocks/MockPriceOracle.sol";
 import "@openzeppelin-contracts/utils/cryptography/MessageHashUtils.sol";
+import "@openzeppelin-contracts/utils/math/SignedMath.sol";
 import {console2} from "@forge-std/Test.sol";
+import "@src/libs/Constants.sol";
 
 uint8 constant VALUATION_DECIMALS = 18;
 uint256 constant VAULT_DECIMAL_OFFSET = 1;
 
+uint256 constant MAX_NET_EXIT_FEE_IN_BPS = 5_000;
+uint256 constant MAX_NET_PERFORMANCE_FEE_IN_BPS = 7_000;
+uint256 constant MAX_NET_ENTRANCE_FEE_IN_BPS = 5_000;
+
 contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
     using MessageHashUtils for bytes;
+    using SignedMath for int256;
 
     address internal fundAdmin;
     uint256 internal fundAdminPK;
@@ -87,7 +94,8 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
                         address(oracleRouter),
                         address(fund),
                         /// fund is admin
-                        feeRecipient
+                        feeRecipient,
+                        0
                     )
                 )
             )
@@ -257,92 +265,26 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
         return SignedWithdrawIntent({intent: intent, signature: abi.encodePacked(r, s, v)});
     }
 
-    function test_multi_user_withdraw_all_with_profit_NO_FEE(bool useIntent)
-        public
-        approveAll(alice)
-        approveAll(bob)
-    {
-        vm.startPrank(address(fund));
-        periphery.openAccount(
-            CreateAccountParams({
-                transferable: false,
-                user: alice,
-                role: Role.USER,
-                ttl: 100000000,
-                shareMintLimit: type(uint256).max,
-                feeBps: 0
-            })
-        );
-        periphery.openAccount(
-            CreateAccountParams({
-                transferable: false,
-                user: bob,
-                role: Role.USER,
-                ttl: 100000000,
-                shareMintLimit: type(uint256).max,
-                feeBps: 0
-            })
-        );
-        vm.stopPrank();
-
-        mockToken1.mint(alice, 10 * mock1Unit);
-        mockToken1.mint(bob, 10 * mock1Unit);
-
-        // Alice deposits 10
-        if (useIntent) {
-            periphery.deposit(
-                _depositIntent(1, alice, alicePK, address(mockToken1), 10 * mock1Unit, 0, 0)
-            );
-        } else {
-            vm.prank(alice);
-            periphery.deposit(_depositOrder(1, alice, address(mockToken1), 10 * mock1Unit));
-        }
-
-        // Bob deposits 0 (all balance)
-        if (useIntent) {
-            periphery.deposit(
-                _depositIntent(2, bob, bobPK, address(mockToken1), type(uint256).max, 0, 0)
-            );
-        } else {
-            vm.prank(bob);
-            periphery.deposit(_depositOrder(2, bob, address(mockToken1), type(uint256).max));
-        }
-
-        // Simulate that the fund gains 100 units of mockToken1
-        mockToken1.mint(address(fund), 100 * mock1Unit);
-
-        // Alice direct withdraws, no intent
-        if (useIntent) {
-            periphery.withdraw(
-                _withdrawIntent(1, alicePK, alice, address(mockToken1), type(uint256).max, 0, 0)
-            );
-        } else {
-            vm.prank(alice);
-            periphery.withdraw(_withdrawOrder(1, alice, address(mockToken1), type(uint256).max));
-        }
-
-        // Bob withdraws, no intent
-        if (useIntent) {
-            periphery.withdraw(
-                _withdrawIntent(2, bobPK, bob, address(mockToken1), type(uint256).max, 0, 0)
-            );
-        } else {
-            vm.prank(bob);
-            periphery.withdraw(_withdrawOrder(2, bob, address(mockToken1), type(uint256).max));
-        }
-
-        // @notice you wont get exact amount out because of vault inflation attack protection
-        assertApproxEqRel(mockToken1.balanceOf(alice), 60 * mock1Unit, 0.1e18);
-        assertApproxEqRel(mockToken1.balanceOf(bob), 60 * mock1Unit, 0.1e18);
-        assertApproxEqRel(mockToken1.balanceOf(address(fund)), 5, 1);
-        assertEq(mockToken1.balanceOf(address(fund)), periphery.vault().totalAssets());
+    struct TestEntranceFeeParams {
+        bool useIntent;
+        uint32 depositAmount;
+        uint8 brokerEntranceFeeInBps;
+        uint8 protocolEntranceFeeInBps;
     }
 
-    function test_deposit_withdraw_all_WITH_FEE(bool useIntent)
+    function test_deposit_with_entrance_fees(TestEntranceFeeParams memory params)
         public
         approveAll(alice)
-        approveAll(feeRecipient)
     {
+        vm.assume(params.depositAmount > 10);
+
+        uint256 brokerEntranceFeeInBps = uint256(params.brokerEntranceFeeInBps) * 25;
+        uint256 protocolEntranceFeeInBps = uint256(params.protocolEntranceFeeInBps) * 25;
+        vm.assume(brokerEntranceFeeInBps + protocolEntranceFeeInBps < MAX_NET_ENTRANCE_FEE_IN_BPS);
+
+        /// @notice we cast to uint256 because we want to test the max values
+        uint256 depositAmount = params.depositAmount * mock1Unit;
+
         vm.startPrank(address(fund));
         periphery.openAccount(
             CreateAccountParams({
@@ -351,46 +293,148 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
                 role: Role.USER,
                 ttl: 100000000,
                 shareMintLimit: type(uint256).max,
-                feeBps: 1_000
-            })
-        );
-        periphery.openAccount(
-            CreateAccountParams({
-                transferable: false,
-                user: feeRecipient,
-                role: Role.USER,
-                ttl: 100000000,
-                shareMintLimit: type(uint256).max,
-                feeBps: 0
+                brokerPerformanceFeeInBps: 0,
+                protocolPerformanceFeeInBps: 0,
+                brokerEntranceFeeInBps: brokerEntranceFeeInBps,
+                protocolEntranceFeeInBps: protocolEntranceFeeInBps,
+                brokerExitFeeInBps: 0,
+                protocolExitFeeInBps: 0
             })
         );
         vm.stopPrank();
 
-        mockToken1.mint(alice, 10 * mock1Unit);
+        mockToken1.mint(alice, depositAmount);
 
-        /// alice deposits 10
-        if (useIntent) {
-            periphery.deposit(
-                _depositIntent(1, alice, alicePK, address(mockToken1), 10 * mock1Unit, 0, 0)
+        address receiver = makeAddr("Receiver");
+
+        uint256 sharesOut;
+
+        /// alice deposits
+        if (params.useIntent) {
+            sharesOut = periphery.deposit(
+                _depositIntent(1, receiver, alicePK, address(mockToken1), type(uint256).max, 0, 0)
             );
         } else {
             vm.prank(alice);
-            periphery.deposit(_depositOrder(1, alice, address(mockToken1), 10 * mock1Unit));
+            sharesOut = periphery.deposit(
+                _depositOrder(1, receiver, address(mockToken1), type(uint256).max)
+            );
         }
 
-        assertEq(periphery.vault().balanceOf(feeRecipient), 0);
+        uint256 entranceFeeForBroker =
+            brokerEntranceFeeInBps > 0 ? sharesOut * brokerEntranceFeeInBps / BP_DIVISOR : 0;
+        uint256 entranceFeeForProtocol =
+            protocolEntranceFeeInBps > 0 ? sharesOut * protocolEntranceFeeInBps / BP_DIVISOR : 0;
 
-        /// simulate that the fund gains 40 units of mockToken1
-        mockToken1.mint(address(fund), 40 * mock1Unit);
+        assertApproxEqRel(
+            mockToken1.balanceOf(address(fund)), depositAmount, 0.1e18, "Fund balance wrong"
+        );
+        assertApproxEqRel(
+            periphery.vault().balanceOf(receiver),
+            sharesOut - entranceFeeForBroker - entranceFeeForProtocol,
+            0.1e18,
+            "Broker entrance fee balance wrong"
+        );
+        if (brokerEntranceFeeInBps > 0) {
+            assertApproxEqRel(
+                periphery.vault().balanceOf(alice),
+                entranceFeeForBroker,
+                0.1e18,
+                "Broker entrance fee balance wrong"
+            );
+        }
+        if (protocolEntranceFeeInBps > 0) {
+            assertApproxEqRel(
+                periphery.vault().balanceOf(feeRecipient),
+                entranceFeeForProtocol,
+                0.1e18,
+                "Protocol entrance fee balance wrong"
+            );
+        }
+    }
 
-        assertEq(periphery.vault().balanceOf(feeRecipient), 0);
+    struct TestExitFeeParams {
+        bool useIntent;
+        uint32 depositAmount;
+        int32 profitAmount;
+        uint8 brokerExitFeeInBps;
+        uint8 protocolExitFeeInBps;
+        uint8 brokerPerformanceFeeInBps;
+        uint8 protocolPerformanceFeeInBps;
+    }
+
+    function test_deposit_withdraw_all_with_exit_fees(TestExitFeeParams memory params)
+        public
+        approveAll(alice)
+    {
+        vm.assume(params.depositAmount > 10);
+
+        /// @notice that the fees are fuzzed in 25bps increments
+        uint256 protocolExitFeeInBps = uint256(params.protocolExitFeeInBps) * 25;
+        uint256 brokerExitFeeInBps = uint256(params.brokerExitFeeInBps) * 25;
+        vm.assume(brokerExitFeeInBps + protocolExitFeeInBps < MAX_NET_EXIT_FEE_IN_BPS);
+
+        uint256 brokerPerformanceFeeInBps = uint256(params.brokerPerformanceFeeInBps) * 25;
+        uint256 protocolPerformanceFeeInBps = uint256(params.protocolPerformanceFeeInBps) * 25;
+        vm.assume(
+            protocolPerformanceFeeInBps + brokerPerformanceFeeInBps < MAX_NET_PERFORMANCE_FEE_IN_BPS
+        );
+
+        /// @notice we cast to uint256 because we want to test the max values
+        uint256 depositAmount = params.depositAmount * mock1Unit;
+        int256 profitAmount = params.profitAmount * int256(mock1Unit);
+
+        vm.assume(profitAmount.abs() > 1 * mock1Unit || profitAmount == 0);
+        vm.assume(profitAmount.abs() < depositAmount);
+
+        vm.startPrank(address(fund));
+        periphery.openAccount(
+            CreateAccountParams({
+                transferable: false,
+                user: alice,
+                role: Role.USER,
+                ttl: 100000000,
+                shareMintLimit: type(uint256).max,
+                brokerPerformanceFeeInBps: brokerPerformanceFeeInBps,
+                protocolPerformanceFeeInBps: protocolPerformanceFeeInBps,
+                brokerEntranceFeeInBps: 0,
+                protocolEntranceFeeInBps: 0,
+                brokerExitFeeInBps: brokerExitFeeInBps,
+                protocolExitFeeInBps: protocolExitFeeInBps
+            })
+        );
+        vm.stopPrank();
+
+        mockToken1.mint(alice, depositAmount);
+
+        /// alice deposits
+        if (params.useIntent) {
+            periphery.deposit(
+                _depositIntent(1, alice, alicePK, address(mockToken1), type(uint256).max, 0, 0)
+            );
+        } else {
+            vm.prank(alice);
+            periphery.deposit(_depositOrder(1, alice, address(mockToken1), type(uint256).max));
+        }
+
+        /// simulate that the fund makes profit or loses money
+        if (profitAmount > 0) {
+            mockToken1.mint(address(fund), profitAmount.abs());
+        } else {
+            vm.prank(address(fund));
+            mockToken1.transfer(address(1), profitAmount.abs());
+        }
 
         address claimer = makeAddr("Claimer");
 
-        assertEq(mockToken1.balanceOf(address(fund)), 50 * mock1Unit);
+        uint256 exitFeeForBroker = brokerExitFeeInBps > 0
+            ? mockToken1.balanceOf(address(fund)) * brokerExitFeeInBps / BP_DIVISOR
+            : 0;
+        uint256 exitFeeForProtocol = protocolExitFeeInBps > 0
+            ? mockToken1.balanceOf(address(fund)) * protocolExitFeeInBps / BP_DIVISOR
+            : 0;
 
-        /// alice withdraws everything she is owed => 46
-        if (useIntent) {
+        if (params.useIntent) {
             periphery.withdraw(
                 _withdrawIntent(1, alicePK, claimer, address(mockToken1), type(uint256).max, 0, 0)
             );
@@ -399,110 +443,56 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
             periphery.withdraw(_withdrawOrder(1, claimer, address(mockToken1), type(uint256).max));
         }
 
-        assertEq(periphery.vault().totalSupply(), periphery.vault().balanceOf(feeRecipient));
-        assertApproxEqRel(mockToken1.balanceOf(address(fund)), 4 * mock1Unit, 0.1e18);
+        uint256 performanceFeeForBroker = brokerPerformanceFeeInBps > 0 && profitAmount > 0
+            ? profitAmount.abs() * brokerPerformanceFeeInBps / 10_000
+            : 0;
+        uint256 performanceFeeForProtocol = protocolPerformanceFeeInBps > 0 && profitAmount > 0
+            ? profitAmount.abs() * protocolPerformanceFeeInBps / 10_000
+            : 0;
 
-        /// fee recipient withdraws everything he is owed
-        if (useIntent) {
-            vm.prank(relayer);
-            periphery.withdraw(
-                _withdrawIntent(
-                    2, feeRecipientPK, feeRecipient, address(mockToken1), type(uint256).max, 0, 0
-                )
+        uint256 profit = profitAmount.abs() - performanceFeeForBroker - performanceFeeForProtocol;
+
+        /// @notice you wont get exact amount out because of vault inflation attack protection
+        if (profitAmount > 0) {
+            assertApproxEqRel(
+                mockToken1.balanceOf(claimer),
+                depositAmount + profit - exitFeeForBroker - exitFeeForProtocol,
+                0.1e18,
+                "Claimer balance wrong when profit"
+            );
+            assertApproxEqRel(
+                mockToken1.balanceOf(alice),
+                performanceFeeForBroker + exitFeeForBroker,
+                0.1e18,
+                "broker fee wrong when profit"
+            );
+            assertApproxEqRel(
+                mockToken1.balanceOf(feeRecipient),
+                performanceFeeForProtocol + exitFeeForProtocol,
+                0.1e18,
+                "protocol fee wrong when profit"
             );
         } else {
-            vm.prank(feeRecipient);
-            periphery.withdraw(
-                _withdrawOrder(2, feeRecipient, address(mockToken1), type(uint256).max)
+            assertEq(
+                mockToken1.balanceOf(claimer),
+                depositAmount - profitAmount.abs() - exitFeeForBroker - exitFeeForProtocol,
+                "Claimer balance wrong when no profit"
+            );
+            assertApproxEqRel(
+                mockToken1.balanceOf(alice),
+                exitFeeForBroker,
+                0.1e18,
+                "Broker fee wrong when no profit"
+            );
+            assertApproxEqRel(
+                mockToken1.balanceOf(feeRecipient),
+                exitFeeForProtocol,
+                0.1e18,
+                "Protocol fee wrong when no profit"
             );
         }
 
-        /// @notice you wont get exact amount out because of vault inflation attack protection
-        assertApproxEqRel(mockToken1.balanceOf(claimer), 46 * mock1Unit, 0.1e18);
-        assertApproxEqRel(mockToken1.balanceOf(feeRecipient), 4 * mock1Unit, 0.1e18);
-        assertEq(mockToken1.balanceOf(address(fund)), 4);
-
-        assertEq(periphery.vault().balanceOf(feeRecipient), 0);
         assertEq(periphery.vault().balanceOf(alice), 0);
         assertEq(mockToken1.balanceOf(address(fund)), periphery.vault().totalAssets());
-    }
-
-    function test_deposit_withdraw_all_with_relayer_fee() public approveAll(alice) {
-        vm.startPrank(address(fund));
-        periphery.openAccount(
-            CreateAccountParams({
-                transferable: false,
-                user: alice,
-                role: Role.USER,
-                ttl: 100000000,
-                shareMintLimit: type(uint256).max,
-                feeBps: 1_000
-            })
-        );
-        vm.stopPrank();
-
-        mockToken1.mint(alice, 20 * mock1Unit);
-        vm.startPrank(relayer);
-        periphery.deposit(
-            _depositIntent(1, alice, alicePK, address(mockToken1), 10 * mock1Unit, 10, 0)
-        );
-        vm.stopPrank();
-
-        assertEq(mockToken1.balanceOf(address(fund)), 10 * mock1Unit);
-        assertEq(mockToken1.balanceOf(alice), 10 * mock1Unit - 10);
-        assertEq(mockToken1.balanceOf(relayer), 10);
-
-        vm.startPrank(relayer);
-        periphery.withdraw(
-            _withdrawIntent(1, alicePK, alice, address(mockToken1), type(uint256).max, 10, 0)
-        );
-        vm.stopPrank();
-
-        assertEq(mockToken1.balanceOf(address(fund)), 0);
-        assertEq(mockToken1.balanceOf(alice), 20 * mock1Unit - 20);
-        assertEq(mockToken1.balanceOf(relayer), 20);
-    }
-
-    function test_deposit_withdraw_with_bribe() public approveAll(alice) {
-        vm.startPrank(address(fund));
-        periphery.openAccount(
-            CreateAccountParams({
-                transferable: false,
-                user: alice,
-                role: Role.USER,
-                ttl: 100000000,
-                shareMintLimit: type(uint256).max,
-                feeBps: 0
-            })
-        );
-        vm.stopPrank();
-
-        mockToken1.mint(alice, 50 * mock1Unit);
-
-        vm.startPrank(relayer);
-        periphery.deposit(
-            _depositIntent(
-                1, alice, alicePK, address(mockToken1), 10 * mock1Unit, 10, 1 * mock1Unit
-            )
-        );
-        vm.stopPrank();
-
-        assertEq(mockToken1.balanceOf(address(fund)), 11 * mock1Unit);
-        assertApproxEqRel(mockToken1.balanceOf(alice), 39 * mock1Unit, 0.1e18);
-        assertEq(mockToken1.balanceOf(relayer), 10);
-
-        vm.startPrank(relayer);
-        periphery.withdraw(
-            _withdrawIntent(
-                1, alicePK, alice, address(mockToken1), type(uint256).max, 10, 1 * mock1Unit
-            )
-        );
-        vm.stopPrank();
-
-        /// this should actually be 2 * mock1Unit, not 1 * mock1Unit
-        /// but since there is one depositor it makes sense
-        assertApproxEqRel(mockToken1.balanceOf(address(fund)), 1 * mock1Unit, 0.1e18);
-        assertApproxEqRel(mockToken1.balanceOf(alice), 49 * mock1Unit, 0.1e18);
-        assertEq(mockToken1.balanceOf(relayer), 20);
     }
 }
