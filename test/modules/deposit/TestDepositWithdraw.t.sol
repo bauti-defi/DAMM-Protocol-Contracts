@@ -17,6 +17,9 @@ import {console2} from "@forge-std/Test.sol";
 uint8 constant VALUATION_DECIMALS = 18;
 uint256 constant VAULT_DECIMAL_OFFSET = 1;
 
+uint256 constant MAX_NET_EXIT_FEE_IN_BPS = 5_000;
+uint256 constant MAX_NET_PERFORMANCE_FEE_IN_BPS = 7_000;
+
 contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
     using MessageHashUtils for bytes;
     using SignedMath for int256;
@@ -259,18 +262,35 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
         return SignedWithdrawIntent({intent: intent, signature: abi.encodePacked(r, s, v)});
     }
 
-    function test_deposit_withdraw_all_WITH_FEE(
-        bool useIntent,
-        uint32 _depositAmount,
-        int32 _profitAmount,
-        uint16 _brokerPerformanceFeeInBps
-    ) public approveAll(alice) approveAll(feeRecipient) {
-        vm.assume(_depositAmount > 10);
-        vm.assume(_brokerPerformanceFeeInBps < 10_000);
+    struct TestParams {
+        bool useIntent;
+        uint32 depositAmount;
+        int32 profitAmount;
+        uint8 brokerPerformanceFeeInBps;
+        uint8 protocolPerformanceFeeInBps;
+        uint8 brokerExitFeeInBps;
+        uint8 protocolExitFeeInBps;
+    }
+
+    function test_deposit_withdraw_all_WITH_FEE(TestParams memory params)
+        public
+        approveAll(alice)
+    {
+        vm.assume(params.depositAmount > 10);
+
+        uint256 protocolExitFeeInBps = uint256(params.protocolExitFeeInBps) * 40;
+        uint256 brokerExitFeeInBps = uint256(params.brokerExitFeeInBps) * 40;
+        vm.assume(brokerExitFeeInBps + protocolExitFeeInBps < MAX_NET_EXIT_FEE_IN_BPS);
+
+        uint256 brokerPerformanceFeeInBps = uint256(params.brokerPerformanceFeeInBps) * 40;
+        uint256 protocolPerformanceFeeInBps = uint256(params.protocolPerformanceFeeInBps) * 40;
+        vm.assume(
+            protocolPerformanceFeeInBps + brokerPerformanceFeeInBps < MAX_NET_PERFORMANCE_FEE_IN_BPS
+        );
 
         /// @notice we cast to uint256 because we want to test the max values
-        uint256 depositAmount = _depositAmount * mock1Unit;
-        int256 profitAmount = _profitAmount * int256(mock1Unit);
+        uint256 depositAmount = params.depositAmount * mock1Unit;
+        int256 profitAmount = params.profitAmount * int256(mock1Unit);
 
         vm.assume(profitAmount.abs() > 1 * mock1Unit || profitAmount == 0);
         vm.assume(profitAmount.abs() < depositAmount);
@@ -283,12 +303,12 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
                 role: Role.USER,
                 ttl: 100000000,
                 shareMintLimit: type(uint256).max,
-                brokerPerformanceFeeInBps: _brokerPerformanceFeeInBps,
-                protocolPerformanceFeeInBps: 0,
+                brokerPerformanceFeeInBps: brokerPerformanceFeeInBps,
+                protocolPerformanceFeeInBps: protocolPerformanceFeeInBps,
                 brokerEntranceFeeInBps: 0,
                 protocolEntranceFeeInBps: 0,
-                brokerExitFeeInBps: 0,
-                protocolExitFeeInBps: 0
+                brokerExitFeeInBps: brokerExitFeeInBps,
+                protocolExitFeeInBps: protocolExitFeeInBps
             })
         );
         vm.stopPrank();
@@ -296,7 +316,7 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
         mockToken1.mint(alice, depositAmount);
 
         /// alice deposits
-        if (useIntent) {
+        if (params.useIntent) {
             periphery.deposit(
                 _depositIntent(1, alice, alicePK, address(mockToken1), type(uint256).max, 0, 0)
             );
@@ -315,7 +335,14 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
 
         address claimer = makeAddr("Claimer");
 
-        if (useIntent) {
+        uint256 exitFeeForBroker = brokerExitFeeInBps > 0
+            ? mockToken1.balanceOf(address(fund)) * brokerExitFeeInBps / 10_000
+            : 0;
+        uint256 exitFeeForProtocol = protocolExitFeeInBps > 0
+            ? mockToken1.balanceOf(address(fund)) * protocolExitFeeInBps / 10_000
+            : 0;
+
+        if (params.useIntent) {
             periphery.withdraw(
                 _withdrawIntent(1, alicePK, claimer, address(mockToken1), type(uint256).max, 0, 0)
             );
@@ -324,24 +351,42 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
             periphery.withdraw(_withdrawOrder(1, claimer, address(mockToken1), type(uint256).max));
         }
 
-        uint256 profit = profitAmount > 0
-            ? profitAmount.abs() * (10_000 - _brokerPerformanceFeeInBps) / 10_000
+        uint256 performanceFeeForBroker = brokerPerformanceFeeInBps > 0 && profitAmount > 0
+            ? profitAmount.abs() * brokerPerformanceFeeInBps / 10_000
             : 0;
+        uint256 performanceFeeForProtocol = protocolPerformanceFeeInBps > 0 && profitAmount > 0
+            ? profitAmount.abs() * protocolPerformanceFeeInBps / 10_000
+            : 0;
+
+        uint256 profit = profitAmount.abs() - performanceFeeForBroker - performanceFeeForProtocol;
 
         /// @notice you wont get exact amount out because of vault inflation attack protection
         if (profitAmount > 0) {
             assertApproxEqRel(
                 mockToken1.balanceOf(claimer),
-                depositAmount + profit,
+                depositAmount + profit - exitFeeForBroker - exitFeeForProtocol,
                 0.1e18,
                 "Claimer balance wrong"
             );
             assertApproxEqRel(
-                mockToken1.balanceOf(alice), profitAmount.abs() - profit, 0.1e18, "broker fee wrong"
+                mockToken1.balanceOf(alice),
+                performanceFeeForBroker + exitFeeForBroker,
+                0.1e18,
+                "broker fee wrong"
+            );
+            assertApproxEqRel(
+                mockToken1.balanceOf(feeRecipient),
+                performanceFeeForProtocol + exitFeeForProtocol,
+                0.1e18,
+                "protocol fee wrong"
             );
         } else {
-            assertEq(mockToken1.balanceOf(claimer), depositAmount - profitAmount.abs());
-            assertEq(mockToken1.balanceOf(alice), 0);
+            assertEq(
+                mockToken1.balanceOf(claimer),
+                depositAmount - profitAmount.abs() - exitFeeForBroker - exitFeeForProtocol
+            );
+            assertEq(mockToken1.balanceOf(alice), exitFeeForBroker);
+            assertEq(mockToken1.balanceOf(feeRecipient), exitFeeForProtocol);
         }
 
         assertEq(periphery.vault().balanceOf(alice), 0);
