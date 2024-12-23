@@ -40,7 +40,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
     /// @dev the recipient of the protocol fees
     address public protocolFeeRecipient;
     uint256 private lastManagementFeeTimestamp;
-    uint256 public immutable managementFeeRateInBps;
+    uint256 public managementFeeRateInBps;
 
     mapping(address asset => AssetPolicy policy) private assetPolicy;
     mapping(uint256 tokenId => UserAccountInfo account) private accountInfo;
@@ -622,6 +622,14 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
 
     function setProtocolFeeRecipient(address recipient_) external onlyFund {
         _setProtocolFeeRecipient(recipient_);
+    }
+
+    function setManagementFeeRateInBps(uint256 rateInBps_) external onlyFund {
+        if (rateInBps_ > BP_DIVISOR) {
+            revert Errors.Deposit_InvalidManagementFeeRate();
+        }
+
+        managementFeeRateInBps = rateInBps_;
     }
 
     function _setAdmin(address admin_) private {
