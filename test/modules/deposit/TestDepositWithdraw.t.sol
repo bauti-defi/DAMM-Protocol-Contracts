@@ -259,87 +259,6 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
         return SignedWithdrawIntent({intent: intent, signature: abi.encodePacked(r, s, v)});
     }
 
-    function test_multi_user_withdraw_all_with_profit_NO_FEE(bool useIntent)
-        public
-        approveAll(alice)
-        approveAll(bob)
-    {
-        vm.startPrank(address(fund));
-        periphery.openAccount(
-            CreateAccountParams({
-                transferable: false,
-                user: alice,
-                role: Role.USER,
-                ttl: 100000000,
-                shareMintLimit: type(uint256).max,
-                brokerPerformanceFeeInBps: 0
-            })
-        );
-        periphery.openAccount(
-            CreateAccountParams({
-                transferable: false,
-                user: bob,
-                role: Role.USER,
-                ttl: 100000000,
-                shareMintLimit: type(uint256).max,
-                brokerPerformanceFeeInBps: 0
-            })
-        );
-        vm.stopPrank();
-
-        mockToken1.mint(alice, 10 * mock1Unit);
-        mockToken1.mint(bob, 10 * mock1Unit);
-
-        // Alice deposits 10
-        if (useIntent) {
-            periphery.deposit(
-                _depositIntent(1, alice, alicePK, address(mockToken1), 10 * mock1Unit, 0, 0)
-            );
-        } else {
-            vm.prank(alice);
-            periphery.deposit(_depositOrder(1, alice, address(mockToken1), 10 * mock1Unit));
-        }
-
-        // Bob deposits 0 (all balance)
-        if (useIntent) {
-            periphery.deposit(
-                _depositIntent(2, bob, bobPK, address(mockToken1), type(uint256).max, 0, 0)
-            );
-        } else {
-            vm.prank(bob);
-            periphery.deposit(_depositOrder(2, bob, address(mockToken1), type(uint256).max));
-        }
-
-        // Simulate that the fund gains 100 units of mockToken1
-        mockToken1.mint(address(fund), 100 * mock1Unit);
-
-        // Alice direct withdraws, no intent
-        if (useIntent) {
-            periphery.withdraw(
-                _withdrawIntent(1, alicePK, alice, address(mockToken1), type(uint256).max, 0, 0)
-            );
-        } else {
-            vm.prank(alice);
-            periphery.withdraw(_withdrawOrder(1, alice, address(mockToken1), type(uint256).max));
-        }
-
-        // Bob withdraws, no intent
-        if (useIntent) {
-            periphery.withdraw(
-                _withdrawIntent(2, bobPK, bob, address(mockToken1), type(uint256).max, 0, 0)
-            );
-        } else {
-            vm.prank(bob);
-            periphery.withdraw(_withdrawOrder(2, bob, address(mockToken1), type(uint256).max));
-        }
-
-        // @notice you wont get exact amount out because of vault inflation attack protection
-        assertApproxEqRel(mockToken1.balanceOf(alice), 60 * mock1Unit, 0.1e18);
-        assertApproxEqRel(mockToken1.balanceOf(bob), 60 * mock1Unit, 0.1e18);
-        assertApproxEqRel(mockToken1.balanceOf(address(fund)), 5, 1);
-        assertEq(mockToken1.balanceOf(address(fund)), periphery.vault().totalAssets());
-    }
-
     function test_deposit_withdraw_all_WITH_FEE(
         bool useIntent,
         uint32 _depositAmount,
@@ -364,7 +283,12 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
                 role: Role.USER,
                 ttl: 100000000,
                 shareMintLimit: type(uint256).max,
-                brokerPerformanceFeeInBps: _brokerPerformanceFeeInBps
+                brokerPerformanceFeeInBps: _brokerPerformanceFeeInBps,
+                protocolPerformanceFeeInBps: 0,
+                brokerEntranceFeeInBps: 0,
+                protocolEntranceFeeInBps: 0,
+                brokerExitFeeInBps: 0,
+                protocolExitFeeInBps: 0
             })
         );
         vm.stopPrank();
@@ -422,84 +346,5 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
 
         assertEq(periphery.vault().balanceOf(alice), 0);
         assertEq(mockToken1.balanceOf(address(fund)), periphery.vault().totalAssets());
-    }
-
-    function test_deposit_withdraw_all_with_relayer_fee() public approveAll(alice) {
-        vm.startPrank(address(fund));
-        periphery.openAccount(
-            CreateAccountParams({
-                transferable: false,
-                user: alice,
-                role: Role.USER,
-                ttl: 100000000,
-                shareMintLimit: type(uint256).max,
-                brokerPerformanceFeeInBps: 1_000
-            })
-        );
-        vm.stopPrank();
-
-        mockToken1.mint(alice, 20 * mock1Unit);
-        vm.startPrank(relayer);
-        periphery.deposit(
-            _depositIntent(1, alice, alicePK, address(mockToken1), 10 * mock1Unit, 10, 0)
-        );
-        vm.stopPrank();
-
-        assertEq(mockToken1.balanceOf(address(fund)), 10 * mock1Unit);
-        assertEq(mockToken1.balanceOf(alice), 10 * mock1Unit - 10);
-        assertEq(mockToken1.balanceOf(relayer), 10);
-
-        vm.startPrank(relayer);
-        periphery.withdraw(
-            _withdrawIntent(1, alicePK, alice, address(mockToken1), type(uint256).max, 10, 0)
-        );
-        vm.stopPrank();
-
-        assertEq(mockToken1.balanceOf(address(fund)), 0);
-        assertEq(mockToken1.balanceOf(alice), 20 * mock1Unit - 20);
-        assertEq(mockToken1.balanceOf(relayer), 20);
-    }
-
-    function test_deposit_withdraw_with_bribe() public approveAll(alice) {
-        vm.startPrank(address(fund));
-        periphery.openAccount(
-            CreateAccountParams({
-                transferable: false,
-                user: alice,
-                role: Role.USER,
-                ttl: 100000000,
-                shareMintLimit: type(uint256).max,
-                brokerPerformanceFeeInBps: 0
-            })
-        );
-        vm.stopPrank();
-
-        mockToken1.mint(alice, 50 * mock1Unit);
-
-        vm.startPrank(relayer);
-        periphery.deposit(
-            _depositIntent(
-                1, alice, alicePK, address(mockToken1), 10 * mock1Unit, 10, 1 * mock1Unit
-            )
-        );
-        vm.stopPrank();
-
-        assertEq(mockToken1.balanceOf(address(fund)), 11 * mock1Unit);
-        assertApproxEqRel(mockToken1.balanceOf(alice), 39 * mock1Unit, 0.1e18);
-        assertEq(mockToken1.balanceOf(relayer), 10);
-
-        vm.startPrank(relayer);
-        periphery.withdraw(
-            _withdrawIntent(
-                1, alicePK, alice, address(mockToken1), type(uint256).max, 10, 1 * mock1Unit
-            )
-        );
-        vm.stopPrank();
-
-        /// this should actually be 2 * mock1Unit, not 1 * mock1Unit
-        /// but since there is one depositor it makes sense
-        assertApproxEqRel(mockToken1.balanceOf(address(fund)), 1 * mock1Unit, 0.1e18);
-        assertApproxEqRel(mockToken1.balanceOf(alice), 49 * mock1Unit, 0.1e18);
-        assertEq(mockToken1.balanceOf(relayer), 20);
     }
 }

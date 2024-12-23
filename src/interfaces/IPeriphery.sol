@@ -15,7 +15,6 @@ interface IPeriphery {
         Role role,
         uint256 expirationTimestamp,
         uint256 shareMintLimit,
-        uint256 feeBps,
         bool transferable
     );
 
