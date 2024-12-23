@@ -348,8 +348,6 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         /// @notice this will implicitly pay the bribe to the fund
         assetAmountOut = assetAmountOut - order.intent.relayerTip - order.intent.bribe;
 
-        emit Log2This(netAssetAmountOut, assetAmountOut, netBrokerFee, netProtocolFee);
-
         /// pay the relayer if required
         if (order.intent.relayerTip > 0) {
             _transferAssetFromFund(order.intent.withdraw.asset, msg.sender, order.intent.relayerTip);
@@ -409,8 +407,6 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
 
         assetAmountOut = netAssetAmountOut - netBrokerFee - netProtocolFee;
 
-        emit Log2This(netAssetAmountOut, assetAmountOut, netBrokerFee, netProtocolFee);
-
         /// transfer asset from fund to receiver
         _transferAssetFromFund(order.asset, order.to, assetAmountOut);
 
@@ -426,13 +422,6 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
 
         emit Withdraw(order.accountId, order.asset, order.shares, netAssetAmountOut, 0, 0);
     }
-
-    event Log2This(
-        uint256 netAssetAmountOut,
-        uint256 assetAmountOut,
-        uint256 netBrokerFee,
-        uint256 netProtocolFee
-    );
 
     function _withdraw(
         address broker,
@@ -494,16 +483,6 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         }
     }
 
-    event LogThis(
-        uint256 sharesToBurn,
-        uint256 liquidity,
-        uint256 averageShareBuyPriceInUnitOfAccount,
-        uint256 realizedSharePriceInUnitOfAccount,
-        uint256 netPerformanceInTermsOfUnitOfAccount,
-        uint256 netBrokerFee,
-        uint256 netProtocolFee
-    );
-
     function _calculateWithdrawalFees(
         UserAccountInfo memory account,
         uint256 sharesBurnt,
@@ -546,16 +525,6 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         if (account.brokerExitFeeInBps > 0) {
             netBrokerFee += liquidityRedeemed.fullMulDivUp(account.brokerExitFeeInBps, BP_DIVISOR);
         }
-
-        emit LogThis(
-            sharesBurnt,
-            liquidityRedeemed,
-            averageShareBuyPriceInUnitOfAccount,
-            realizedSharePriceInUnitOfAccount,
-            netPerformanceInTermsOfUnitOfAccount,
-            netBrokerFee,
-            netProtocolFee
-        );
     }
 
     function _takeManagementFee() private {
