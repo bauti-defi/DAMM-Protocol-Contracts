@@ -561,7 +561,8 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
             periphery.vault().balanceOf(alice), periphery.vault().totalSupply() - managementFee
         );
 
-        /// @notice that now blocks have passed, so no time has passed, so there is no management fee
+        /// @notice now the management fee should have been minted to the management fee recipient
+        /// since time has passed between deposits
         assertEq(periphery.vault().balanceOf(managementFeeRecipient), managementFee);
     }
 }
