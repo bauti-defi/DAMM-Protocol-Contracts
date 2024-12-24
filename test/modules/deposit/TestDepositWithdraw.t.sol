@@ -21,6 +21,7 @@ uint256 constant VAULT_DECIMAL_OFFSET = 1;
 uint256 constant MAX_NET_EXIT_FEE_IN_BPS = 5_000;
 uint256 constant MAX_NET_PERFORMANCE_FEE_IN_BPS = 7_000;
 uint256 constant MAX_NET_ENTRANCE_FEE_IN_BPS = 5_000;
+uint256 constant MAX_NET_MANAGEMENT_FEE_IN_BPS = 5_000;
 
 contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
     using MessageHashUtils for bytes;
@@ -494,5 +495,68 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
 
         assertEq(periphery.vault().balanceOf(alice), 0);
         assertEq(mockToken1.balanceOf(address(fund)), periphery.vault().totalAssets());
+    }
+
+    function test_management_fee(uint16 managementFeeRateInBps) public approveAll(alice) {
+        vm.assume(managementFeeRateInBps < MAX_NET_MANAGEMENT_FEE_IN_BPS);
+
+        address managementFeeRecipient = makeAddr("ManagementFeeRecipient");
+
+        vm.assume(managementFeeRecipient != address(0));
+
+        vm.startPrank(address(fund));
+        periphery.setManagementFeeRateInBps(managementFeeRateInBps);
+        periphery.setProtocolFeeRecipient(managementFeeRecipient);
+        periphery.openAccount(
+            CreateAccountParams({
+                transferable: false,
+                user: alice,
+                role: Role.USER,
+                ttl: 2 * 365 days,
+                shareMintLimit: type(uint256).max,
+                brokerPerformanceFeeInBps: 0,
+                protocolPerformanceFeeInBps: 0,
+                brokerEntranceFeeInBps: 0,
+                protocolEntranceFeeInBps: 0,
+                brokerExitFeeInBps: 0,
+                protocolExitFeeInBps: 0
+            })
+        );
+        vm.stopPrank();
+
+        mockToken1.mint(alice, 50 ether);
+
+        vm.prank(alice);
+        periphery.deposit(_depositOrder(1, alice, address(mockToken1), type(uint256).max));
+        assertEq(periphery.vault().balanceOf(alice), periphery.vault().totalSupply());
+
+        /// @notice that now blocks have passed, so no time has passed, so there is no management fee
+        assertEq(periphery.vault().balanceOf(managementFeeRecipient), 0);
+
+        mockToken1.mint(alice, 50 ether);
+
+        vm.prank(alice);
+        periphery.withdraw(_withdrawOrder(1, alice, address(mockToken1), type(uint256).max));
+        assertEq(periphery.vault().balanceOf(alice), periphery.vault().totalSupply());
+
+        /// @notice that now blocks have passed, so no time has passed, so there is no management fee
+        assertEq(periphery.vault().balanceOf(managementFeeRecipient), 0);
+
+        /// now we wait 1 year
+        vm.warp(block.timestamp + 365 days);
+
+        uint256 managementFee =
+            periphery.vault().totalSupply() * managementFeeRateInBps / BP_DIVISOR;
+
+        mockToken1.mint(alice, 50 ether);
+
+        vm.prank(alice);
+        periphery.deposit(_depositOrder(1, alice, address(mockToken1), type(uint256).max));
+        assertEq(
+            periphery.vault().balanceOf(alice), periphery.vault().totalSupply() - managementFee
+        );
+
+        /// @notice that now blocks have passed, so no time has passed, so there is no management fee
+        assertEq(periphery.vault().balanceOf(managementFeeRecipient), managementFee);
     }
 }
