@@ -497,8 +497,13 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
         assertEq(mockToken1.balanceOf(address(fund)), periphery.vault().totalAssets());
     }
 
-    function test_management_fee(uint16 managementFeeRateInBps) public approveAll(alice) {
+    function test_management_fee(uint16 managementFeeRateInBps, uint256 timeDelta)
+        public
+        approveAll(alice)
+    {
         vm.assume(managementFeeRateInBps < MAX_NET_MANAGEMENT_FEE_IN_BPS);
+        vm.assume(timeDelta > 0);
+        vm.assume(timeDelta < 10 * 365 days);
 
         address managementFeeRecipient = makeAddr("ManagementFeeRecipient");
 
@@ -512,7 +517,7 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
                 transferable: false,
                 user: alice,
                 role: Role.USER,
-                ttl: 2 * 365 days,
+                ttl: timeDelta + 1,
                 shareMintLimit: type(uint256).max,
                 brokerPerformanceFeeInBps: 0,
                 protocolPerformanceFeeInBps: 0,
@@ -543,10 +548,10 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
         assertEq(periphery.vault().balanceOf(managementFeeRecipient), 0);
 
         /// now we wait 1 year
-        vm.warp(block.timestamp + 365 days);
+        vm.warp(block.timestamp + timeDelta);
 
-        uint256 managementFee =
-            periphery.vault().totalSupply() * managementFeeRateInBps / BP_DIVISOR;
+        uint256 managementFee = periphery.vault().totalSupply() * timeDelta * managementFeeRateInBps
+            / BP_DIVISOR / 365 days;
 
         mockToken1.mint(alice, 50 ether);
 
