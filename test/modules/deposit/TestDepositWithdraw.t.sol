@@ -547,7 +547,7 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
         /// @notice that now blocks have passed, so no time has passed, so there is no management fee
         assertEq(periphery.vault().balanceOf(managementFeeRecipient), 0);
 
-        /// now we wait 1 year
+        /// now we simulate time passing
         vm.warp(block.timestamp + timeDelta);
 
         uint256 managementFee = periphery.vault().totalSupply() * timeDelta * managementFeeRateInBps
