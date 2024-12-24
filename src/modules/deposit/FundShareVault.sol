@@ -55,6 +55,10 @@ contract FundShareVault is ERC4626 {
         shares = super.withdraw(assets, receiver, owner);
     }
 
+    function mintUnbacked(uint256 shares, address receiver) public onlyPeriphery {
+        _mint(receiver, shares);
+    }
+
     function _decimalsOffset() internal pure override returns (uint8) {
         return 1;
     }

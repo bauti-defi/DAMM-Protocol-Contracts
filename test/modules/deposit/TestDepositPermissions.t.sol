@@ -12,6 +12,7 @@ import {MockERC20} from "@test/mocks/MockERC20.sol";
 import {MockPriceOracle} from "@test/mocks/MockPriceOracle.sol";
 import "@openzeppelin-contracts/utils/cryptography/MessageHashUtils.sol";
 import "@src/libs/Errors.sol";
+import {BP_DIVISOR} from "@src/libs/Constants.sol";
 
 uint8 constant VALUATION_DECIMALS = 18;
 uint256 constant VAULT_DECIMAL_OFFSET = 1;
@@ -170,11 +171,11 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         _;
     }
 
-    modifier whitelistUser(address user_, uint256 ttl_, Role role_) {
+    modifier whitelistUser(address user_, uint256 ttl_, Role role_, bool transferable_) {
         vm.startPrank(address(fund));
         periphery.openAccount(
             CreateAccountParams({
-                transferable: false,
+                transferable: transferable_,
                 user: user_,
                 role: role_,
                 ttl: ttl_,
@@ -263,7 +264,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
 
     function test_only_account_signature_is_valid(string memory name)
         public
-        whitelistUser(alice, 10000, Role.USER)
+        whitelistUser(alice, 10000, Role.USER, false)
     {
         (address user, uint256 userPK) = makeAddrAndKey(name);
 
@@ -303,7 +304,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
 
     function test_only_active_account_can_deposit_withdraw()
         public
-        whitelistUser(alice, 100000, Role.USER)
+        whitelistUser(alice, 100000, Role.USER, false)
     {
         vm.prank(address(fund));
         periphery.pauseAccount(1);
@@ -326,7 +327,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
 
     function test_order_must_have_valid_nonce(uint256 nonce_)
         public
-        whitelistUser(alice, 1000000, Role.USER)
+        whitelistUser(alice, 1000000, Role.USER, false)
     {
         vm.assume(nonce_ > 1);
 
@@ -349,7 +350,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
 
     function test_order_must_be_within_deadline(uint256 timestamp_)
         public
-        whitelistUser(alice, 100000000 * 2, Role.USER)
+        whitelistUser(alice, 100000000 * 2, Role.USER, false)
     {
         vm.assume(timestamp_ > 10000);
         vm.assume(timestamp_ < 100000000 * 2);
@@ -381,7 +382,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
 
     function test_order_chain_id_must_match(uint256 chainId_)
         public
-        whitelistUser(alice, 1000000, Role.USER)
+        whitelistUser(alice, 1000000, Role.USER, false)
     {
         vm.assume(chainId_ != block.chainid);
 
@@ -409,8 +410,8 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
 
     function test_only_super_user_can_deposit_or_withdraw_permissioned_asset()
         public
-        whitelistUser(alice, 1000000 * 2, Role.USER)
-        whitelistUser(bob, 1000000 * 2, Role.SUPER_USER)
+        whitelistUser(alice, 1000000 * 2, Role.USER, false)
+        whitelistUser(bob, 1000000 * 2, Role.SUPER_USER, false)
     {
         mockToken2.mint(bob, 100_000_000 * mock2Unit);
         mockToken2.mint(alice, 100_000_000 * mock2Unit);
@@ -458,7 +459,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
 
     function test_only_non_expired_account_can_deposit(uint256 timestamp)
         public
-        whitelistUser(alice, 1, Role.USER)
+        whitelistUser(alice, 1, Role.USER, false)
         approveAll(alice)
     {
         vm.assume(timestamp > 1);
@@ -476,7 +477,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
 
     function test_expired_account_can_withdraw()
         public
-        whitelistUser(alice, 1000, Role.USER)
+        whitelistUser(alice, 1000, Role.USER, false)
         approveAll(alice)
     {
         SignedDepositIntent memory dOrder =
@@ -504,7 +505,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
 
     function test_only_allowed_assets_can_be_deposited_or_withdrawn(address asset)
         public
-        whitelistUser(alice, 1000000, Role.USER)
+        whitelistUser(alice, 1000000, Role.USER, false)
     {
         vm.assume(asset != address(mockToken1));
         vm.assume(asset != address(mockToken2));
@@ -526,7 +527,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
 
     function test_only_admin_can_pause_unpause_account(address attacker)
         public
-        whitelistUser(alice, 1000000, Role.USER)
+        whitelistUser(alice, 1000000, Role.USER, false)
     {
         vm.assume(attacker != address(fund));
 
@@ -551,7 +552,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
 
     function test_only_admin_can_close_account(address attacker)
         public
-        whitelistUser(alice, 1000000, Role.USER)
+        whitelistUser(alice, 1000000, Role.USER, false)
     {
         vm.assume(attacker != address(fund));
 
@@ -589,9 +590,9 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         assertTrue(!periphery.paused());
     }
 
-    function test_only_fund_can_transfer_account_nft(address attacker)
+    function test_cannot_transfer_souldbound_broker_account(address attacker)
         public
-        whitelistUser(alice, 1000000, Role.USER)
+        whitelistUser(alice, 1000000, Role.USER, false)
     {
         vm.prank(attacker);
         vm.expectRevert(Errors.Deposit_AccountNotTransferable.selector);
@@ -610,6 +611,29 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         periphery.safeTransferFrom(alice, bob, 1);
     }
 
+    function test_can_transfer_non_soulbound_broker_account()
+        public
+        whitelistUser(alice, 2 days, Role.USER, true)
+    {
+        address receiver = makeAddr("receiver");
+
+        vm.prank(alice);
+        periphery.transferFrom(alice, receiver, 1);
+
+        assertEq(periphery.ownerOf(1), receiver);
+
+        vm.prank(alice);
+        vm.expectRevert();
+        periphery.transferFrom(alice, receiver, 1);
+
+        assertEq(periphery.ownerOf(1), receiver);
+
+        vm.prank(receiver);
+        periphery.safeTransferFrom(receiver, alice, 1);
+
+        assertEq(periphery.ownerOf(1), alice);
+    }
+
     function test_only_fund_can_change_admin(address attacker) public {
         vm.assume(attacker != address(fund) && attacker != address(0));
 
@@ -623,7 +647,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         assertTrue(periphery.admin() == attacker);
     }
 
-    function test_only_fund_can_change_fee_recipient(address attacker) public {
+    function test_only_fund_can_change_protocol_fee_recipient(address attacker) public {
         vm.assume(attacker != address(fund) && attacker != address(0));
 
         vm.prank(attacker);
@@ -634,6 +658,29 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         periphery.setProtocolFeeRecipient(attacker);
 
         assertTrue(periphery.protocolFeeRecipient() == attacker);
+    }
+
+    function test_only_fund_can_set_management_fee(address attacker) public {
+        vm.assume(attacker != address(fund));
+
+        vm.prank(attacker);
+        vm.expectRevert(Errors.OnlyFund.selector);
+        periphery.setManagementFeeRateInBps(100);
+
+        vm.prank(address(fund));
+        periphery.setManagementFeeRateInBps(100);
+
+        assertEq(periphery.managementFeeRateInBps(), 100);
+    }
+
+    function test_management_fee_cannot_be_set_above_100_percent(uint16 rateInBps) public {
+        vm.prank(address(fund));
+        if (rateInBps <= BP_DIVISOR) {
+            periphery.setManagementFeeRateInBps(rateInBps);
+        } else {
+            vm.expectRevert(Errors.Deposit_InvalidManagementFeeRate.selector);
+            periphery.setManagementFeeRateInBps(rateInBps);
+        }
     }
 
     /// TODO: test share mint limit exceeded

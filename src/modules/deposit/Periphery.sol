@@ -544,7 +544,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             uint256 managementFeeInShares = vault.totalSupply().mulWadUp(annualizedFeeRate);
 
             /// mint the management fee to the fee recipient
-            vault.mint(managementFeeInShares, protocolFeeRecipient);
+            vault.mintUnbacked(managementFeeInShares, protocolFeeRecipient);
         }
     }
 
