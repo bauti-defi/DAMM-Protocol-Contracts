@@ -6,8 +6,6 @@ address constant NATIVE_ASSET = address(0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEE
 
 uint256 constant BP_DIVISOR = 10_000;
 
-uint256 constant PRECISION = 1e18;
-
 // FundCallbackHandler
 uint256 constant NULL_ROLE = 1 << 0;
 uint256 constant FUND_ROLE = 1 << 1;
