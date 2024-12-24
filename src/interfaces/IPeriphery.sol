@@ -67,7 +67,7 @@ interface IPeriphery {
     function disableAsset(address asset) external;
     function getAssetPolicy(address asset) external returns (AssetPolicy memory);
     function increaseAccountNonce(uint256 accountId, uint256 increment) external;
-    function getAccountInfo(uint256 accountId) external returns (UserAccountInfo memory);
+    function getAccountInfo(uint256 accountId) external returns (BrokerAccountInfo memory);
     function pauseAccount(uint256 accountId) external;
     function unpauseAccount(uint256 accountId) external;
     function openAccount(CreateAccountParams calldata params) external returns (uint256);

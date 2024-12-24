@@ -43,7 +43,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
     uint256 public managementFeeRateInBps;
 
     mapping(address asset => AssetPolicy policy) private assetPolicy;
-    mapping(uint256 tokenId => UserAccountInfo account) private accountInfo;
+    mapping(uint256 tokenId => BrokerAccountInfo account) private accountInfo;
 
     uint256 private tokenId = 0;
     bool public paused;
@@ -112,7 +112,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         _updateVaultBalance();
     }
 
-    /// @dev this modifier ensures that the account info is zeroed out if the user has no shares outstanding
+    /// @dev this modifier ensures that the account info is zeroed out if the broker has no shares outstanding
     modifier zeroOutAccountInfo(uint256 accountId_) {
         _;
         if (accountInfo[accountId_].totalSharesOutstanding == 0) {
@@ -150,7 +150,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         _takeManagementFee();
 
         AssetPolicy memory policy = assetPolicy[order.intent.deposit.asset];
-        UserAccountInfo memory account = accountInfo[order.intent.deposit.accountId];
+        BrokerAccountInfo memory account = accountInfo[order.intent.deposit.accountId];
 
         _validateAccountAssetPolicy(policy, account, true);
 
@@ -209,7 +209,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         _takeManagementFee();
 
         AssetPolicy memory policy = assetPolicy[order.asset];
-        UserAccountInfo memory account = accountInfo[order.accountId];
+        BrokerAccountInfo memory account = accountInfo[order.accountId];
 
         _validateAccountAssetPolicy(policy, account, true);
 
@@ -246,7 +246,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             revert Errors.Deposit_InsufficientDeposit();
         }
 
-        /// if amount is type(uint256).max, then deposit the user's entire balance
+        /// if amount is type(uint256).max, then deposit the broker's entire balance
         if (assetAmountIn == type(uint256).max) {
             assetAmountIn = assetToken.balanceOf(broker);
         }
@@ -256,7 +256,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             revert Errors.Deposit_InsufficientDeposit();
         }
 
-        /// transfer asset from user to fund
+        /// transfer asset from broker to fund
         assetToken.safeTransferFrom(broker, address(fund), assetAmountIn);
 
         /// calculate how much liquidity for this amount of deposited asset
@@ -274,7 +274,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             revert Errors.Deposit_SlippageLimitExceeded();
         }
 
-        /// make sure the user hasn't exceeded their share mint limit
+        /// make sure the broker hasn't exceeded their share mint limit
         if (totalSharesOutstanding + sharesOut > shareMintLimit) {
             revert Errors.Deposit_ShareMintLimitExceeded();
         }
@@ -291,16 +291,16 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             );
         }
 
-        /// forward the remaining shares to the user
+        /// forward the remaining shares to the broker
         vault.transfer(order.recipient, vault.balanceOf(address(this)));
 
-        /// update the user's cumulative units deposited
+        /// update the broker's cumulative units deposited
         accountInfo[order.accountId].cumulativeUnitsDeposited += liquidity;
 
-        /// update the user's total shares outstanding
+        /// update the broker's total shares outstanding
         accountInfo[order.accountId].totalSharesOutstanding += sharesOut;
 
-        /// update the user's cumulative shares minted
+        /// update the broker's cumulative shares minted
         accountInfo[order.accountId].cumulativeSharesMinted += sharesOut;
     }
 
@@ -329,7 +329,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         if (order.intent.chaindId != block.chainid) revert Errors.Deposit_InvalidChain();
 
         AssetPolicy memory policy = assetPolicy[order.intent.withdraw.asset];
-        UserAccountInfo memory account = accountInfo[order.intent.withdraw.accountId];
+        BrokerAccountInfo memory account = accountInfo[order.intent.withdraw.accountId];
 
         _validateAccountAssetPolicy(policy, account, false);
 
@@ -391,7 +391,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         }
 
         AssetPolicy memory policy = assetPolicy[order.asset];
-        UserAccountInfo memory account = accountInfo[order.accountId];
+        BrokerAccountInfo memory account = accountInfo[order.accountId];
 
         _validateAccountAssetPolicy(policy, account, false);
 
@@ -411,7 +411,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
     function _withdraw(
         address broker,
         WithdrawOrder calldata order,
-        UserAccountInfo memory account,
+        BrokerAccountInfo memory account,
         uint256 minimumWithdrawal
     ) private returns (uint256 netAssetAmountOut, uint256 netBrokerFee, uint256 netProtocolFee) {
         if (order.deadline < block.timestamp) revert Errors.Deposit_OrderExpired();
@@ -422,18 +422,18 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             revert Errors.Deposit_InsufficientWithdrawal();
         }
 
-        /// if shares to burn is max uint256, then burn all shares owned by user
+        /// if shares to burn is max uint256, then burn all shares owned by broker
         if (sharesToBurn == type(uint256).max) {
             sharesToBurn = vault.balanceOf(broker);
         }
 
-        /// make sure the user has not exceeded their share burn limit
+        /// make sure the broker has not exceeded their share burn limit
         if (account.shareMintLimit != type(uint256).max) {
             if (account.totalSharesOutstanding < sharesToBurn) {
                 revert Errors.Deposit_ShareBurnLimitExceeded();
             }
 
-            /// update the user's total shares outstanding
+            /// update the broker's total shares outstanding
             accountInfo[order.accountId].totalSharesOutstanding -= sharesToBurn;
         }
 
@@ -443,7 +443,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         /// burn liquidity from periphery
         unitOfAccount.burn(address(this), liquidity);
 
-        /// take the withdrawal fees, and return the net liquidity left for the user
+        /// take the withdrawal fees, and return the net liquidity left for the broker
         /// @notice this will consume part of the liquidity that was redeemed
         (uint256 netBrokerFeeInLiquidity, uint256 netProtocolFeeInLiquidity) =
             _calculateWithdrawalFees(account, sharesToBurn, liquidity);
@@ -486,7 +486,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
     }
 
     function _calculateWithdrawalFees(
-        UserAccountInfo memory account,
+        BrokerAccountInfo memory account,
         uint256 sharesBurnt,
         uint256 liquidityRedeemed
     ) private returns (uint256 netBrokerFee, uint256 netProtocolFee) {
@@ -565,7 +565,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
 
     function _validateAccountAssetPolicy(
         AssetPolicy memory policy,
-        UserAccountInfo memory account,
+        BrokerAccountInfo memory account,
         bool isDeposit
     ) private view {
         if (!account.isActive()) revert Errors.Deposit_AccountNotActive();
@@ -717,7 +717,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         /// @notice If `to` refers to a smart contract, it must implement {IERC721Receiver-onERC721Received}, which is called upon a safe transfer.
         _safeMint(params_.user, nextTokenId);
 
-        accountInfo[nextTokenId] = UserAccountInfo({
+        accountInfo[nextTokenId] = BrokerAccountInfo({
             transferable: params_.transferable,
             role: params_.role,
             state: AccountState.ACTIVE,
@@ -774,7 +774,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         emit AccountUnpaused(accountId_);
     }
 
-    function getAccountInfo(uint256 accountId_) public view returns (UserAccountInfo memory) {
+    function getAccountInfo(uint256 accountId_) public view returns (BrokerAccountInfo memory) {
         return accountInfo[accountId_];
     }
 

@@ -68,7 +68,7 @@ struct AssetPolicy {
     bool enabled;
 }
 
-struct UserAccountInfo {
+struct BrokerAccountInfo {
     Role role;
     bool transferable;
     AccountState state;
@@ -101,25 +101,25 @@ struct CreateAccountParams {
 }
 
 library AccountLib {
-    function isActive(UserAccountInfo memory account) internal pure returns (bool) {
+    function isActive(BrokerAccountInfo memory account) internal pure returns (bool) {
         return account.state == AccountState.ACTIVE;
     }
 
-    function isPaused(UserAccountInfo memory account) internal pure returns (bool) {
+    function isPaused(BrokerAccountInfo memory account) internal pure returns (bool) {
         return account.state == AccountState.PAUSED;
     }
 
-    function canBeClosed(UserAccountInfo memory account) internal pure returns (bool) {
+    function canBeClosed(BrokerAccountInfo memory account) internal pure returns (bool) {
         return account.state == AccountState.ACTIVE || account.state == AccountState.PAUSED;
     }
 
-    function isSuperUser(UserAccountInfo memory account) internal pure returns (bool) {
+    function isSuperUser(BrokerAccountInfo memory account) internal pure returns (bool) {
         return account.role == Role.SUPER_USER;
     }
 
-    function isExpired(UserAccountInfo memory account) internal view returns (bool) {
+    function isExpired(BrokerAccountInfo memory account) internal view returns (bool) {
         return account.expirationTimestamp != 0 && block.timestamp >= account.expirationTimestamp;
     }
 }
 
-using AccountLib for UserAccountInfo global;
+using AccountLib for BrokerAccountInfo global;
