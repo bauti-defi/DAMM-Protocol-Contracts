@@ -70,7 +70,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         if (protocolFeeRecipient_ == address(0)) {
             revert Errors.Deposit_InvalidConstructorParam();
         }
-        if (managementFeeRateInBps_ > BP_DIVISOR) {
+        if (managementFeeRateInBps_ >= BP_DIVISOR) {
             revert Errors.Deposit_InvalidConstructorParam();
         }
 
