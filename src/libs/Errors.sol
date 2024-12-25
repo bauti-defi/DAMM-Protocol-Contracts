@@ -23,7 +23,7 @@ library Errors {
     error Hook_InvalidOperation();
     error Hook_InvalidTargetSelector();
     error Hook_AlreadyDefined();
-
+    error Hook_NotDefined();
     /// Constructor errors
     error Deposit_InvalidConstructorParam();
 

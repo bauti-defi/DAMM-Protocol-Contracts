@@ -12,6 +12,7 @@ interface IHookRegistry {
     error OnlyFund();
 
     event HookSet(
+        bytes32 pointer,
         address operator,
         address target,
         uint8 operation,
@@ -20,7 +21,9 @@ interface IHookRegistry {
         address afterHook
     );
 
-    event HookRemoved(address operator, address target, uint8 operation, bytes4 selector);
+    event HookRemoved(
+        bytes32 pointer, address operator, address target, uint8 operation, bytes4 selector
+    );
 
     function fund() external returns (address);
 

@@ -279,6 +279,15 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             revert Errors.Deposit_ShareMintLimitExceeded();
         }
 
+        /// update the broker's cumulative units deposited
+        accountInfo[order.accountId].cumulativeUnitsDeposited += liquidity;
+
+        /// update the broker's total shares outstanding
+        accountInfo[order.accountId].totalSharesOutstanding += sharesOut;
+
+        /// update the broker's cumulative shares minted
+        accountInfo[order.accountId].cumulativeSharesMinted += sharesOut;
+
         /// take the broker entrance fees
         if (brokerEntranceFeeInBps > 0) {
             vault.transfer(broker, sharesOut.fullMulDivUp(brokerEntranceFeeInBps, BP_DIVISOR));
@@ -291,17 +300,8 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             );
         }
 
-        /// forward the remaining shares to the broker
+        /// forward the remaining shares to the recipient
         vault.transfer(order.recipient, vault.balanceOf(address(this)));
-
-        /// update the broker's cumulative units deposited
-        accountInfo[order.accountId].cumulativeUnitsDeposited += liquidity;
-
-        /// update the broker's total shares outstanding
-        accountInfo[order.accountId].totalSharesOutstanding += sharesOut;
-
-        /// update the broker's cumulative shares minted
-        accountInfo[order.accountId].cumulativeSharesMinted += sharesOut;
     }
 
     function withdraw(SignedWithdrawIntent calldata order)
