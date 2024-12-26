@@ -21,9 +21,7 @@ interface IHookRegistry {
         address afterHook
     );
 
-    event HookRemoved(
-        bytes32 pointer, address operator, address target, uint8 operation, bytes4 selector
-    );
+    event HookRemoved(bytes32 pointer);
 
     function fund() external returns (address);
 

@@ -70,8 +70,6 @@ contract HookRegistry is IHookRegistry {
 
         delete hooks[pointer];
 
-        emit HookRemoved(
-            pointer, config.operator, config.target, config.operation, config.targetSelector
-        );
+        emit HookRemoved(pointer);
     }
 }
