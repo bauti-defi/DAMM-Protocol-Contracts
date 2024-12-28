@@ -14,7 +14,7 @@ contract ModuleLib is IModuleLib {
     }
 
     modifier isDelegateCall() {
-        if (address(this) == self) revert Errors.ModuleLib_OnlyDelegateCall();
+        if (address(this) == self) revert Errors.OnlyDelegateCall();
         _;
     }
 

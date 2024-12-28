@@ -6,6 +6,7 @@ library Errors {
     /// Shared errors
     error OnlyFund();
     error OnlyAdmin();
+    error OnlyDelegateCall();
 
     /// Transaction module errors
     error Transaction_HookNotDefined();
@@ -85,7 +86,6 @@ library Errors {
     error ModuleLib_ModuleSetupFailed();
     error ModuleLib_InsufficientBalance();
     error ModuleLib_EmptyBytecode();
-    error ModuleLib_OnlyDelegateCall();
 
     /// FundCallbackHandler errors
     error Fund_NotModule();
