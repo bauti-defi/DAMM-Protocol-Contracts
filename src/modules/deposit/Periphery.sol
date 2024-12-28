@@ -490,32 +490,35 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         uint256 sharesBurnt,
         uint256 liquidityRedeemed
     ) private returns (uint256 netBrokerFee, uint256 netProtocolFee) {
-        /// first we must calculate the performance in terms of unit of account
-        /// peformance is the difference between the realized share price and the average share buy price
-        /// if the realized share price is greater than the average share buy price, then the performance is positive
-        /// if the realized share price is less than the average share buy price, then the performance is negative
-        /// only take fee if the performance is positive
-        /// @notice liquidity is priced in terms of unit of account
-        /// @dev Invariant: 1 liquidity = 1 unit of account
-        uint256 averageShareBuyPriceInUnitOfAccount =
-            account.cumulativeUnitsDeposited.divWadUp(account.cumulativeSharesMinted);
-        uint256 realizedSharePriceInUnitOfAccount = liquidityRedeemed.divWad(sharesBurnt);
-        uint256 netPerformanceInTermsOfUnitOfAccount = realizedSharePriceInUnitOfAccount
-            > averageShareBuyPriceInUnitOfAccount
-            ? (realizedSharePriceInUnitOfAccount - averageShareBuyPriceInUnitOfAccount) * sharesBurnt
-            : 0;
-
-        /// @notice netPerformance is scaled by WAD
-        if (netPerformanceInTermsOfUnitOfAccount > 0) {
-            if (account.protocolPerformanceFeeInBps > 0) {
-                netProtocolFee = netPerformanceInTermsOfUnitOfAccount.mulWadUp(
-                    account.protocolPerformanceFeeInBps
-                ) / BP_DIVISOR;
-            }
-            if (account.brokerPerformanceFeeInBps > 0) {
-                netBrokerFee = netPerformanceInTermsOfUnitOfAccount.mulWadUp(
-                    account.brokerPerformanceFeeInBps
-                ) / BP_DIVISOR;
+        if (account.brokerPerformanceFeeInBps + account.protocolPerformanceFeeInBps > 0) {
+            /// first we must calculate the performance in terms of unit of account
+            /// peformance is the difference between the realized share price and the average share buy price
+            /// if the realized share price is greater than the average share buy price, then the performance is positive
+            /// if the realized share price is less than the average share buy price, then the performance is negative
+            /// only take fee if the performance is positive
+            /// @notice liquidity is priced in terms of unit of account
+            /// @dev Invariant: 1 liquidity = 1 unit of account
+            uint256 averageShareBuyPriceInUnitOfAccount =
+                account.cumulativeUnitsDeposited.divWadUp(account.cumulativeSharesMinted);
+            uint256 realizedSharePriceInUnitOfAccount = liquidityRedeemed.divWad(sharesBurnt);
+            uint256 netPerformanceInTermsOfUnitOfAccount = realizedSharePriceInUnitOfAccount
+                > averageShareBuyPriceInUnitOfAccount
+                ? (realizedSharePriceInUnitOfAccount - averageShareBuyPriceInUnitOfAccount)
+                    * sharesBurnt
+                : 0;
+                
+            /// @notice netPerformance is scaled by WAD
+            if (netPerformanceInTermsOfUnitOfAccount > 0) {
+                if (account.protocolPerformanceFeeInBps > 0) {
+                    netProtocolFee = netPerformanceInTermsOfUnitOfAccount.mulWadUp(
+                        account.protocolPerformanceFeeInBps
+                    ) / BP_DIVISOR;
+                }
+                if (account.brokerPerformanceFeeInBps > 0) {
+                    netBrokerFee = netPerformanceInTermsOfUnitOfAccount.mulWadUp(
+                        account.brokerPerformanceFeeInBps
+                    ) / BP_DIVISOR;
+                }
             }
         }
 
