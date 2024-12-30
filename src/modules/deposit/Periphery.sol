@@ -118,6 +118,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         if (accountInfo[accountId_].totalSharesOutstanding == 0) {
             accountInfo[accountId_].cumulativeSharesMinted = 0;
             accountInfo[accountId_].cumulativeUnitsDeposited = 0;
+            accountInfo[accountId_].cumulativeBenchmarkAsset = 0;
         }
     }
 
@@ -168,15 +169,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             );
         }
 
-        sharesOut = _deposit(
-            order.intent.deposit,
-            minter,
-            policy.minimumDeposit,
-            account.totalSharesOutstanding,
-            account.shareMintLimit,
-            account.brokerEntranceFeeInBps,
-            account.protocolEntranceFeeInBps
-        );
+        sharesOut = _deposit(order.intent.deposit, minter, policy.minimumDeposit, account);
 
         emit Deposit(
             order.intent.deposit.accountId,
@@ -213,15 +206,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
 
         _validateAccountAssetPolicy(policy, account, true);
 
-        sharesOut = _deposit(
-            order,
-            minter,
-            policy.minimumDeposit,
-            account.totalSharesOutstanding,
-            account.shareMintLimit,
-            account.brokerEntranceFeeInBps,
-            account.protocolEntranceFeeInBps
-        );
+        sharesOut = _deposit(order, minter, policy.minimumDeposit, account);
 
         emit Deposit(order.accountId, order.asset, order.amount, sharesOut, 0, 0);
     }
@@ -230,21 +215,19 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         DepositOrder calldata order,
         address broker,
         uint256 minimumDeposit,
-        uint256 totalSharesOutstanding,
-        uint256 shareMintLimit,
-        uint256 brokerEntranceFeeInBps,
-        uint256 protocolEntranceFeeInBps
+        BrokerAccountInfo memory account
     ) private returns (uint256 sharesOut) {
         if (order.deadline < block.timestamp) {
             revert Errors.Deposit_OrderExpired();
         }
 
         uint256 assetAmountIn = order.amount;
-        ERC20 assetToken = ERC20(order.asset);
 
         if (assetAmountIn == 0) {
             revert Errors.Deposit_InsufficientDeposit();
         }
+
+        ERC20 assetToken = ERC20(order.asset);
 
         /// if amount is type(uint256).max, then deposit the broker's entire balance
         if (assetAmountIn == type(uint256).max) {
@@ -275,7 +258,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         }
 
         /// make sure the broker hasn't exceeded their share mint limit
-        if (totalSharesOutstanding + sharesOut > shareMintLimit) {
+        if (account.totalSharesOutstanding + sharesOut > account.shareMintLimit) {
             revert Errors.Deposit_ShareMintLimitExceeded();
         }
 
@@ -288,15 +271,25 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         /// update the broker's cumulative shares minted
         accountInfo[order.accountId].cumulativeSharesMinted += sharesOut;
 
+        /// update the broker's cumulative benchmark asset
+        /// @notice this is only necessary if the performance fee is based on a benchmark asset
+        if (account.benchmarkAsset != address(0)) {
+            accountInfo[order.accountId].cumulativeBenchmarkAsset +=
+                oracleRouter.getQuote(liquidity, address(unitOfAccount), account.benchmarkAsset);
+        }
+
         /// take the broker entrance fees
-        if (brokerEntranceFeeInBps > 0) {
-            vault.transfer(broker, sharesOut.fullMulDivUp(brokerEntranceFeeInBps, BP_DIVISOR));
+        if (account.brokerEntranceFeeInBps > 0) {
+            vault.transfer(
+                broker, sharesOut.fullMulDivUp(account.brokerEntranceFeeInBps, BP_DIVISOR)
+            );
         }
 
         /// take the protocol entrance fees
-        if (protocolEntranceFeeInBps > 0) {
+        if (account.protocolEntranceFeeInBps > 0) {
             vault.transfer(
-                protocolFeeRecipient, sharesOut.fullMulDivUp(protocolEntranceFeeInBps, BP_DIVISOR)
+                protocolFeeRecipient,
+                sharesOut.fullMulDivUp(account.protocolEntranceFeeInBps, BP_DIVISOR)
             );
         }
 
@@ -492,21 +485,40 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
     ) private returns (uint256 netBrokerFee, uint256 netProtocolFee) {
         if (account.brokerPerformanceFeeInBps + account.protocolPerformanceFeeInBps > 0) {
             /// first we must calculate the performance in terms of unit of account
-            /// peformance is the difference between the realized share price and the average share buy price
-            /// if the realized share price is greater than the average share buy price, then the performance is positive
-            /// if the realized share price is less than the average share buy price, then the performance is negative
-            /// only take fee if the performance is positive
-            /// @notice liquidity is priced in terms of unit of account
-            /// @dev Invariant: 1 liquidity = 1 unit of account
-            uint256 averageShareBuyPriceInUnitOfAccount =
-                account.cumulativeUnitsDeposited.divWadUp(account.cumulativeSharesMinted);
-            uint256 realizedSharePriceInUnitOfAccount = liquidityRedeemed.divWad(sharesBurnt);
-            uint256 netPerformanceInTermsOfUnitOfAccount = realizedSharePriceInUnitOfAccount
-                > averageShareBuyPriceInUnitOfAccount
-                ? (realizedSharePriceInUnitOfAccount - averageShareBuyPriceInUnitOfAccount)
-                    * sharesBurnt
-                : 0;
-                
+            uint256 netPerformanceInTermsOfUnitOfAccount;
+
+            if (account.benchmarkAsset == address(0)) {
+                /// when there is no benchmark asset
+                /// peformance is the difference between the realized share price and the average share buy price
+                /// if the realized share price is greater than the average share buy price, then the performance is positive
+                /// if the realized share price is less than the average share buy price, then the performance is negative
+                /// only take fee if the performance is positive
+                /// @notice liquidity is priced in terms of unit of account
+                /// @dev Invariant: 1 liquidity = 1 unit of account
+                uint256 averageShareBuyPriceInUnitOfAccount =
+                    account.cumulativeUnitsDeposited.divWadUp(account.cumulativeSharesMinted);
+                uint256 realizedSharePriceInUnitOfAccount = liquidityRedeemed.divWad(sharesBurnt);
+                netPerformanceInTermsOfUnitOfAccount = realizedSharePriceInUnitOfAccount
+                    > averageShareBuyPriceInUnitOfAccount
+                    ? (realizedSharePriceInUnitOfAccount - averageShareBuyPriceInUnitOfAccount)
+                        * sharesBurnt
+                    : 0;
+            } else {
+                /// when there is a benchmark asset
+                /// performance is the difference between having invested in the benchmark asset vs shares
+                /// if the benchmark asset amount is greater than the cumulative benchmark asset, then the performance is positive
+                /// if the benchmark asset amount is less than the cumulative benchmark asset, then the performance is negative
+                /// only take fee if the performance is positive
+                uint256 benchmarkAssetAmount = oracleRouter.getQuote(
+                    account.cumulativeUnitsDeposited, address(unitOfAccount), account.benchmarkAsset
+                );
+                netPerformanceInTermsOfUnitOfAccount = benchmarkAssetAmount
+                    > account.cumulativeBenchmarkAsset
+                    ? (benchmarkAssetAmount.divWad(account.cumulativeBenchmarkAsset) - 1e18)
+                        * liquidityRedeemed
+                    : 0;
+            }
+
             /// @notice netPerformance is scaled by WAD
             if (netPerformanceInTermsOfUnitOfAccount > 0) {
                 if (account.protocolPerformanceFeeInBps > 0) {
@@ -730,6 +742,8 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             cumulativeSharesMinted: 0,
             cumulativeUnitsDeposited: 0,
             totalSharesOutstanding: 0,
+            cumulativeBenchmarkAsset: 0,
+            benchmarkAsset: params_.benchmarkAsset,
             brokerPerformanceFeeInBps: params_.brokerPerformanceFeeInBps,
             protocolPerformanceFeeInBps: params_.protocolPerformanceFeeInBps,
             brokerEntranceFeeInBps: params_.brokerEntranceFeeInBps,

@@ -294,6 +294,7 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
                 role: Role.USER,
                 ttl: 100000000,
                 shareMintLimit: type(uint256).max,
+                benchmarkAsset: address(0),
                 brokerPerformanceFeeInBps: 0,
                 protocolPerformanceFeeInBps: 0,
                 brokerEntranceFeeInBps: brokerEntranceFeeInBps,
@@ -396,6 +397,7 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
                 role: Role.USER,
                 ttl: 100000000,
                 shareMintLimit: type(uint256).max,
+                benchmarkAsset: address(0),
                 brokerPerformanceFeeInBps: brokerPerformanceFeeInBps,
                 protocolPerformanceFeeInBps: protocolPerformanceFeeInBps,
                 brokerEntranceFeeInBps: 0,
@@ -497,6 +499,62 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
         assertEq(mockToken1.balanceOf(address(fund)), periphery.vault().totalAssets());
     }
 
+    function test_performance_fee_based_on_benchmark_asset() public approveAll(alice) {
+        address benchmarkAsset = makeAddr("BenchmarkAsset");
+        address unitOfAccount = address(periphery.unitOfAccount());
+        uint256 benchmarkAssetPrice = 10 * 10 ** VALUATION_DECIMALS;
+
+        /// @notice initial price of the benchmark asset is 10
+        MockPriceOracle mockPriceOracle = new MockPriceOracle(
+            address(benchmarkAsset), unitOfAccount, benchmarkAssetPrice, VALUATION_DECIMALS
+        );
+        vm.label(address(mockPriceOracle), "MockPriceOracleBenchmark");
+        vm.prank(address(fund));
+        oracleRouter.govSetConfig(address(benchmarkAsset), unitOfAccount, address(mockPriceOracle));
+
+        vm.startPrank(address(fund));
+        periphery.openAccount(
+            CreateAccountParams({
+                transferable: false,
+                user: alice,
+                role: Role.USER,
+                ttl: 100000000,
+                shareMintLimit: type(uint256).max,
+                benchmarkAsset: benchmarkAsset,
+                brokerPerformanceFeeInBps: 0,
+                protocolPerformanceFeeInBps: 1_000,
+                brokerEntranceFeeInBps: 0,
+                protocolEntranceFeeInBps: 0,
+                brokerExitFeeInBps: 0,
+                protocolExitFeeInBps: 0
+            })
+        );
+        vm.stopPrank();
+
+        address claimer = makeAddr("Claimer");
+
+        mockToken1.mint(alice, 10 ether);
+        vm.prank(alice);
+        periphery.deposit(_depositOrder(1, alice, address(mockToken1), type(uint256).max));
+
+        mockToken1.mint(address(fund), 10 ether);
+
+        mockToken1.mint(alice, 10 ether);
+        vm.prank(alice);
+        periphery.deposit(_depositOrder(1, alice, address(mockToken1), type(uint256).max));
+
+        // mockPriceOracle.setPrice(benchmarkAssetPrice * 2);
+
+        vm.prank(alice);
+        periphery.withdraw(_withdrawOrder(1, claimer, address(mockToken1), type(uint256).max));
+
+        assertApproxEqRel(mockToken1.balanceOf(claimer), 29 ether, 0.1e18, "Claimer balance wrong");
+        assertApproxEqRel(
+            mockToken1.balanceOf(feeRecipient), 1 ether, 0.1e18, "Fee recipient balance wrong"
+        );
+        assertEq(periphery.vault().balanceOf(alice), 0);
+    }
+
     function test_management_fee(
         uint16 managementFeeRateInBps,
         uint256 timeDelta1,
@@ -522,6 +580,7 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
                 role: Role.USER,
                 ttl: timeDelta1 + timeDelta2 + 1,
                 shareMintLimit: type(uint256).max,
+                benchmarkAsset: address(0),
                 brokerPerformanceFeeInBps: 0,
                 protocolPerformanceFeeInBps: 0,
                 brokerEntranceFeeInBps: 0,

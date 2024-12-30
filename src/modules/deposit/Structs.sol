@@ -78,6 +78,8 @@ struct BrokerAccountInfo {
     uint256 cumulativeSharesMinted;
     uint256 cumulativeUnitsDeposited;
     uint256 totalSharesOutstanding;
+    uint256 cumulativeBenchmarkAsset;
+    address benchmarkAsset;
     uint256 brokerPerformanceFeeInBps;
     uint256 protocolPerformanceFeeInBps;
     uint256 brokerEntranceFeeInBps;
@@ -89,6 +91,7 @@ struct BrokerAccountInfo {
 struct CreateAccountParams {
     uint256 ttl;
     uint256 shareMintLimit;
+    address benchmarkAsset;
     uint256 brokerPerformanceFeeInBps;
     uint256 protocolPerformanceFeeInBps;
     uint256 brokerEntranceFeeInBps;

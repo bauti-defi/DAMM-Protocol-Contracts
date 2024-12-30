@@ -180,6 +180,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
                 role: role_,
                 ttl: ttl_,
                 shareMintLimit: type(uint256).max,
+                benchmarkAsset: address(0),
                 brokerPerformanceFeeInBps: 0,
                 protocolPerformanceFeeInBps: 0,
                 brokerEntranceFeeInBps: 0,
