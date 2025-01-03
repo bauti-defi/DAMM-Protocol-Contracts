@@ -489,7 +489,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         BrokerAccountInfo memory account,
         uint256 sharesBurnt,
         uint256 liquidityRedeemed
-    ) private returns (uint256 netBrokerFee, uint256 netProtocolFee) {
+    ) private pure returns (uint256 netBrokerFee, uint256 netProtocolFee) {
         if (account.brokerPerformanceFeeInBps + account.protocolPerformanceFeeInBps > 0) {
             /// first we must calculate the performance in terms of unit of account
             /// peformance is the difference between the realized share price and the average share buy price
@@ -506,7 +506,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
                 ? (realizedSharePriceInUnitOfAccount - averageShareBuyPriceInUnitOfAccount)
                     * sharesBurnt
                 : 0;
-                
+
             /// @notice netPerformance is scaled by WAD
             if (netPerformanceInTermsOfUnitOfAccount > 0) {
                 if (account.protocolPerformanceFeeInBps > 0) {
@@ -539,6 +539,11 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             /// update the last management fee timestamp
             lastManagementFeeTimestamp = block.timestamp;
 
+            /// if the vault has no assets, then we don't take any fees
+            if (vault.totalAssets() == 0 || vault.totalSupply() == 0) {
+                return;
+            }
+
             /// calculate the annualized management fee rate
             uint256 annualizedFeeRate =
                 managementFeeRateInBps.divWad(BP_DIVISOR) * timeDelta / 365 days;
@@ -547,7 +552,9 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             uint256 managementFeeInShares = vault.totalSupply().mulWadUp(annualizedFeeRate);
 
             /// mint the management fee to the fee recipient
-            vault.mintUnbacked(managementFeeInShares, protocolFeeRecipient);
+            if (managementFeeInShares > 0) {
+                vault.mintUnbacked(managementFeeInShares, protocolFeeRecipient);
+            }
         }
     }
 
