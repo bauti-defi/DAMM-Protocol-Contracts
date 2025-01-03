@@ -32,7 +32,7 @@ remove-uniswap-v3-hooks:
 approve-uniswap-v3:
 	DEPLOYMENT_CHAIN=arb forge script script/$(SCRIPT).s.sol:$(SCRIPT) --broadcast --rpc-url ${ARBI_RPC_URL} --sig "approveUniswap()" --optimizer-runs 10000 -vvvv -l --mnemonic-indexes 1
 
-configure-uniswap-v3: configure-uniswap-v3-assets set-uniswap-v3-hooks
+configure-uniswap-v3: configure-uniswap-v3-assets set-uniswap-v3-hooks approve-uniswap-v3
 	@echo "Configured Uniswap V3"
 
 deploy-aave-v3-hooks:
@@ -44,7 +44,7 @@ configure-aave-v3-assets:
 set-aave-v3-hooks:
 	DEPLOYMENT_CHAIN=arb forge script script/$(SCRIPT).s.sol:$(SCRIPT) --broadcast --rpc-url ${ARBI_RPC_URL} --sig "setAaveHooks()" --optimizer-runs 10000 -vvvv -l --mnemonic-indexes 1
 
-configure-aave-v3: configure-aave-v3-assets set-aave-v3-hooks
+configure-aave-v3: configure-aave-v3-assets set-aave-v3-hooks approve-aave-v3
 	@echo "Configured Aave V3"
 	
 remove-aave-v3-hooks:
