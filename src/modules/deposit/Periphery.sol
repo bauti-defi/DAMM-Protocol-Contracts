@@ -539,8 +539,11 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             /// update the last management fee timestamp
             lastManagementFeeTimestamp = block.timestamp;
 
+            uint256 totalSupply = vault.totalSupply();
+            uint256 totalAssets = vault.totalAssets();
+
             /// if the vault has no assets, then we don't take any fees
-            if (vault.totalAssets() == 0 || vault.totalSupply() == 0) {
+            if (totalAssets == 0 || totalSupply == 0) {
                 return;
             }
 
@@ -549,12 +552,10 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
                 managementFeeRateInBps.divWad(BP_DIVISOR) * timeDelta / 365 days;
             /// calculate the management fee in shares, remove WAD precision
             /// @notice mulWapUp rounds up in favor of the fee recipient, deter fuckery.
-            uint256 managementFeeInShares = vault.totalSupply().mulWadUp(annualizedFeeRate);
+            uint256 managementFeeInShares = totalSupply.mulWadUp(annualizedFeeRate);
 
             /// mint the management fee to the fee recipient
-            if (managementFeeInShares > 0) {
-                vault.mintUnbacked(managementFeeInShares, protocolFeeRecipient);
-            }
+            vault.mintUnbacked(managementFeeInShares, protocolFeeRecipient);
         }
     }
 
