@@ -19,7 +19,7 @@ event VaultConnectorHook_AccountDisabled(address periphery, uint256 accountId);
 /// So it interacts with the periphery to deposit assets into the vault
 contract VaultConnectorHook is BaseHook, IBeforeTransaction {
     /// @dev accountId = keccak256(abi.encode(periphery, accountId))
-    mapping(bytes32 accountId => bool allowed) public accountWhitelist;
+    mapping(bytes32 accountId => bool allowed) private accountWhitelist;
 
     constructor(address _fund) BaseHook(_fund) {}
 
@@ -66,6 +66,10 @@ contract VaultConnectorHook is BaseHook, IBeforeTransaction {
         accountWhitelist[accountId] = false;
 
         emit VaultConnectorHook_AccountDisabled(periphery, id);
+    }
+
+    function isAccountEnabled(address periphery, uint256 id) external view returns (bool) {
+        return accountWhitelist[_accountPointer(periphery, id)];
     }
 
     function _accountPointer(address periphery, uint256 accountId)
