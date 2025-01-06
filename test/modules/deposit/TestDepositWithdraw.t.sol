@@ -201,7 +201,8 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
             asset: token,
             amount: amount,
             deadline: block.timestamp + 1000,
-            minSharesOut: 0
+            minSharesOut: 0,
+            referralCode: 0
         });
     }
 
@@ -239,7 +240,8 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
             asset: asset,
             shares: shares,
             deadline: block.timestamp + 1000,
-            minAmountOut: 0
+            minAmountOut: 0,
+            referralCode: 0
         });
     }
 

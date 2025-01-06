@@ -80,7 +80,8 @@ contract TestVaultConnectorHooks is Test {
             asset: address(0),
             amount: 0,
             deadline: block.timestamp + 1 days,
-            minSharesOut: 0
+            minSharesOut: 0,
+            referralCode: 0
         });
 
         vm.prank(fund);
@@ -97,7 +98,8 @@ contract TestVaultConnectorHooks is Test {
             asset: address(0),
             amount: 0,
             deadline: block.timestamp + 1 days,
-            minSharesOut: 0
+            minSharesOut: 0,
+            referralCode: 0
         });
 
         vm.prank(fund);
@@ -121,7 +123,8 @@ contract TestVaultConnectorHooks is Test {
             asset: address(0),
             amount: 0,
             deadline: block.timestamp + 1 days,
-            minSharesOut: 0
+            minSharesOut: 0,
+            referralCode: 0
         });
 
         vm.prank(fund);
@@ -141,7 +144,8 @@ contract TestVaultConnectorHooks is Test {
             asset: address(0),
             shares: 0,
             deadline: block.timestamp + 1 days,
-            minAmountOut: 0
+            minAmountOut: 0,
+            referralCode: 0
         });
 
         vm.prank(fund);
@@ -158,7 +162,8 @@ contract TestVaultConnectorHooks is Test {
             asset: address(0),
             shares: 0,
             deadline: block.timestamp + 1 days,
-            minAmountOut: 0
+            minAmountOut: 0,
+            referralCode: 0
         });
 
         vm.prank(fund);
@@ -182,7 +187,8 @@ contract TestVaultConnectorHooks is Test {
             asset: address(0),
             shares: 0,
             deadline: block.timestamp + 1 days,
-            minAmountOut: 0
+            minAmountOut: 0,
+            referralCode: 0
         });
 
         vm.prank(fund);

@@ -184,7 +184,8 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             order.intent.deposit.amount,
             sharesOut,
             order.intent.relayerTip,
-            order.intent.bribe
+            order.intent.bribe,
+            order.intent.deposit.referralCode
         );
     }
 
@@ -223,7 +224,9 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             account.protocolEntranceFeeInBps
         );
 
-        emit Deposit(order.accountId, order.asset, order.amount, sharesOut, 0, 0);
+        emit Deposit(
+            order.accountId, order.asset, order.amount, sharesOut, 0, 0, order.referralCode
+        );
     }
 
     function _deposit(
@@ -369,7 +372,8 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             order.intent.withdraw.shares,
             netAssetAmountOut,
             order.intent.relayerTip,
-            order.intent.bribe
+            order.intent.bribe,
+            order.intent.withdraw.referralCode
         );
     }
 
@@ -405,7 +409,9 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             order.asset, order.to, burner, assetAmountOut, netBrokerFee, netProtocolFee
         );
 
-        emit Withdraw(order.accountId, order.asset, order.shares, netAssetAmountOut, 0, 0);
+        emit Withdraw(
+            order.accountId, order.asset, order.shares, netAssetAmountOut, 0, 0, order.referralCode
+        );
     }
 
     function _withdraw(
