@@ -207,7 +207,8 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
                 asset: token,
                 amount: amount,
                 deadline: block.timestamp + 1000,
-                minSharesOut: 0
+                minSharesOut: 0,
+                referralCode: 0
             }),
             chaindId: block.chainid,
             relayerTip: 0,
@@ -229,7 +230,6 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
 
     function _withdrawIntent(
         uint256 accountId,
-        address user,
         address to,
         address asset,
         uint256 shares,
@@ -242,7 +242,8 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
                 asset: asset,
                 shares: shares,
                 deadline: block.timestamp + 1000,
-                minAmountOut: 0
+                minAmountOut: 0,
+                referralCode: 0
             }),
             chaindId: block.chainid,
             relayerTip: 0,
@@ -276,7 +277,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         periphery.deposit(dOrder);
 
         SignedWithdrawIntent memory wOrder = _signWithdrawIntent(
-            _withdrawIntent(1, alice, alice, address(mockToken1), mock1Unit, 0), userPK
+            _withdrawIntent(1, alice, address(mockToken1), mock1Unit, 0), userPK
         );
 
         vm.prank(relayer);
@@ -294,7 +295,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         periphery.deposit(dOrder);
 
         SignedWithdrawIntent memory wOrder = _signWithdrawIntent(
-            _withdrawIntent(accountId_, alice, alice, address(mockToken1), mock1Unit, 0), alicePK
+            _withdrawIntent(accountId_, alice, address(mockToken1), mock1Unit, 0), alicePK
         );
 
         vm.prank(relayer);
@@ -317,7 +318,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         periphery.deposit(dOrder);
 
         SignedWithdrawIntent memory wOrder = _signWithdrawIntent(
-            _withdrawIntent(1, alice, alice, address(mockToken1), mock1Unit, 0), alicePK
+            _withdrawIntent(1, alice, address(mockToken1), mock1Unit, 0), alicePK
         );
 
         vm.prank(relayer);
@@ -340,7 +341,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         periphery.deposit(dOrder);
 
         SignedWithdrawIntent memory wOrder = _signWithdrawIntent(
-            _withdrawIntent(1, alice, alice, address(mockToken1), mock1Unit, nonce_), alicePK
+            _withdrawIntent(1, alice, address(mockToken1), mock1Unit, nonce_), alicePK
         );
 
         vm.prank(relayer);
@@ -369,7 +370,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         vm.warp(0);
 
         SignedWithdrawIntent memory wOrder = _signWithdrawIntent(
-            _withdrawIntent(1, alice, alice, address(mockToken1), mock1Unit, 0), alicePK
+            _withdrawIntent(1, alice, address(mockToken1), mock1Unit, 0), alicePK
         );
 
         // increase timestamp
@@ -396,8 +397,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         vm.expectRevert(Errors.Deposit_InvalidChain.selector);
         periphery.deposit(dOrder);
 
-        WithdrawIntent memory wIntent =
-            _withdrawIntent(1, alice, alice, address(mockToken1), mock1Unit, 0);
+        WithdrawIntent memory wIntent = _withdrawIntent(1, alice, address(mockToken1), mock1Unit, 0);
 
         wIntent.chaindId = chainId_;
 
@@ -442,14 +442,14 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         periphery.deposit(dOrder);
 
         SignedWithdrawIntent memory wOrder = _signWithdrawIntent(
-            _withdrawIntent(2, bob, bob, address(mockToken2), type(uint256).max, 1), bobPK
+            _withdrawIntent(2, bob, address(mockToken2), type(uint256).max, 1), bobPK
         );
 
         vm.prank(relayer);
         periphery.withdraw(wOrder);
 
         wOrder = _signWithdrawIntent(
-            _withdrawIntent(1, alice, alice, address(mockToken2), type(uint256).max, 0), alicePK
+            _withdrawIntent(1, alice, address(mockToken2), type(uint256).max, 0), alicePK
         );
 
         vm.prank(relayer);
@@ -494,7 +494,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         assertTrue(periphery.getAccountInfo(1).isExpired());
 
         SignedWithdrawIntent memory wOrder = _signWithdrawIntent(
-            _withdrawIntent(1, alice, alice, address(mockToken1), type(uint256).max, 1), alicePK
+            _withdrawIntent(1, alice, address(mockToken1), type(uint256).max, 1), alicePK
         );
 
         vm.prank(relayer);
@@ -518,7 +518,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         periphery.deposit(dOrder);
 
         SignedWithdrawIntent memory wOrder =
-            _signWithdrawIntent(_withdrawIntent(1, alice, alice, asset, mock2Unit, 0), alicePK);
+            _signWithdrawIntent(_withdrawIntent(1, alice, asset, mock2Unit, 0), alicePK);
 
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_AssetUnavailable.selector);

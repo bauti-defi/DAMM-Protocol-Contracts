@@ -16,6 +16,7 @@ struct DepositOrder {
     uint256 amount;
     uint256 deadline;
     uint256 minSharesOut;
+    uint16 referralCode;
 }
 
 struct SignedDepositIntent {
@@ -30,6 +31,7 @@ struct WithdrawOrder {
     uint256 shares;
     uint256 deadline;
     uint256 minAmountOut;
+    uint16 referralCode;
 }
 
 struct WithdrawIntent {
