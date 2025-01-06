@@ -53,7 +53,7 @@ contract TestVaultConnectorHooks is Test {
         hook.disableAccount(periphery, id);
     }
 
-    function test_invalidOperation(uint8 operation) public {
+    function test_onlyCallOperation(uint8 operation) public {
         vm.assume(operation != CALL);
 
         vm.prank(fund);
@@ -61,7 +61,7 @@ contract TestVaultConnectorHooks is Test {
         hook.checkBeforeTransaction(address(0), IPeriphery.deposit.selector, operation, 0, "");
     }
 
-    function test_invalidTargetSelector(bytes4 selector) public {
+    function test_onlyDepositAndWithdrawSelectors(bytes4 selector) public {
         vm.assume(selector != IPeriphery.deposit.selector);
         vm.assume(selector != IPeriphery.withdraw.selector);
 
