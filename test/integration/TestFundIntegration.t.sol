@@ -416,16 +416,16 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
             ARB_USDT, address(fundAChild2), address(fundA), IERC20.transfer.selector
         );
         transferHookA.enableTransfer(
-            ARB_USDC, address(fundAChild1), address(fundA), IERC20.transferFrom.selector
+            ARB_USDC, address(fundA), address(fundAChild1), IERC20.transferFrom.selector
         );
         transferHookA.enableTransfer(
-            ARB_USDT, address(fundAChild1), address(fundA), IERC20.transferFrom.selector
+            ARB_USDT, address(fundA), address(fundAChild1), IERC20.transferFrom.selector
         );
         transferHookA.enableTransfer(
-            ARB_USDC, address(fundAChild2), address(fundA), IERC20.transferFrom.selector
+            ARB_USDC, address(fundA), address(fundAChild2), IERC20.transferFrom.selector
         );
         transferHookA.enableTransfer(
-            ARB_USDT, address(fundAChild2), address(fundA), IERC20.transferFrom.selector
+            ARB_USDT, address(fundA), address(fundAChild2), IERC20.transferFrom.selector
         );
 
         // enable the broker account for Fund A
@@ -448,7 +448,18 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
         // give periphery B allowance to deposit funds from Fund A
         USDC.approve(address(peripheryB), type(uint256).max);
         USDT.approve(address(peripheryB), type(uint256).max);
+        peripheryB.vault().approve(address(peripheryB), type(uint256).max);
+        vm.stopPrank();
 
+        // need to approve the mother fund to transfer funds from child funds
+        vm.startPrank(address(fundAChild1));
+        USDC.approve(address(fundA), type(uint256).max);
+        USDT.approve(address(fundA), type(uint256).max);
+        vm.stopPrank();
+
+        vm.startPrank(address(fundAChild2));
+        USDC.approve(address(fundA), type(uint256).max);
+        USDT.approve(address(fundA), type(uint256).max);
         vm.stopPrank();
 
         // we must mint a Fund B broker NFT to Fund A
@@ -691,7 +702,7 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
         vm.stopPrank();
     }
 
-    function test_deposit() public {
+    function test_valuation() public {
         mintUSDC(broker, 10_000_000);
         mintUSDT(broker, 10_000_000);
 
@@ -781,6 +792,68 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
         assertEq(USDC.balanceOf(address(fundAChild2)), 500_000);
         assertEq(USDC.balanceOf(address(fundA)), 500_000);
         assertEq(USDC.balanceOf(address(fundB)), 500_000);
+        assertEq(
+            oracleRouter.getQuote(0, address(fundA), address(peripheryA.unitOfAccount())), fundATvl
+        );
+
+        // transfer from FundAChild1 to FundA
+        transactions = new Transaction[](2);
+
+        transactions[0] = Transaction({
+            target: ARB_USDC,
+            value: 0,
+            targetSelector: IERC20.transferFrom.selector,
+            data: abi.encode(address(fundAChild1), address(fundA), 500_000),
+            operation: uint8(Enum.Operation.Call)
+        });
+
+        transactions[1] = Transaction({
+            target: ARB_USDC,
+            value: 0,
+            targetSelector: IERC20.transferFrom.selector,
+            data: abi.encode(address(fundAChild2), address(fundA), 500_000),
+            operation: uint8(Enum.Operation.Call)
+        });
+
+        vm.prank(operator);
+        transactionModuleA.execute(transactions);
+
+        assertEq(USDC.balanceOf(address(fundAChild1)), 0);
+        assertEq(USDC.balanceOf(address(fundAChild2)), 0);
+        assertEq(USDC.balanceOf(address(fundA)), 1_500_000);
+        assertEq(USDC.balanceOf(address(fundB)), 500_000);
+        assertEq(
+            oracleRouter.getQuote(0, address(fundA), address(peripheryA.unitOfAccount())), fundATvl
+        );
+
+        // now we withdraw from FundB to FundA
+        transactions = new Transaction[](1);
+
+        transactions[0] = Transaction({
+            target: address(peripheryB),
+            value: 0,
+            targetSelector: IPeriphery.withdraw.selector,
+            data: abi.encode(
+                WithdrawOrder({
+                    accountId: fundABrokerId,
+                    to: address(fundA),
+                    asset: ARB_USDC,
+                    shares: type(uint256).max,
+                    deadline: block.timestamp + 100000,
+                    minAmountOut: 0,
+                    referralCode: 0
+                })
+            ),
+            operation: uint8(Enum.Operation.Call)
+        });
+
+        vm.prank(operator);
+        transactionModuleA.execute(transactions);
+
+        assertEq(USDC.balanceOf(address(fundAChild1)), 0);
+        assertEq(USDC.balanceOf(address(fundAChild2)), 0);
+        assertEq(USDC.balanceOf(address(fundA)), 2_000_000);
+        assertEq(USDC.balanceOf(address(fundB)), 0);
         assertEq(
             oracleRouter.getQuote(0, address(fundA), address(peripheryA.unitOfAccount())), fundATvl
         );
