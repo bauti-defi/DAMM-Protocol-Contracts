@@ -15,10 +15,13 @@ interface IPeriphery {
         Role role,
         uint256 expirationTimestamp,
         uint256 shareMintLimit,
+        address feeRecipient,
         bool transferable
     );
 
     event ProtocolFeeRecipientUpdated(address oldRecipient, address newRecipient);
+
+    event BrokerFeeRecipientUpdated(uint256 accountId, address oldRecipient, address newRecipient);
 
     event AssetEnabled(address asset, AssetPolicy policy);
 

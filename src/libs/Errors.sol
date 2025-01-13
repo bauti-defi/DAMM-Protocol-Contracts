@@ -24,6 +24,7 @@ library Errors {
     error Hook_InvalidTargetSelector();
     error Hook_AlreadyDefined();
     error Hook_NotDefined();
+
     /// Constructor errors
     error Deposit_InvalidConstructorParam();
 
@@ -72,6 +73,7 @@ library Errors {
     error Deposit_InvalidRole();
     error Deposit_InvalidTTL();
     error Deposit_InvalidShareMintLimit();
+    error Deposit_InvalidBrokerFeeRecipient();
 
     /// Admin errors
     error Deposit_InvalidAdmin();

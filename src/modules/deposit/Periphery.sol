@@ -634,6 +634,25 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         emit ProtocolFeeRecipientUpdated(recipient_, previous);
     }
 
+    function setBrokerFeeRecipient(uint256 accountId_, address recipient_) external {
+        address broker = _ownerOf(accountId_);
+        if (broker == address(0)) {
+            revert Errors.Deposit_AccountDoesNotExist();
+        }
+        if (broker != msg.sender) {
+            revert Errors.Deposit_OnlyAccountOwner();
+        }
+        if (recipient_ == address(0)) {
+            revert Errors.Deposit_InvalidBrokerFeeRecipient();
+        }
+
+        address previous = accountInfo[accountId_].feeRecipient;
+
+        accountInfo[accountId_].feeRecipient = recipient_;
+
+        emit BrokerFeeRecipientUpdated(accountId_, recipient_, previous);
+    }
+
     function setManagementFeeRateInBps(uint256 rateInBps_) external onlyFund {
         if (rateInBps_ > BP_DIVISOR) {
             revert Errors.Deposit_InvalidManagementFeeRate();
@@ -722,6 +741,9 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             revert Errors.Deposit_InvalidShareMintLimit();
         }
 
+        address feeRecipient =
+            params_.feeRecipient == address(0) ? params_.user : params_.feeRecipient;
+
         unchecked {
             nextTokenId = ++tokenId;
         }
@@ -735,7 +757,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             state: AccountState.ACTIVE,
             expirationTimestamp: block.timestamp + params_.ttl,
             nonce: 0,
-            feeRecipient: params_.feeRecipient == address(0) ? params_.user : params_.feeRecipient,
+            feeRecipient: feeRecipient,
             shareMintLimit: params_.shareMintLimit,
             cumulativeSharesMinted: 0,
             cumulativeUnitsDeposited: 0,
@@ -753,6 +775,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             params_.role,
             block.timestamp + params_.ttl,
             params_.shareMintLimit,
+            feeRecipient,
             params_.transferable
         );
     }

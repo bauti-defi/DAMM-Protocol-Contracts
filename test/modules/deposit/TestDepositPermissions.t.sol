@@ -171,6 +171,12 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
     }
 
     modifier whitelistUser(address user_, uint256 ttl_, Role role_, bool transferable_) {
+        _whitelistUser(user_, ttl_, role_, transferable_);
+
+        _;
+    }
+
+    function _whitelistUser(address user_, uint256 ttl_, Role role_, bool transferable_) internal {
         vm.startPrank(address(fund));
         periphery.openAccount(
             CreateAccountParams({
@@ -189,8 +195,6 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
             })
         );
         vm.stopPrank();
-
-        _;
     }
 
     function _depositIntent(
@@ -683,5 +687,25 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         }
     }
 
-    /// TODO: test share mint limit exceeded
+    function test_set_broker_fee_recipient(address attacker, address newRecipient) public {
+        address broker = makeAddr("broker");
+
+        vm.assume(attacker != broker);
+        vm.assume(newRecipient != address(0));
+
+        _whitelistUser(broker, 2 days, Role.USER, false);
+
+        vm.prank(attacker);
+        vm.expectRevert(Errors.Deposit_AccountDoesNotExist.selector);
+        periphery.setBrokerFeeRecipient(2, newRecipient);
+
+        vm.prank(attacker);
+        vm.expectRevert(Errors.Deposit_OnlyAccountOwner.selector);
+        periphery.setBrokerFeeRecipient(1, newRecipient);
+
+        vm.prank(broker);
+        periphery.setBrokerFeeRecipient(1, newRecipient);
+
+        assertEq(periphery.getAccountInfo(1).feeRecipient, newRecipient);
+    }
 }
