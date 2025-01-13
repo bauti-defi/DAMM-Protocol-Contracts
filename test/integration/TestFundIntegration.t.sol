@@ -160,8 +160,7 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
                         address(oracleRouter),
                         address(fundA),
                         /// fund is admin
-                        feeRecipient,
-                        0
+                        feeRecipient
                     )
                 )
             )
@@ -229,8 +228,7 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
                         address(oracleRouter),
                         address(fundB),
                         /// fund is admin
-                        feeRecipient,
-                        0
+                        feeRecipient
                     )
                 )
             )

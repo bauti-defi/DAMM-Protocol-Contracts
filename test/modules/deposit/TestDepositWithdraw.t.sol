@@ -95,8 +95,7 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
                         address(oracleRouter),
                         address(fund),
                         /// fund is admin
-                        feeRecipient,
-                        0
+                        feeRecipient
                     )
                 )
             )

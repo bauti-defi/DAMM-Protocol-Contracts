@@ -55,8 +55,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         address fund_,
         address oracleRouter_,
         address admin_,
-        address protocolFeeRecipient_,
-        uint256 managementFeeRateInBps_
+        address protocolFeeRecipient_
     ) ERC721(vaultName_, vaultSymbol_) {
         if (fund_ == address(0)) {
             revert Errors.Deposit_InvalidConstructorParam();
@@ -70,15 +69,11 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         if (protocolFeeRecipient_ == address(0)) {
             revert Errors.Deposit_InvalidConstructorParam();
         }
-        if (managementFeeRateInBps_ >= BP_DIVISOR) {
-            revert Errors.Deposit_InvalidConstructorParam();
-        }
 
         fund = IFund(fund_);
         oracleRouter = IPriceOracle(oracleRouter_);
         admin = admin_;
         protocolFeeRecipient = protocolFeeRecipient_;
-        managementFeeRateInBps = managementFeeRateInBps_;
         lastManagementFeeTimestamp = block.timestamp;
         unitOfAccount = new UnitOfAccount("Liquidity", "UNIT", decimals_);
         vault = new FundShareVault(address(unitOfAccount), vaultName_, vaultSymbol_);
