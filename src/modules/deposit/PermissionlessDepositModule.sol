@@ -17,31 +17,28 @@ import "@solmate/tokens/ERC20.sol";
 import {Enum} from "@safe-contracts/common/Enum.sol";
 import {SafeLib} from "@src/libs/SafeLib.sol";
 import {DepositLibs} from "./DepositLibs.sol";
-
-event Paused();
-
-event Unpaused();
+import {IPermissionlessDepositModule} from "@src/interfaces/IPermissionlessDepositModule.sol";
 
 /// @dev A module that when added to a gnosis safe, allows for anyone to deposit into the fund
 /// the gnosis safe must have a valid broker account (nft) with the periphery to be able to deposit
 /// on behalf of the caller.
-contract PermissionlessDepositModule {
+contract PermissionlessDepositModule is IPermissionlessDepositModule {
     using DepositLibs for BrokerAccountInfo;
     using SafeTransferLib for ERC20;
     using SafeLib for ISafe;
 
-    IPeriphery public immutable periphery;
-    ISafe public immutable safe;
+    address public immutable periphery;
+    address public immutable safe;
     mapping(address user => uint256 nonce) public nonces;
     bool public paused;
 
     constructor(address safe_, address periphery_) {
-        safe = ISafe(safe_);
-        periphery = IPeriphery(periphery_);
+        safe = safe_;
+        periphery = periphery_;
     }
 
     modifier onlyAdmin() {
-        if (msg.sender != address(safe)) revert Errors.OnlyAdmin();
+        if (msg.sender != safe) revert Errors.OnlyAdmin();
         _;
     }
 
@@ -51,11 +48,11 @@ contract PermissionlessDepositModule {
     }
 
     function deposit(DepositOrder calldata order) external notPaused returns (uint256 sharesOut) {
-        ERC20(order.asset).safeTransferFrom(msg.sender, address(safe), order.amount);
+        ERC20(order.asset).safeTransferFrom(msg.sender, safe, order.amount);
 
         // call deposit through the safe
-        bytes memory returnData = safe.executeAndReturnDataOrRevert(
-            address(periphery),
+        bytes memory returnData = ISafe(safe).executeAndReturnDataOrRevert(
+            periphery,
             0,
             abi.encodeWithSelector(IPeriphery.deposit.selector, order),
             Enum.Operation.Call
@@ -80,12 +77,12 @@ contract PermissionlessDepositModule {
 
         ERC20(order.intent.deposit.asset).safeTransferFrom(
             msg.sender,
-            address(safe),
+            safe,
             order.intent.deposit.amount + order.intent.relayerTip + order.intent.bribe
         );
 
-        bytes memory returnData = safe.executeAndReturnDataOrRevert(
-            address(periphery),
+        bytes memory returnData = ISafe(safe).executeAndReturnDataOrRevert(
+            periphery,
             0,
             abi.encodeWithSelector(IPeriphery.deposit.selector, order.intent.deposit),
             Enum.Operation.Call
@@ -99,10 +96,10 @@ contract PermissionlessDepositModule {
         notPaused
         returns (uint256 assetAmountOut)
     {
-        ERC20(periphery.getVault()).safeTransferFrom(msg.sender, address(safe), order.shares);
+        ERC20(IPeriphery(periphery).getVault()).safeTransferFrom(msg.sender, safe, order.shares);
 
-        bytes memory returnData = safe.executeAndReturnDataOrRevert(
-            address(periphery),
+        bytes memory returnData = ISafe(safe).executeAndReturnDataOrRevert(
+            periphery,
             0,
             abi.encodeWithSelector(IPeriphery.withdraw.selector, order),
             Enum.Operation.Call
@@ -125,8 +122,8 @@ contract PermissionlessDepositModule {
             order.intent.nonce
         );
 
-        bytes memory returnData = safe.executeAndReturnDataOrRevert(
-            address(periphery),
+        bytes memory returnData = ISafe(safe).executeAndReturnDataOrRevert(
+            periphery,
             0,
             abi.encodeWithSelector(IPeriphery.withdraw.selector, order.intent.withdraw),
             Enum.Operation.Call
