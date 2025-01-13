@@ -10,7 +10,6 @@ import {TokenMinter} from "@test/forked/TokenMinter.sol";
 import {EulerRouter} from "@euler-price-oracle/EulerRouter.sol";
 import {ChainlinkOracle} from "@euler-price-oracle/adapter/chainlink/ChainlinkOracle.sol";
 import {FundValuationOracle} from "@src/oracles/FundValuationOracle.sol";
-import {MotherFundValuationOracle} from "@src/oracles/MotherFundValuationOracle.sol";
 import {
     ARB_USDC_USD_FEED,
     ARB_USDT_USD_FEED,
@@ -43,7 +42,7 @@ contract TestMotherFundValuation is TestBaseProtocol, TestBaseGnosis, TokenMinte
     EulerRouter internal oracleRouter;
     Periphery internal periphery;
     FundValuationOracle internal fundBValuationOracle;
-    MotherFundValuationOracle internal fundAValuationOracle;
+    FundValuationOracle internal fundAValuationOracle;
     address internal unitOfAccount;
 
     address positionOpenerCloser;
@@ -155,8 +154,8 @@ contract TestMotherFundValuation is TestBaseProtocol, TestBaseGnosis, TokenMinte
 
         unitOfAccount = address(periphery.unitOfAccount());
 
-        fundAValuationOracle = new MotherFundValuationOracle(address(oracleRouter));
-        vm.label(address(fundAValuationOracle), "MotherFundValuationOracle-FundA");
+        fundAValuationOracle = new FundValuationOracle(address(oracleRouter));
+        vm.label(address(fundAValuationOracle), "FundValuationOracle-FundA");
         vm.prank(protocolAdmin);
         oracleRouter.govSetConfig(address(fundA), unitOfAccount, address(fundAValuationOracle));
 

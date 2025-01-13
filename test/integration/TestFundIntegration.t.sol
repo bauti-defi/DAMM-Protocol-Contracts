@@ -20,7 +20,6 @@ import {VaultConnectorHook} from "@src/hooks/damm/VaultConnectorHook.sol";
 import {TokenTransferCallValidator} from "@src/hooks/transfers/TokenTransferCallValidator.sol";
 import {IERC20} from "@openzeppelin-contracts/interfaces/IERC20.sol";
 import {FundValuationOracle} from "@src/oracles/FundValuationOracle.sol";
-import {MotherFundValuationOracle} from "@src/oracles/MotherFundValuationOracle.sol";
 import {ChainlinkOracle} from "@euler-price-oracle/adapter/chainlink/ChainlinkOracle.sol";
 import {
     ARB_USDC_USD_FEED,
@@ -679,17 +678,10 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
         oracleRouter.govSetConfig(unitOfAccountA, unitOfAccountB, address(fixedRateOracle));
         vm.stopPrank();
 
-        // setup MotherFundValuationOracle for FundA and FundB
-        MotherFundValuationOracle motherFundValuationOracle =
-            new MotherFundValuationOracle(address(oracleRouter));
-        vm.label(address(motherFundValuationOracle), "MotherFundValuationOracle");
+        // setup FundValuationOracle for FundA and FundB
         vm.startPrank(protocolAdmin);
-        oracleRouter.govSetConfig(
-            address(fundA), unitOfAccountA, address(motherFundValuationOracle)
-        );
-        oracleRouter.govSetConfig(
-            address(fundB), unitOfAccountB, address(motherFundValuationOracle)
-        );
+        oracleRouter.govSetConfig(address(fundA), unitOfAccountA, address(fundOracle));
+        oracleRouter.govSetConfig(address(fundB), unitOfAccountB, address(fundOracle));
         oracleRouter.govSetResolvedVault(address(peripheryB.vault()), true);
         oracleRouter.govSetResolvedVault(address(peripheryA.vault()), true);
         vm.stopPrank();
