@@ -274,7 +274,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
 
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_InvalidSignature.selector);
-        periphery.deposit(dOrder);
+        periphery.intentDeposit(dOrder);
 
         SignedWithdrawIntent memory wOrder = _signWithdrawIntent(
             _withdrawIntent(1, alice, address(mockToken1), mock1Unit, 0), userPK
@@ -282,7 +282,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
 
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_InvalidSignature.selector);
-        periphery.withdraw(wOrder);
+        periphery.intentWithdraw(wOrder);
     }
 
     function test_only_enabled_account_can_deposit_withdraw(uint256 accountId_) public {
@@ -292,7 +292,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
 
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_AccountDoesNotExist.selector);
-        periphery.deposit(dOrder);
+        periphery.intentDeposit(dOrder);
 
         SignedWithdrawIntent memory wOrder = _signWithdrawIntent(
             _withdrawIntent(accountId_, alice, address(mockToken1), mock1Unit, 0), alicePK
@@ -300,7 +300,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
 
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_AccountDoesNotExist.selector);
-        periphery.withdraw(wOrder);
+        periphery.intentWithdraw(wOrder);
     }
 
     function test_only_active_account_can_deposit_withdraw()
@@ -315,7 +315,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
 
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_AccountNotActive.selector);
-        periphery.deposit(dOrder);
+        periphery.intentDeposit(dOrder);
 
         SignedWithdrawIntent memory wOrder = _signWithdrawIntent(
             _withdrawIntent(1, alice, address(mockToken1), mock1Unit, 0), alicePK
@@ -323,7 +323,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
 
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_AccountNotActive.selector);
-        periphery.withdraw(wOrder);
+        periphery.intentWithdraw(wOrder);
     }
 
     function test_order_must_have_valid_nonce(uint256 nonce_)
@@ -338,7 +338,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
 
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_InvalidNonce.selector);
-        periphery.deposit(dOrder);
+        periphery.intentDeposit(dOrder);
 
         SignedWithdrawIntent memory wOrder = _signWithdrawIntent(
             _withdrawIntent(1, alice, address(mockToken1), mock1Unit, nonce_), alicePK
@@ -346,7 +346,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
 
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_InvalidNonce.selector);
-        periphery.withdraw(wOrder);
+        periphery.intentWithdraw(wOrder);
     }
 
     function test_order_must_be_within_deadline(uint256 timestamp_)
@@ -364,7 +364,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
 
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_OrderExpired.selector);
-        periphery.deposit(dOrder);
+        periphery.intentDeposit(dOrder);
 
         // reset timestamp to generate valid order
         vm.warp(0);
@@ -378,7 +378,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
 
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_OrderExpired.selector);
-        periphery.withdraw(wOrder);
+        periphery.intentWithdraw(wOrder);
     }
 
     function test_order_chain_id_must_match(uint256 chainId_)
@@ -395,7 +395,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
 
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_InvalidChain.selector);
-        periphery.deposit(dOrder);
+        periphery.intentDeposit(dOrder);
 
         WithdrawIntent memory wIntent = _withdrawIntent(1, alice, address(mockToken1), mock1Unit, 0);
 
@@ -405,7 +405,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
 
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_InvalidChain.selector);
-        periphery.withdraw(wOrder);
+        periphery.intentWithdraw(wOrder);
     }
 
     function test_only_super_user_can_deposit_or_withdraw_permissioned_asset()
@@ -432,21 +432,21 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
 
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_OnlySuperUser.selector);
-        periphery.deposit(dOrder);
+        periphery.intentDeposit(dOrder);
 
         dOrder = _signDepositIntent(
             _depositIntent(2, bob, address(mockToken2), 10 * mock2Unit, 0), bobPK
         );
 
         vm.prank(relayer);
-        periphery.deposit(dOrder);
+        periphery.intentDeposit(dOrder);
 
         SignedWithdrawIntent memory wOrder = _signWithdrawIntent(
             _withdrawIntent(2, bob, address(mockToken2), type(uint256).max, 1), bobPK
         );
 
         vm.prank(relayer);
-        periphery.withdraw(wOrder);
+        periphery.intentWithdraw(wOrder);
 
         wOrder = _signWithdrawIntent(
             _withdrawIntent(1, alice, address(mockToken2), type(uint256).max, 0), alicePK
@@ -454,7 +454,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
 
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_OnlySuperUser.selector);
-        periphery.withdraw(wOrder);
+        periphery.intentWithdraw(wOrder);
     }
 
     function test_only_non_expired_account_can_deposit(uint256 timestamp)
@@ -472,7 +472,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
 
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_AccountExpired.selector);
-        periphery.deposit(dOrder);
+        periphery.intentDeposit(dOrder);
     }
 
     function test_expired_account_can_withdraw()
@@ -484,7 +484,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
             _signDepositIntent(_depositIntent(1, alice, address(mockToken1), mock1Unit, 0), alicePK);
 
         vm.prank(relayer);
-        periphery.deposit(dOrder);
+        periphery.intentDeposit(dOrder);
 
         assertTrue(periphery.vault().balanceOf(alice) > 0);
         assertFalse(periphery.getAccountInfo(1).isExpired());
@@ -498,7 +498,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         );
 
         vm.prank(relayer);
-        periphery.withdraw(wOrder);
+        periphery.intentWithdraw(wOrder);
 
         assertTrue(periphery.vault().balanceOf(alice) == 0);
     }
@@ -515,14 +515,14 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
 
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_AssetUnavailable.selector);
-        periphery.deposit(dOrder);
+        periphery.intentDeposit(dOrder);
 
         SignedWithdrawIntent memory wOrder =
             _signWithdrawIntent(_withdrawIntent(1, alice, asset, mock2Unit, 0), alicePK);
 
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_AssetUnavailable.selector);
-        periphery.withdraw(wOrder);
+        periphery.intentWithdraw(wOrder);
     }
 
     function test_only_admin_can_pause_unpause_account(address attacker)

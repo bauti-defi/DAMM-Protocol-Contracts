@@ -196,13 +196,6 @@ contract TestMotherFundValuation is TestBaseProtocol, TestBaseGnosis, TokenMinte
         vm.label(address(chainlinkOracle), "ChainlinkOracle-ETH");
         vm.prank(protocolAdmin);
         oracleRouter.govSetConfig(NATIVE_ASSET, unitOfAccount, address(chainlinkOracle));
-
-        // setup USDC/USD oracle for FundB
-        // chainlinkOracle =
-        //     new ChainlinkOracle(ARB_USDC, address(fundB), ARB_USDC_USD_FEED, 24 hours);
-        // vm.label(address(chainlinkOracle), "ChainlinkOracle-USDC");
-        // vm.prank(protocolAdmin);
-        // oracleRouter.govSetConfig(ARB_USDC, address(fundB), address(chainlinkOracle));
     }
 
     function test_cannot_valuate_fund_with_open_positions() public {

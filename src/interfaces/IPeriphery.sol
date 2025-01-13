@@ -58,10 +58,14 @@ interface IPeriphery {
     function admin() external returns (address);
     function protocolFeeRecipient() external returns (address);
     function managementFeeRateInBps() external returns (uint256);
-    function deposit(SignedDepositIntent calldata order) external returns (uint256 sharesOut);
-    function withdraw(SignedWithdrawIntent calldata order)
+    function intentDeposit(SignedDepositIntent calldata order)
+        external
+        returns (uint256 sharesOut);
+    function deposit(DepositOrder calldata order) external returns (uint256 sharesOut);
+    function intentWithdraw(SignedWithdrawIntent calldata order)
         external
         returns (uint256 assetAmountOut);
+    function withdraw(WithdrawOrder calldata order) external returns (uint256 assetAmountOut);
     function peekNextTokenId() external returns (uint256);
     function setProtocolFeeRecipient(address newRecipient) external;
     function setManagementFeeRateInBps(uint256 rateInBps) external;

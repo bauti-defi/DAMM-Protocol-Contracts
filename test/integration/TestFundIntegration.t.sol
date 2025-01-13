@@ -2,11 +2,13 @@
 pragma solidity ^0.8.0;
 
 import {Test} from "forge-std/Test.sol";
+import {console2} from "forge-std/console2.sol";
 import {TestBaseGnosis} from "@test/base/TestBaseGnosis.sol";
 import {TestBaseProtocol} from "@test/base/TestBaseProtocol.sol";
 import {IFund} from "@src/interfaces/IFund.sol";
 import {FundFactory} from "@src/FundFactory.sol";
 import {EulerRouter} from "@euler-price-oracle/EulerRouter.sol";
+import {FixedRateOracle} from "@euler-price-oracle/adapter/fixed/FixedRateOracle.sol";
 import {Periphery} from "@src/modules/deposit/Periphery.sol";
 import {IPeriphery} from "@src/interfaces/IPeriphery.sol";
 import {Enum} from "@safe-contracts/common/Enum.sol";
@@ -17,10 +19,18 @@ import {TransactionModule} from "@src/modules/transact/TransactionModule.sol";
 import {VaultConnectorHook} from "@src/hooks/damm/VaultConnectorHook.sol";
 import {TokenTransferCallValidator} from "@src/hooks/transfers/TokenTransferCallValidator.sol";
 import {IERC20} from "@openzeppelin-contracts/interfaces/IERC20.sol";
-import {MockERC20} from "@test/mocks/MockERC20.sol";
 import {FundValuationOracle} from "@src/oracles/FundValuationOracle.sol";
 import {MotherFundValuationOracle} from "@src/oracles/MotherFundValuationOracle.sol";
-import {MockPriceOracle} from "@test/mocks/MockPriceOracle.sol";
+import {ChainlinkOracle} from "@euler-price-oracle/adapter/chainlink/ChainlinkOracle.sol";
+import {
+    ARB_USDC_USD_FEED,
+    ARB_USDT_USD_FEED,
+    ARB_DAI_USD_FEED,
+    ARB_ETH_USD_FEED
+} from "@test/forked/ChainlinkOracleFeeds.sol";
+import {TokenMinter} from "@test/forked/TokenMinter.sol";
+import {MockERC20} from "@test/mocks/MockERC20.sol";
+import "@src/modules/transact/Structs.sol";
 
 /// This contract will test a full deployment of 2 funds with child funds included.
 /// Fund A (mother) will have two child funds. Fund B (mother) will have 2 childs funds.
@@ -30,18 +40,19 @@ import {MockPriceOracle} from "@test/mocks/MockPriceOracle.sol";
 /// No strategies will be deployed in this test => no protocols will be integrated.
 /// The only hooks to use are the vault connector for deposits and withdrawals of Fund A to Fund B.
 /// And the transfer hook for transfering assets to and from child funds.
-contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol {
+contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
     uint8 constant VALUATION_DECIMALS = 18;
     uint256 constant VAULT_DECIMAL_OFFSET = 1;
+
+    uint256 internal arbitrumFork;
 
     address internal protocolAdmin;
     uint256 internal protocolAdminPK;
 
     address internal feeRecipient;
     address internal operator;
+    address internal broker;
 
-    MockERC20 internal mockToken0;
-    MockERC20 internal mockToken1;
     IFund internal fundA;
     IFund internal fundB;
     IFund internal fundAChild1;
@@ -66,16 +77,29 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol {
 
     EulerRouter internal oracleRouter;
 
-    function setUp() public virtual override(TestBaseGnosis, TestBaseProtocol) {
+    uint256 internal brokerAId;
+    uint256 internal brokerBId;
+    uint256 internal fundABrokerId;
+
+    uint256 internal nonce;
+
+    function setUp() public virtual override(TestBaseGnosis, TestBaseProtocol, TokenMinter) {
+        arbitrumFork = vm.createFork(vm.envString("ARBI_RPC_URL"));
+
+        vm.selectFork(arbitrumFork);
+        assertEq(vm.activeFork(), arbitrumFork);
+
+        /// @notice we fork at this block because we know the chainlink feed prices at this block
+        vm.rollFork(218796378);
+
         TestBaseGnosis.setUp();
         TestBaseProtocol.setUp();
+        TokenMinter.setUp();
 
         feeRecipient = makeAddr("FeeRecipient");
         operator = makeAddr("Operator");
+        broker = makeAddr("Broker");
         (protocolAdmin, protocolAdminPK) = makeAddrAndKey("ProtocolAdmin");
-
-        mockToken0 = new MockERC20(18);
-        mockToken1 = new MockERC20(18);
 
         fundFactory = new FundFactory();
         vm.label(address(fundFactory), "FundFactory");
@@ -83,28 +107,34 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol {
         address[] memory admins = new address[](1);
         admins[0] = protocolAdmin;
 
-        fundA =
-            fundFactory.deployFund(address(safeProxyFactory), address(safeSingleton), admins, 1, 1);
+        fundA = fundFactory.deployFund(
+            address(safeProxyFactory), address(safeSingleton), admins, ++nonce, 1
+        );
         vm.label(address(fundA), "FundA");
 
-        fundAChild1 =
-            fundFactory.deployFund(address(safeProxyFactory), address(safeSingleton), admins, 2, 1);
+        fundAChild1 = fundFactory.deployFund(
+            address(safeProxyFactory), address(safeSingleton), admins, ++nonce, 1
+        );
         vm.label(address(fundAChild1), "FundAChild1");
 
-        fundAChild2 =
-            fundFactory.deployFund(address(safeProxyFactory), address(safeSingleton), admins, 3, 1);
+        fundAChild2 = fundFactory.deployFund(
+            address(safeProxyFactory), address(safeSingleton), admins, ++nonce, 1
+        );
         vm.label(address(fundAChild2), "FundAChild2");
 
-        fundB =
-            fundFactory.deployFund(address(safeProxyFactory), address(safeSingleton), admins, 4, 1);
+        fundB = fundFactory.deployFund(
+            address(safeProxyFactory), address(safeSingleton), admins, ++nonce, 1
+        );
         vm.label(address(fundB), "FundB");
 
-        fundBChild1 =
-            fundFactory.deployFund(address(safeProxyFactory), address(safeSingleton), admins, 5, 1);
+        fundBChild1 = fundFactory.deployFund(
+            address(safeProxyFactory), address(safeSingleton), admins, ++nonce, 1
+        );
         vm.label(address(fundBChild1), "FundBChild1");
 
-        fundBChild2 =
-            fundFactory.deployFund(address(safeProxyFactory), address(safeSingleton), admins, 6, 1);
+        fundBChild2 = fundFactory.deployFund(
+            address(safeProxyFactory), address(safeSingleton), admins, ++nonce, 1
+        );
         vm.label(address(fundBChild2), "FundBChild2");
 
         /// TODO: check if we should be deploying the oracle router as fund or admin
@@ -137,6 +167,8 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol {
                 )
             )
         );
+
+        vm.label(address(peripheryA), "PeripheryA");
 
         assertTrue(fundA.isModuleEnabled(address(peripheryA)), "PeripheryA is not module");
 
@@ -205,6 +237,8 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol {
             )
         );
 
+        vm.label(address(peripheryB), "PeripheryB");
+
         assertTrue(fundB.isModuleEnabled(address(peripheryB)), "PeripheryB is not module");
 
         // deploy hook registry and transaction module for Fund B
@@ -244,7 +278,27 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol {
         transferHookB = new TokenTransferCallValidator(address(fundB));
         vm.label(address(transferHookB), "TransferHookB");
 
-        /// ALL THE INFRA IS DEPLOYED, NOW WE MUST CONFIGURE IT
+        /// @notice ALL THE INFRA IS DEPLOYED, NOW WE MUST CONFIGURE IT
+
+        vm.startPrank(address(fundAChild1));
+        fundAChild1.setAssetOfInterest(ARB_USDC);
+        fundAChild1.setAssetOfInterest(ARB_USDT);
+        vm.stopPrank();
+
+        vm.startPrank(address(fundAChild2));
+        fundAChild2.setAssetOfInterest(ARB_USDC);
+        fundAChild2.setAssetOfInterest(ARB_USDT);
+        vm.stopPrank();
+
+        vm.startPrank(address(fundBChild1));
+        fundBChild1.setAssetOfInterest(ARB_USDC);
+        fundBChild1.setAssetOfInterest(ARB_USDT);
+        vm.stopPrank();
+
+        vm.startPrank(address(fundBChild2));
+        fundBChild2.setAssetOfInterest(ARB_USDC);
+        fundBChild2.setAssetOfInterest(ARB_USDT);
+        vm.stopPrank();
 
         // configure the vault connector for Fund A
         // deposit from Fund A to Fund B
@@ -272,18 +326,19 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol {
             })
         );
 
-        // configure the token transfer hook for Fund A to its children funds
-        // need to configure for both mockToken0 and mockToken1
-
         // configure child funds for Fund A
         fundA.addChildFund(address(fundAChild1));
         fundA.addChildFund(address(fundAChild2));
 
         // configure mock tokens as assets of interest for Fund A
-        fundA.setAssetOfInterest(address(mockToken0));
+        fundA.setAssetOfInterest(ARB_USDT);
+        // we must include the Fund B LP token as an asset of interest
+        fundA.setAssetOfInterest(address(peripheryB.vault()));
+        fundA.setAssetOfInterest(ARB_USDC);
+
         // also enable assets on the periphery for Fund A
         peripheryA.enableAsset(
-            address(mockToken0),
+            ARB_USDC,
             AssetPolicy({
                 minimumDeposit: 100,
                 minimumWithdrawal: 100,
@@ -293,13 +348,23 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol {
                 enabled: true
             })
         );
-        fundA.setAssetOfInterest(address(mockToken1));
+        peripheryA.enableAsset(
+            ARB_USDT,
+            AssetPolicy({
+                minimumDeposit: 100,
+                minimumWithdrawal: 100,
+                canDeposit: true,
+                canWithdraw: false,
+                permissioned: false,
+                enabled: true
+            })
+        );
 
         // transfer from Fund A to Fund A Child 1
         hookRegistryA.setHooks(
             HookConfig({
                 operator: address(operator),
-                target: address(mockToken0),
+                target: ARB_USDC,
                 beforeTrxHook: address(transferHookA),
                 afterTrxHook: address(0),
                 targetSelector: IERC20.transfer.selector,
@@ -309,18 +374,17 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol {
         hookRegistryA.setHooks(
             HookConfig({
                 operator: address(operator),
-                target: address(mockToken1),
+                target: ARB_USDT,
                 beforeTrxHook: address(transferHookA),
                 afterTrxHook: address(0),
                 targetSelector: IERC20.transfer.selector,
                 operation: uint8(Enum.Operation.Call)
             })
         );
-
         hookRegistryA.setHooks(
             HookConfig({
                 operator: address(operator),
-                target: address(mockToken0),
+                target: ARB_USDC,
                 beforeTrxHook: address(transferHookA),
                 afterTrxHook: address(0),
                 targetSelector: IERC20.transferFrom.selector,
@@ -330,7 +394,7 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol {
         hookRegistryA.setHooks(
             HookConfig({
                 operator: address(operator),
-                target: address(mockToken1),
+                target: ARB_USDT,
                 beforeTrxHook: address(transferHookA),
                 afterTrxHook: address(0),
                 targetSelector: IERC20.transferFrom.selector,
@@ -340,42 +404,115 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol {
 
         // configure the transfer hook for Fund A
         transferHookA.enableTransfer(
-            address(mockToken0), address(fundAChild1), address(fundA), IERC20.transfer.selector
+            ARB_USDC, address(fundAChild1), address(fundA), IERC20.transfer.selector
         );
         transferHookA.enableTransfer(
-            address(mockToken1), address(fundAChild1), address(fundA), IERC20.transfer.selector
+            ARB_USDT, address(fundAChild1), address(fundA), IERC20.transfer.selector
         );
         transferHookA.enableTransfer(
-            address(mockToken0), address(fundAChild2), address(fundA), IERC20.transfer.selector
+            ARB_USDC, address(fundAChild2), address(fundA), IERC20.transfer.selector
         );
         transferHookA.enableTransfer(
-            address(mockToken1), address(fundAChild2), address(fundA), IERC20.transfer.selector
+            ARB_USDT, address(fundAChild2), address(fundA), IERC20.transfer.selector
         );
         transferHookA.enableTransfer(
-            address(mockToken0), address(fundAChild1), address(fundA), IERC20.transferFrom.selector
+            ARB_USDC, address(fundAChild1), address(fundA), IERC20.transferFrom.selector
         );
         transferHookA.enableTransfer(
-            address(mockToken1), address(fundAChild1), address(fundA), IERC20.transferFrom.selector
+            ARB_USDT, address(fundAChild1), address(fundA), IERC20.transferFrom.selector
         );
         transferHookA.enableTransfer(
-            address(mockToken0), address(fundAChild2), address(fundA), IERC20.transferFrom.selector
+            ARB_USDC, address(fundAChild2), address(fundA), IERC20.transferFrom.selector
         );
         transferHookA.enableTransfer(
-            address(mockToken1), address(fundAChild2), address(fundA), IERC20.transferFrom.selector
+            ARB_USDT, address(fundAChild2), address(fundA), IERC20.transferFrom.selector
         );
+
+        // enable the broker account for Fund A
+        brokerAId = peripheryA.openAccount(
+            CreateAccountParams({
+                user: broker,
+                brokerPerformanceFeeInBps: 0,
+                protocolPerformanceFeeInBps: 0,
+                brokerEntranceFeeInBps: 0,
+                protocolEntranceFeeInBps: 0,
+                brokerExitFeeInBps: 0,
+                protocolExitFeeInBps: 0,
+                role: Role.USER,
+                transferable: false,
+                ttl: 365 days,
+                shareMintLimit: type(uint256).max
+            })
+        );
+
+        // give periphery B allowance to deposit funds from Fund A
+        USDC.approve(address(peripheryB), type(uint256).max);
+        USDT.approve(address(peripheryB), type(uint256).max);
 
         vm.stopPrank();
 
+        // we must mint a Fund B broker NFT to Fund A
+        vm.startPrank(address(fundB));
+        fundABrokerId = peripheryB.openAccount(
+            CreateAccountParams({
+                user: address(fundA),
+                brokerPerformanceFeeInBps: 0,
+                protocolPerformanceFeeInBps: 0,
+                brokerEntranceFeeInBps: 0,
+                protocolEntranceFeeInBps: 0,
+                brokerExitFeeInBps: 0,
+                protocolExitFeeInBps: 0,
+                role: Role.USER,
+                transferable: false,
+                ttl: 365 days,
+                shareMintLimit: type(uint256).max
+            })
+        );
+        vm.stopPrank();
+
+        assertTrue(peripheryB.balanceOf(address(fundA)) > 0, "Fund A broker NFT not minted");
+        assertTrue(
+            peripheryB.ownerOf(fundABrokerId) == address(fundA), "Fund A broker NFT not minted"
+        );
+
+        // enable the broker account for Fund A
+        vm.prank(address(fundA));
+        vaultConnectorA.enableAccount(address(peripheryB), fundABrokerId);
+
+        assertTrue(
+            vaultConnectorA.isAccountEnabled(address(peripheryB), fundABrokerId),
+            "Broker account not enabled"
+        );
+
         // configure child funds for Fund B
         vm.startPrank(address(fundB));
+
+        // open broker account for Fund B
+        brokerBId = peripheryB.openAccount(
+            CreateAccountParams({
+                user: broker,
+                brokerPerformanceFeeInBps: 0,
+                protocolPerformanceFeeInBps: 0,
+                brokerEntranceFeeInBps: 0,
+                protocolEntranceFeeInBps: 0,
+                brokerExitFeeInBps: 0,
+                protocolExitFeeInBps: 0,
+                role: Role.USER,
+                transferable: false,
+                ttl: 365 days,
+                shareMintLimit: type(uint256).max
+            })
+        );
+
         fundB.addChildFund(address(fundBChild1));
         fundB.addChildFund(address(fundBChild2));
 
         // configure mock tokens as assets of interest for Fund B
-        fundB.setAssetOfInterest(address(mockToken0));
+        fundB.setAssetOfInterest(ARB_USDC);
+        fundB.setAssetOfInterest(ARB_USDT);
         // also enable assets on the periphery for Fund B
         peripheryB.enableAsset(
-            address(mockToken0),
+            ARB_USDC,
             AssetPolicy({
                 minimumDeposit: 100,
                 minimumWithdrawal: 100,
@@ -385,13 +522,23 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol {
                 enabled: true
             })
         );
-        fundB.setAssetOfInterest(address(mockToken1));
+        peripheryB.enableAsset(
+            ARB_USDT,
+            AssetPolicy({
+                minimumDeposit: 100,
+                minimumWithdrawal: 100,
+                canDeposit: true,
+                canWithdraw: false,
+                permissioned: false,
+                enabled: true
+            })
+        );
 
         // transfer from Fund B to Fund B Child 1
         hookRegistryB.setHooks(
             HookConfig({
                 operator: address(operator),
-                target: address(mockToken0),
+                target: ARB_USDC,
                 beforeTrxHook: address(transferHookB),
                 afterTrxHook: address(0),
                 targetSelector: IERC20.transfer.selector,
@@ -402,7 +549,7 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol {
         hookRegistryB.setHooks(
             HookConfig({
                 operator: address(operator),
-                target: address(mockToken0),
+                target: ARB_USDC,
                 beforeTrxHook: address(transferHookB),
                 afterTrxHook: address(0),
                 targetSelector: IERC20.transferFrom.selector,
@@ -413,7 +560,7 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol {
         hookRegistryB.setHooks(
             HookConfig({
                 operator: address(operator),
-                target: address(mockToken1),
+                target: ARB_USDT,
                 beforeTrxHook: address(transferHookB),
                 afterTrxHook: address(0),
                 targetSelector: IERC20.transfer.selector,
@@ -424,7 +571,7 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol {
         hookRegistryB.setHooks(
             HookConfig({
                 operator: address(operator),
-                target: address(mockToken1),
+                target: ARB_USDT,
                 beforeTrxHook: address(transferHookB),
                 afterTrxHook: address(0),
                 targetSelector: IERC20.transferFrom.selector,
@@ -434,45 +581,208 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol {
 
         // configure the transfer hook for Fund B
         transferHookB.enableTransfer(
-            address(mockToken0), address(fundBChild1), address(fundB), IERC20.transfer.selector
+            ARB_USDC, address(fundBChild1), address(fundB), IERC20.transfer.selector
         );
         transferHookB.enableTransfer(
-            address(mockToken1), address(fundBChild1), address(fundB), IERC20.transfer.selector
+            ARB_USDT, address(fundBChild1), address(fundB), IERC20.transfer.selector
         );
         transferHookB.enableTransfer(
-            address(mockToken0), address(fundBChild2), address(fundB), IERC20.transfer.selector
+            ARB_USDC, address(fundBChild2), address(fundB), IERC20.transfer.selector
         );
         transferHookB.enableTransfer(
-            address(mockToken1), address(fundBChild2), address(fundB), IERC20.transfer.selector
+            ARB_USDT, address(fundBChild2), address(fundB), IERC20.transfer.selector
         );
         transferHookB.enableTransfer(
-            address(mockToken0), address(fundBChild1), address(fundB), IERC20.transferFrom.selector
+            ARB_USDC, address(fundBChild1), address(fundB), IERC20.transferFrom.selector
         );
         transferHookB.enableTransfer(
-            address(mockToken1), address(fundBChild1), address(fundB), IERC20.transferFrom.selector
+            ARB_USDT, address(fundBChild1), address(fundB), IERC20.transferFrom.selector
         );
         transferHookB.enableTransfer(
-            address(mockToken0), address(fundBChild2), address(fundB), IERC20.transferFrom.selector
+            ARB_USDC, address(fundBChild2), address(fundB), IERC20.transferFrom.selector
         );
         transferHookB.enableTransfer(
-            address(mockToken1), address(fundBChild2), address(fundB), IERC20.transferFrom.selector
+            ARB_USDT, address(fundBChild2), address(fundB), IERC20.transferFrom.selector
         );
 
         vm.stopPrank();
 
+        assertTrue(
+            peripheryA.unitOfAccount().decimals() == peripheryB.unitOfAccount().decimals(),
+            "Unit of account decimals mismatch"
+        );
+        assertTrue(
+            peripheryA.unitOfAccount().decimals() == VALUATION_DECIMALS,
+            "Unit of account decimals mismatch"
+        );
+
         // now configure the oracles
         address unitOfAccountA = address(peripheryA.unitOfAccount());
+        vm.label(unitOfAccountA, "UnitOfAccount-A");
         address unitOfAccountB = address(peripheryB.unitOfAccount());
+        vm.label(unitOfAccountB, "UnitOfAccount-B");
 
-        MotherFundValuationOracle motherValuationOracleA = new MotherFundValuationOracle(address(oracleRouter));
-        vm.label(address(motherValuationOracleA), "MotherFundValuationOracleA");
-        vm.prank(address(protocolAdmin));
-        oracleRouter.govSetConfig(address(fundA), unitOfAccountA, address(motherValuationOracleA));
+        // setup USDC/USD oracle for FundA
+        ChainlinkOracle chainlinkOracle =
+            new ChainlinkOracle(ARB_USDC, unitOfAccountA, ARB_USDC_USD_FEED, 24 hours);
+        vm.label(address(chainlinkOracle), "ChainlinkOracle-USDC/USD");
+        vm.startPrank(protocolAdmin);
+        oracleRouter.govSetConfig(ARB_USDC, unitOfAccountA, address(chainlinkOracle));
+        vm.stopPrank();
 
-       
+        // setup USDT/USD oracle for FundB
+        chainlinkOracle = new ChainlinkOracle(ARB_USDC, unitOfAccountB, ARB_USDC_USD_FEED, 24 hours);
+        vm.label(address(chainlinkOracle), "ChainlinkOracle-USDC/USD");
+        vm.startPrank(protocolAdmin);
+        oracleRouter.govSetConfig(ARB_USDC, unitOfAccountB, address(chainlinkOracle));
+        vm.stopPrank();
+
+        // setup USDT/USD oracle for FundA
+        chainlinkOracle = new ChainlinkOracle(ARB_USDT, unitOfAccountA, ARB_USDT_USD_FEED, 24 hours);
+        vm.label(address(chainlinkOracle), "ChainlinkOracle-USDT/USD");
+        vm.startPrank(protocolAdmin);
+        oracleRouter.govSetConfig(ARB_USDT, unitOfAccountA, address(chainlinkOracle));
+        vm.stopPrank();
+
+        // setup USDT/USD oracle for FundB
+        chainlinkOracle = new ChainlinkOracle(ARB_USDT, unitOfAccountB, ARB_USDT_USD_FEED, 24 hours);
+        vm.label(address(chainlinkOracle), "ChainlinkOracle-USDT/USD");
+        vm.startPrank(protocolAdmin);
+        oracleRouter.govSetConfig(ARB_USDT, unitOfAccountB, address(chainlinkOracle));
+        vm.stopPrank();
+
+        // setup FundValuationOracle for all child funds
+        FundValuationOracle fundOracle = new FundValuationOracle(address(oracleRouter));
+        vm.label(address(fundOracle), "FundValuationOracle");
+        vm.startPrank(protocolAdmin);
+        oracleRouter.govSetConfig(address(fundBChild1), unitOfAccountB, address(fundOracle));
+        oracleRouter.govSetConfig(address(fundBChild2), unitOfAccountB, address(fundOracle));
+        oracleRouter.govSetConfig(address(fundAChild1), unitOfAccountA, address(fundOracle));
+        oracleRouter.govSetConfig(address(fundAChild2), unitOfAccountA, address(fundOracle));
+        vm.stopPrank();
+
+        FixedRateOracle fixedRateOracle =
+            new FixedRateOracle(unitOfAccountA, unitOfAccountB, 1 * 10 ** VALUATION_DECIMALS);
+        vm.label(address(fixedRateOracle), "FixedRateOracle-A/B");
+        vm.startPrank(protocolAdmin);
+        oracleRouter.govSetConfig(unitOfAccountA, unitOfAccountB, address(fixedRateOracle));
+        vm.stopPrank();
+
+        // setup MotherFundValuationOracle for FundA and FundB
+        MotherFundValuationOracle motherFundValuationOracle =
+            new MotherFundValuationOracle(address(oracleRouter));
+        vm.label(address(motherFundValuationOracle), "MotherFundValuationOracle");
+        vm.startPrank(protocolAdmin);
+        oracleRouter.govSetConfig(
+            address(fundA), unitOfAccountA, address(motherFundValuationOracle)
+        );
+        oracleRouter.govSetConfig(
+            address(fundB), unitOfAccountB, address(motherFundValuationOracle)
+        );
+        oracleRouter.govSetResolvedVault(address(peripheryB.vault()), true);
+        oracleRouter.govSetResolvedVault(address(peripheryA.vault()), true);
+        vm.stopPrank();
+
+        vm.startPrank(broker);
+        USDC.approve(address(peripheryA), type(uint256).max);
+        USDT.approve(address(peripheryA), type(uint256).max);
+        USDC.approve(address(peripheryB), type(uint256).max);
+        USDT.approve(address(peripheryB), type(uint256).max);
+        vm.stopPrank();
     }
 
-    function test_working() public {
-        assert(true);
+    function test_deposit() public {
+        mintUSDC(broker, 10_000_000);
+        mintUSDT(broker, 10_000_000);
+
+        vm.startPrank(broker);
+        peripheryA.deposit(
+            DepositOrder({
+                accountId: brokerAId,
+                recipient: broker,
+                asset: ARB_USDC,
+                amount: 2_000_000,
+                deadline: block.timestamp + 1000,
+                minSharesOut: 0,
+                referralCode: 0
+            })
+        );
+        vm.stopPrank();
+
+        assertEq(USDC.balanceOf(broker), 8_000_000);
+        assertEq(USDC.balanceOf(address(fundA)), 2_000_000);
+        assertGt(peripheryA.vault().balanceOf(broker), 0);
+
+        // we check the fund A tvl using the oracle router
+        uint256 fundATvl =
+            oracleRouter.getQuote(0, address(fundA), address(peripheryA.unitOfAccount()));
+        uint256 totalAssets = peripheryA.vault().totalAssets();
+        uint256 totalSupply = peripheryA.vault().totalSupply();
+
+        assertEq(fundATvl, totalAssets);
+        assertEq(peripheryA.vault().balanceOf(broker), totalSupply);
+
+        // now we transfer half of the USDC from Fund A to its children
+        // operator will do this through transaction module
+        Transaction[] memory transactions = new Transaction[](2);
+
+        transactions[0] = Transaction({
+            target: ARB_USDC,
+            value: 0,
+            targetSelector: IERC20.transfer.selector,
+            data: abi.encode(address(fundAChild1), 500_000),
+            operation: uint8(Enum.Operation.Call)
+        });
+
+        transactions[1] = Transaction({
+            target: ARB_USDC,
+            value: 0,
+            targetSelector: IERC20.transfer.selector,
+            data: abi.encode(address(fundAChild2), 500_000),
+            operation: uint8(Enum.Operation.Call)
+        });
+
+        vm.prank(operator);
+        transactionModuleA.execute(transactions);
+
+        assertEq(USDC.balanceOf(address(fundAChild1)), 500_000);
+        assertEq(USDC.balanceOf(address(fundAChild2)), 500_000);
+        assertEq(USDC.balanceOf(address(fundA)), 1_000_000);
+        assertEq(
+            oracleRouter.getQuote(0, address(fundA), address(peripheryA.unitOfAccount())), fundATvl
+        );
+
+        // now we deposit from Fund A to Fund B
+        // we will use the transaction module to do this
+        transactions = new Transaction[](1);
+
+        transactions[0] = Transaction({
+            target: address(peripheryB),
+            value: 0,
+            targetSelector: IPeriphery.deposit.selector,
+            data: abi.encode(
+                DepositOrder({
+                    accountId: fundABrokerId,
+                    recipient: address(fundA),
+                    asset: ARB_USDC,
+                    amount: 500_000,
+                    deadline: block.timestamp + 100000,
+                    minSharesOut: 0,
+                    referralCode: 0
+                })
+            ),
+            operation: uint8(Enum.Operation.Call)
+        });
+
+        vm.prank(operator);
+        transactionModuleA.execute(transactions);
+
+        assertEq(USDC.balanceOf(address(fundAChild1)), 500_000);
+        assertEq(USDC.balanceOf(address(fundAChild2)), 500_000);
+        assertEq(USDC.balanceOf(address(fundA)), 500_000);
+        assertEq(USDC.balanceOf(address(fundB)), 500_000);
+        assertEq(
+            oracleRouter.getQuote(0, address(fundA), address(peripheryA.unitOfAccount())), fundATvl
+        );
     }
 }

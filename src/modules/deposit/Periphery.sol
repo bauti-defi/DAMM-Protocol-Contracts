@@ -121,7 +121,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         }
     }
 
-    function deposit(SignedDepositIntent calldata order)
+    function intentDeposit(SignedDepositIntent calldata order)
         public
         notPaused
         nonReentrant
@@ -307,7 +307,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         vault.transfer(order.recipient, vault.balanceOf(address(this)));
     }
 
-    function withdraw(SignedWithdrawIntent calldata order)
+    function intentWithdraw(SignedWithdrawIntent calldata order)
         public
         notPaused
         nonReentrant

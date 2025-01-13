@@ -314,7 +314,7 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
 
         /// alice deposits
         if (params.useIntent) {
-            sharesOut = periphery.deposit(
+            sharesOut = periphery.intentDeposit(
                 _depositIntent(1, receiver, alicePK, address(mockToken1), type(uint256).max, 0, 0)
             );
         } else {
@@ -412,7 +412,7 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
 
         /// alice deposits
         if (params.useIntent) {
-            periphery.deposit(
+            periphery.intentDeposit(
                 _depositIntent(1, alice, alicePK, address(mockToken1), type(uint256).max, 0, 0)
             );
         } else {
@@ -438,7 +438,7 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
             : 0;
 
         if (params.useIntent) {
-            periphery.withdraw(
+            periphery.intentWithdraw(
                 _withdrawIntent(1, alicePK, claimer, address(mockToken1), type(uint256).max, 0, 0)
             );
         } else {
