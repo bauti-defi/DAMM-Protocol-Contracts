@@ -35,6 +35,11 @@ contract PermissionlessDepositModule {
     mapping(address user => uint256 nonce) public nonces;
     bool public paused;
 
+    constructor(address safe_, address periphery_) {
+        safe = ISafe(safe_);
+        periphery = IPeriphery(periphery_);
+    }
+
     modifier onlyAdmin() {
         if (msg.sender != address(safe)) revert Errors.OnlyAdmin();
         _;
@@ -43,11 +48,6 @@ contract PermissionlessDepositModule {
     modifier notPaused() {
         if (paused) revert Errors.Deposit_ModulePaused();
         _;
-    }
-
-    constructor(address safe_, address periphery_) {
-        safe = ISafe(safe_);
-        periphery = IPeriphery(periphery_);
     }
 
     function deposit(DepositOrder calldata order) external notPaused returns (uint256 sharesOut) {
