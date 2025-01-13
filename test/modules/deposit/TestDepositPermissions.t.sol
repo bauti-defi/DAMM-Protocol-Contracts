@@ -184,7 +184,8 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
                 brokerEntranceFeeInBps: 0,
                 protocolEntranceFeeInBps: 0,
                 brokerExitFeeInBps: 0,
-                protocolExitFeeInBps: 0
+                protocolExitFeeInBps: 0,
+                feeRecipient: address(0)
             })
         );
         vm.stopPrank();

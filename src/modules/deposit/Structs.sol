@@ -74,8 +74,8 @@ struct BrokerAccountInfo {
     Role role;
     bool transferable;
     AccountState state;
+    address feeRecipient;
     uint256 expirationTimestamp;
-    uint256 nonce;
     uint256 shareMintLimit;
     uint256 cumulativeSharesMinted;
     uint256 cumulativeUnitsDeposited;
@@ -86,6 +86,7 @@ struct BrokerAccountInfo {
     uint256 protocolEntranceFeeInBps;
     uint256 brokerExitFeeInBps;
     uint256 protocolExitFeeInBps;
+    uint256 nonce;
 }
 
 struct CreateAccountParams {
@@ -97,6 +98,7 @@ struct CreateAccountParams {
     uint256 protocolEntranceFeeInBps;
     uint256 brokerExitFeeInBps;
     uint256 protocolExitFeeInBps;
+    address feeRecipient;
     address user;
     bool transferable;
     Role role;

@@ -438,7 +438,8 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
                 role: Role.USER,
                 transferable: false,
                 ttl: 365 days,
-                shareMintLimit: type(uint256).max
+                shareMintLimit: type(uint256).max,
+                feeRecipient: address(0)
             })
         );
 
@@ -473,7 +474,8 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
                 role: Role.USER,
                 transferable: false,
                 ttl: 365 days,
-                shareMintLimit: type(uint256).max
+                shareMintLimit: type(uint256).max,
+                feeRecipient: address(0)
             })
         );
         vm.stopPrank();
@@ -508,7 +510,8 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
                 role: Role.USER,
                 transferable: false,
                 ttl: 365 days,
-                shareMintLimit: type(uint256).max
+                shareMintLimit: type(uint256).max,
+                feeRecipient: address(0)
             })
         );
 

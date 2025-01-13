@@ -735,6 +735,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             state: AccountState.ACTIVE,
             expirationTimestamp: block.timestamp + params_.ttl,
             nonce: 0,
+            feeRecipient: params_.feeRecipient == address(0) ? params_.user : params_.feeRecipient,
             shareMintLimit: params_.shareMintLimit,
             cumulativeSharesMinted: 0,
             cumulativeUnitsDeposited: 0,

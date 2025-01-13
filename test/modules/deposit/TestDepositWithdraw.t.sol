@@ -300,7 +300,8 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
                 brokerEntranceFeeInBps: brokerEntranceFeeInBps,
                 protocolEntranceFeeInBps: protocolEntranceFeeInBps,
                 brokerExitFeeInBps: 0,
-                protocolExitFeeInBps: 0
+                protocolExitFeeInBps: 0,
+                feeRecipient: address(0)
             })
         );
         vm.stopPrank();
@@ -402,7 +403,8 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
                 brokerEntranceFeeInBps: 0,
                 protocolEntranceFeeInBps: 0,
                 brokerExitFeeInBps: brokerExitFeeInBps,
-                protocolExitFeeInBps: protocolExitFeeInBps
+                protocolExitFeeInBps: protocolExitFeeInBps,
+                feeRecipient: address(0)
             })
         );
         vm.stopPrank();
@@ -528,7 +530,8 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
                 brokerEntranceFeeInBps: 0,
                 protocolEntranceFeeInBps: 0,
                 brokerExitFeeInBps: 0,
-                protocolExitFeeInBps: 0
+                protocolExitFeeInBps: 0,
+                feeRecipient: address(0)
             })
         );
         vm.stopPrank();
