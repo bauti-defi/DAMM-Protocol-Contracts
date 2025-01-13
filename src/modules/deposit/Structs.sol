@@ -103,27 +103,3 @@ struct CreateAccountParams {
     bool transferable;
     Role role;
 }
-
-library AccountLib {
-    function isActive(BrokerAccountInfo memory account) internal pure returns (bool) {
-        return account.state == AccountState.ACTIVE;
-    }
-
-    function isPaused(BrokerAccountInfo memory account) internal pure returns (bool) {
-        return account.state == AccountState.PAUSED;
-    }
-
-    function canBeClosed(BrokerAccountInfo memory account) internal pure returns (bool) {
-        return account.state == AccountState.ACTIVE || account.state == AccountState.PAUSED;
-    }
-
-    function isSuperUser(BrokerAccountInfo memory account) internal pure returns (bool) {
-        return account.role == Role.SUPER_USER;
-    }
-
-    function isExpired(BrokerAccountInfo memory account) internal view returns (bool) {
-        return account.expirationTimestamp != 0 && block.timestamp >= account.expirationTimestamp;
-    }
-}
-
-using AccountLib for BrokerAccountInfo global;

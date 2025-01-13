@@ -13,12 +13,14 @@ import {MockPriceOracle} from "@test/mocks/MockPriceOracle.sol";
 import "@openzeppelin-contracts/utils/cryptography/MessageHashUtils.sol";
 import "@src/libs/Errors.sol";
 import {BP_DIVISOR} from "@src/libs/Constants.sol";
+import {DepositLibs} from "@src/modules/deposit/DepositLibs.sol";
 
 uint8 constant VALUATION_DECIMALS = 18;
 uint256 constant VAULT_DECIMAL_OFFSET = 1;
 
 contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
     using MessageHashUtils for bytes;
+    using DepositLibs for BrokerAccountInfo;
 
     address internal fundAdmin;
     uint256 internal fundAdminPK;

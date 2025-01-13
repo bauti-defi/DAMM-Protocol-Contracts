@@ -6,7 +6,6 @@ import {
     SignedDepositIntent,
     WithdrawOrder,
     SignedWithdrawIntent,
-    AccountLib,
     BrokerAccountInfo
 } from "./Structs.sol";
 import {IPeriphery} from "@src/interfaces/IPeriphery.sol";
@@ -29,7 +28,7 @@ event Unpaused();
 /// the gnosis safe must have a valid broker account (nft) with the periphery to be able to deposit
 /// on behalf of the caller.
 contract PermissionlessDepositModule {
-    using AccountLib for BrokerAccountInfo;
+    using DepositLibs for BrokerAccountInfo;
     using SafeTransferLib for ERC20;
     using MessageHashUtils for bytes;
     using SafeLib for ISafe;

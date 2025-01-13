@@ -20,6 +20,7 @@ import {FundShareVault} from "./FundShareVault.sol";
 import {DepositLibs} from "./DepositLibs.sol";
 
 contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
+    using DepositLibs for BrokerAccountInfo;
     using SafeTransferLib for ERC20;
     using SafeCast for uint256;
     using MessageHashUtils for bytes;
