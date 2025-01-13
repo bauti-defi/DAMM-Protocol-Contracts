@@ -17,9 +17,12 @@ import "@solmate/utils/SafeTransferLib.sol";
 import "@solmate/tokens/ERC20.sol";
 import "@openzeppelin-contracts/utils/cryptography/MessageHashUtils.sol";
 import "@openzeppelin-contracts/utils/cryptography/SignatureChecker.sol";
+import {Enum} from "@safe-contracts/common/Enum.sol";
+import {SafeLib} from "@src/libs/SafeLib.sol";
+import {DepositLibs} from "./DepositLibs.sol";
 
-event AccountSet(uint256 accountId);
 event Paused();
+
 event Unpaused();
 
 /// @dev A module that when added to a gnosis safe, allows for anyone to deposit into the fund
@@ -29,17 +32,15 @@ contract PermissionlessDepositModule {
     using AccountLib for BrokerAccountInfo;
     using SafeTransferLib for ERC20;
     using MessageHashUtils for bytes;
+    using SafeLib for ISafe;
 
     IPeriphery public immutable periphery;
     ISafe public immutable safe;
-
-    /// @dev do we want this to be mutable?
-    uint256 public accountId;
     mapping(address user => uint256 nonce) public nonces;
     bool public paused;
 
-    modifier onlySafe() {
-        require(msg.sender == address(safe), "Only safe can call this function");
+    modifier onlyAdmin() {
+        if (msg.sender != address(safe)) revert Errors.OnlyAdmin();
         _;
     }
 
@@ -53,30 +54,18 @@ contract PermissionlessDepositModule {
         periphery = IPeriphery(periphery_);
     }
 
-    function setAccount(uint256 accountId_) external onlySafe {
-        if (IERC721(address(periphery)).ownerOf(accountId_) != address(safe)) {
-            revert Errors.Deposit_OnlyAccountOwner();
-        }
-
-        BrokerAccountInfo memory account = periphery.getAccountInfo(accountId_);
-
-        if (!account.isActive()) {
-            revert Errors.Deposit_AccountNotActive();
-        }
-
-        accountId = accountId_;
-
-        emit AccountSet(accountId_);
-    }
-
     function deposit(DepositOrder calldata order) external notPaused returns (uint256 sharesOut) {
-        if (accountId != order.accountId) {
-            revert Errors.Deposit_InvalidAccountId();
-        }
-
         ERC20(order.asset).safeTransferFrom(msg.sender, address(safe), order.amount);
 
-        sharesOut = periphery.deposit(order);
+        // call deposit through the safe
+        bytes memory returnData = safe.executeAndReturnDataOrRevert(
+            address(periphery),
+            0,
+            abi.encodeWithSelector(IPeriphery.deposit.selector, order),
+            Enum.Operation.Call
+        );
+
+        sharesOut = abi.decode(returnData, (uint256));
     }
 
     function intentDeposit(SignedDepositIntent calldata order)
@@ -84,13 +73,16 @@ contract PermissionlessDepositModule {
         notPaused
         returns (uint256 sharesOut)
     {
-        if (accountId != order.intent.deposit.accountId) {
-            revert Errors.Deposit_InvalidAccountId();
-        }
-
-        _validateIntent(
-            abi.encode(order.intent), order.signature, order.intent.chaindId, order.intent.nonce
+        DepositLibs.validateIntent(
+            abi.encode(order.intent),
+            order.signature,
+            msg.sender,
+            order.intent.chaindId,
+            nonces[msg.sender],
+            order.intent.nonce
         );
+
+        nonces[msg.sender]++;
 
         ERC20(order.intent.deposit.asset).safeTransferFrom(
             msg.sender,
@@ -98,7 +90,14 @@ contract PermissionlessDepositModule {
             order.intent.deposit.amount + order.intent.relayerTip + order.intent.bribe
         );
 
-        sharesOut = periphery.deposit(order.intent.deposit);
+        bytes memory returnData = safe.executeAndReturnDataOrRevert(
+            address(periphery),
+            0,
+            abi.encodeWithSelector(IPeriphery.deposit.selector, order.intent.deposit),
+            Enum.Operation.Call
+        );
+
+        sharesOut = abi.decode(returnData, (uint256));
     }
 
     function withdraw(WithdrawOrder calldata order)
@@ -106,13 +105,16 @@ contract PermissionlessDepositModule {
         notPaused
         returns (uint256 assetAmountOut)
     {
-        if (accountId != order.accountId) {
-            revert Errors.Deposit_InvalidAccountId();
-        }
-
         ERC20(periphery.getVault()).safeTransferFrom(msg.sender, address(safe), order.shares);
 
-        assetAmountOut = periphery.withdraw(order);
+        bytes memory returnData = safe.executeAndReturnDataOrRevert(
+            address(periphery),
+            0,
+            abi.encodeWithSelector(IPeriphery.withdraw.selector, order),
+            Enum.Operation.Call
+        );
+
+        assetAmountOut = abi.decode(returnData, (uint256));
     }
 
     function intentWithdraw(SignedWithdrawIntent calldata order)
@@ -120,43 +122,38 @@ contract PermissionlessDepositModule {
         notPaused
         returns (uint256 assetAmountOut)
     {
-        if (accountId != order.intent.withdraw.accountId) {
-            revert Errors.Deposit_InvalidAccountId();
-        }
-
-        _validateIntent(
-            abi.encode(order.intent), order.signature, order.intent.chaindId, order.intent.nonce
+        DepositLibs.validateIntent(
+            abi.encode(order.intent),
+            order.signature,
+            msg.sender,
+            order.intent.chaindId,
+            nonces[msg.sender],
+            order.intent.nonce
         );
 
-        assetAmountOut = periphery.withdraw(order.intent.withdraw);
+        nonces[msg.sender]++;
+
+        bytes memory returnData = safe.executeAndReturnDataOrRevert(
+            address(periphery),
+            0,
+            abi.encodeWithSelector(IPeriphery.withdraw.selector, order.intent.withdraw),
+            Enum.Operation.Call
+        );
+
+        assetAmountOut = abi.decode(returnData, (uint256));
     }
 
-    function _validateIntent(
-        bytes memory intent,
-        bytes memory signature,
-        uint256 blockId,
-        uint256 nonce
-    ) internal {
-        if (
-            !SignatureChecker.isValidSignatureNow(
-                msg.sender, intent.toEthSignedMessageHash(), signature
-            )
-        ) revert Errors.Deposit_InvalidSignature();
-
-        if (blockId != block.chainid) revert Errors.Deposit_InvalidChain();
-
-        if (nonce != nonces[msg.sender]++) {
-            revert Errors.Deposit_InvalidNonce();
-        }
+    function increaseNonce(uint256 increment_) external {
+        nonces[msg.sender] += increment_ > 1 ? increment_ : 1;
     }
 
-    function pause() external onlySafe {
+    function pause() external onlyAdmin {
         paused = true;
 
         emit Paused();
     }
 
-    function unpause() external onlySafe {
+    function unpause() external onlyAdmin {
         paused = false;
 
         emit Unpaused();

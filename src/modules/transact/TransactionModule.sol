@@ -9,8 +9,11 @@ import "@src/interfaces/ITransactionHooks.sol";
 import "@src/interfaces/ITransactionModule.sol";
 import "./Structs.sol";
 import {BP_DIVISOR} from "@src/libs/Constants.sol";
+import {SafeLib} from "@src/libs/SafeLib.sol";
 
 contract TransactionModule is ReentrancyGuard, ITransactionModule {
+    using SafeLib for ISafe;
+
     address public immutable fund;
     IHookRegistry public immutable hookRegistry;
     bool public paused;
@@ -44,27 +47,6 @@ contract TransactionModule is ReentrancyGuard, ITransactionModule {
     constructor(address owner, address _hookRegistry) {
         fund = owner;
         hookRegistry = IHookRegistry(_hookRegistry);
-    }
-
-    function _executeAndReturnDataOrRevert(
-        address target,
-        uint256 value,
-        bytes memory data,
-        Enum.Operation operation
-    ) internal returns (bytes memory) {
-        (bool success, bytes memory returnData) =
-            ISafe(fund).execTransactionFromModuleReturnData(target, value, data, operation);
-
-        if (!success) {
-            assembly {
-                /// bubble up revert reason if length > 0
-                if gt(mload(returnData), 0) { revert(add(returnData, 0x20), mload(returnData)) }
-                /// else revert with no reason
-                revert(0, 0)
-            }
-        }
-
-        return returnData;
     }
 
     /**
@@ -105,7 +87,7 @@ contract TransactionModule is ReentrancyGuard, ITransactionModule {
             }
 
             if (hook.beforeTrxHook != address(0)) {
-                _executeAndReturnDataOrRevert(
+                ISafe(fund).executeAndReturnDataOrRevert(
                     /// target
                     hook.beforeTrxHook,
                     /// value
@@ -124,7 +106,7 @@ contract TransactionModule is ReentrancyGuard, ITransactionModule {
                 );
             }
 
-            bytes memory returnData = _executeAndReturnDataOrRevert(
+            bytes memory returnData = ISafe(fund).executeAndReturnDataOrRevert(
                 transactions[i].target,
                 transactions[i].value,
                 abi.encodePacked(transactions[i].targetSelector, transactions[i].data),
@@ -134,7 +116,7 @@ contract TransactionModule is ReentrancyGuard, ITransactionModule {
             );
 
             if (hook.afterTrxHook != address(0)) {
-                _executeAndReturnDataOrRevert(
+                ISafe(fund).executeAndReturnDataOrRevert(
                     hook.afterTrxHook,
                     0,
                     abi.encodeWithSelector(

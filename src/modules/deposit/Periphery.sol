@@ -17,6 +17,7 @@ import "@src/libs/Errors.sol";
 import "@src/interfaces/IPeriphery.sol";
 import "./UnitOfAccount.sol";
 import {FundShareVault} from "./FundShareVault.sol";
+import {DepositLibs} from "./DepositLibs.sol";
 
 contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
     using SafeTransferLib for ERC20;
@@ -128,26 +129,25 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             revert Errors.Deposit_AccountDoesNotExist();
         }
 
-        if (
-            !SignatureChecker.isValidSignatureNow(
-                minter, abi.encode(order.intent).toEthSignedMessageHash(), order.signature
-            )
-        ) revert Errors.Deposit_InvalidSignature();
-
-        if (order.intent.nonce != accountInfo[order.intent.deposit.accountId].nonce++) {
-            revert Errors.Deposit_InvalidNonce();
-        }
-
-        if (order.intent.chaindId != block.chainid) revert Errors.Deposit_InvalidChain();
-
-        /// @notice The management fee should be charged before the deposit is processed
-        /// otherwise, the management fee will be charged on the deposit amount
-        _takeManagementFee();
-
         AssetPolicy memory policy = assetPolicy[order.intent.deposit.asset];
         BrokerAccountInfo memory account = accountInfo[order.intent.deposit.accountId];
 
         _validateAccountAssetPolicy(policy, account, true);
+
+        DepositLibs.validateIntent(
+            abi.encode(order.intent),
+            order.signature,
+            minter,
+            order.intent.chaindId,
+            account.nonce,
+            order.intent.nonce
+        );
+
+        accountInfo[order.intent.deposit.accountId].nonce++;
+
+        /// @notice The management fee should be charged before the deposit is processed
+        /// otherwise, the management fee will be charged on the deposit amount
+        _takeManagementFee();
 
         /// pay the relayer if required
         if (order.intent.relayerTip > 0) {
@@ -316,22 +316,22 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         if (burner == address(0)) {
             revert Errors.Deposit_AccountDoesNotExist();
         }
-        if (
-            !SignatureChecker.isValidSignatureNow(
-                burner, abi.encode(order.intent).toEthSignedMessageHash(), order.signature
-            )
-        ) revert Errors.Deposit_InvalidSignature();
-
-        if (order.intent.nonce != accountInfo[order.intent.withdraw.accountId].nonce++) {
-            revert Errors.Deposit_InvalidNonce();
-        }
-
-        if (order.intent.chaindId != block.chainid) revert Errors.Deposit_InvalidChain();
 
         AssetPolicy memory policy = assetPolicy[order.intent.withdraw.asset];
         BrokerAccountInfo memory account = accountInfo[order.intent.withdraw.accountId];
 
         _validateAccountAssetPolicy(policy, account, false);
+
+        DepositLibs.validateIntent(
+            abi.encode(order.intent),
+            order.signature,
+            burner,
+            order.intent.chaindId,
+            account.nonce,
+            order.intent.nonce
+        );
+
+        accountInfo[order.intent.withdraw.accountId].nonce++;
 
         (uint256 netAssetAmountOut, uint256 netBrokerFee, uint256 netProtocolFee) =
             _withdraw(burner, order.intent.withdraw, account, policy.minimumWithdrawal);
