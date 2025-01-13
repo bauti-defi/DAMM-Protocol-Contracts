@@ -14,8 +14,6 @@ import {IERC721} from "@openzeppelin-contracts/token/ERC721/IERC721.sol";
 import {Errors} from "@src/libs/Errors.sol";
 import "@solmate/utils/SafeTransferLib.sol";
 import "@solmate/tokens/ERC20.sol";
-import "@openzeppelin-contracts/utils/cryptography/MessageHashUtils.sol";
-import "@openzeppelin-contracts/utils/cryptography/SignatureChecker.sol";
 import {Enum} from "@safe-contracts/common/Enum.sol";
 import {SafeLib} from "@src/libs/SafeLib.sol";
 import {DepositLibs} from "./DepositLibs.sol";
@@ -30,7 +28,6 @@ event Unpaused();
 contract PermissionlessDepositModule {
     using DepositLibs for BrokerAccountInfo;
     using SafeTransferLib for ERC20;
-    using MessageHashUtils for bytes;
     using SafeLib for ISafe;
 
     IPeriphery public immutable periphery;
@@ -77,11 +74,9 @@ contract PermissionlessDepositModule {
             order.signature,
             msg.sender,
             order.intent.chaindId,
-            nonces[msg.sender],
+            nonces[msg.sender]++,
             order.intent.nonce
         );
-
-        nonces[msg.sender]++;
 
         ERC20(order.intent.deposit.asset).safeTransferFrom(
             msg.sender,
@@ -126,11 +121,9 @@ contract PermissionlessDepositModule {
             order.signature,
             msg.sender,
             order.intent.chaindId,
-            nonces[msg.sender],
+            nonces[msg.sender]++,
             order.intent.nonce
         );
-
-        nonces[msg.sender]++;
 
         bytes memory returnData = safe.executeAndReturnDataOrRevert(
             address(periphery),

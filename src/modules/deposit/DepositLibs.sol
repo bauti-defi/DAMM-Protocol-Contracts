@@ -4,7 +4,7 @@ pragma solidity ^0.8.0;
 import {Errors} from "@src/libs/Errors.sol";
 import "@openzeppelin-contracts/utils/cryptography/MessageHashUtils.sol";
 import "@openzeppelin-contracts/utils/cryptography/SignatureChecker.sol";
-import {BrokerAccountInfo, Role, AccountState} from "./Structs.sol";
+import {BrokerAccountInfo, Role, AccountState, AssetPolicy} from "./Structs.sol";
 
 library DepositLibs {
     using MessageHashUtils for bytes;
@@ -23,6 +23,29 @@ library DepositLibs {
         ) revert Errors.Deposit_InvalidSignature();
         if (nonce != expectedNonce) revert Errors.Deposit_InvalidNonce();
         if (blockId != block.chainid) revert Errors.Deposit_InvalidChain();
+    }
+
+    function validateAccountAssetPolicy(
+        AssetPolicy memory policy,
+        BrokerAccountInfo memory account,
+        bool isDeposit
+    ) internal view {
+        if (!isActive(account)) revert Errors.Deposit_AccountNotActive();
+
+        if (isExpired(account) && isDeposit) {
+            revert Errors.Deposit_AccountExpired();
+        }
+
+        if (
+            (!policy.canDeposit && isDeposit) || (!policy.canWithdraw && !isDeposit)
+                || !policy.enabled
+        ) {
+            revert Errors.Deposit_AssetUnavailable();
+        }
+
+        if (policy.permissioned && !isSuperUser(account)) {
+            revert Errors.Deposit_OnlySuperUser();
+        }
     }
 
     function isActive(BrokerAccountInfo memory account) internal pure returns (bool) {

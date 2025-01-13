@@ -3,8 +3,6 @@ pragma solidity ^0.8.0;
 
 import "@solmate/tokens/ERC20.sol";
 import "@openzeppelin-contracts/token/ERC721/ERC721.sol";
-import "@openzeppelin-contracts/utils/cryptography/MessageHashUtils.sol";
-import "@openzeppelin-contracts/utils/cryptography/SignatureChecker.sol";
 import "@openzeppelin-contracts/utils/math/SignedMath.sol";
 import "@openzeppelin-contracts/utils/math/SafeCast.sol";
 import "@solady/utils/FixedPointMathLib.sol";
@@ -23,7 +21,6 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
     using DepositLibs for BrokerAccountInfo;
     using SafeTransferLib for ERC20;
     using SafeCast for uint256;
-    using MessageHashUtils for bytes;
     using SignedMath for int256;
     using FixedPointMathLib for uint256;
 
@@ -133,18 +130,16 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         AssetPolicy memory policy = assetPolicy[order.intent.deposit.asset];
         BrokerAccountInfo memory account = accountInfo[order.intent.deposit.accountId];
 
-        _validateAccountAssetPolicy(policy, account, true);
+        DepositLibs.validateAccountAssetPolicy(policy, account, true);
 
         DepositLibs.validateIntent(
             abi.encode(order.intent),
             order.signature,
             minter,
             order.intent.chaindId,
-            account.nonce,
+            accountInfo[order.intent.deposit.accountId].nonce++,
             order.intent.nonce
         );
-
-        accountInfo[order.intent.deposit.accountId].nonce++;
 
         /// @notice The management fee should be charged before the deposit is processed
         /// otherwise, the management fee will be charged on the deposit amount
@@ -208,7 +203,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         AssetPolicy memory policy = assetPolicy[order.asset];
         BrokerAccountInfo memory account = accountInfo[order.accountId];
 
-        _validateAccountAssetPolicy(policy, account, true);
+        DepositLibs.validateAccountAssetPolicy(policy, account, true);
 
         sharesOut = _deposit(
             order,
@@ -321,18 +316,16 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         AssetPolicy memory policy = assetPolicy[order.intent.withdraw.asset];
         BrokerAccountInfo memory account = accountInfo[order.intent.withdraw.accountId];
 
-        _validateAccountAssetPolicy(policy, account, false);
+        DepositLibs.validateAccountAssetPolicy(policy, account, false);
 
         DepositLibs.validateIntent(
             abi.encode(order.intent),
             order.signature,
             burner,
             order.intent.chaindId,
-            account.nonce,
+            accountInfo[order.intent.withdraw.accountId].nonce++,
             order.intent.nonce
         );
-
-        accountInfo[order.intent.withdraw.accountId].nonce++;
 
         (uint256 netAssetAmountOut, uint256 netBrokerFee, uint256 netProtocolFee) =
             _withdraw(burner, order.intent.withdraw, account, policy.minimumWithdrawal);
@@ -395,7 +388,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         AssetPolicy memory policy = assetPolicy[order.asset];
         BrokerAccountInfo memory account = accountInfo[order.accountId];
 
-        _validateAccountAssetPolicy(policy, account, false);
+        DepositLibs.validateAccountAssetPolicy(policy, account, false);
 
         (uint256 netAssetAmountOut, uint256 netBrokerFee, uint256 netProtocolFee) =
             _withdraw(burner, order, account, policy.minimumWithdrawal);
@@ -575,29 +568,6 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         /// check transfer was successful
         if (!success || (returnData.length > 0 && !abi.decode(returnData, (bool)))) {
             revert Errors.Deposit_AssetTransferFailed();
-        }
-    }
-
-    function _validateAccountAssetPolicy(
-        AssetPolicy memory policy,
-        BrokerAccountInfo memory account,
-        bool isDeposit
-    ) private view {
-        if (!account.isActive()) revert Errors.Deposit_AccountNotActive();
-
-        if (account.isExpired() && isDeposit) {
-            revert Errors.Deposit_AccountExpired();
-        }
-
-        if (
-            (!policy.canDeposit && isDeposit) || (!policy.canWithdraw && !isDeposit)
-                || !policy.enabled
-        ) {
-            revert Errors.Deposit_AssetUnavailable();
-        }
-
-        if (policy.permissioned && !account.isSuperUser()) {
-            revert Errors.Deposit_OnlySuperUser();
         }
     }
 
