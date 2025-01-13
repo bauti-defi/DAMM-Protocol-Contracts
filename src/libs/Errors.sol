@@ -57,7 +57,7 @@ library Errors {
     error Deposit_AccountExpired();
     error Deposit_AccountNotTransferable();
     error Deposit_AccountCannotBeClosed();
-    error Deposit_InvalidAccountId();
+
     /// Access control errors
     error Deposit_OnlyUser();
     error Deposit_OnlySuperUser();
