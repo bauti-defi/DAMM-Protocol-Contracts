@@ -32,6 +32,17 @@ contract FundValuationOracle is BaseAdapter {
 
         if (fund.hasOpenPositions()) revert Errors.FundValuationOracle_FundNotFullyDivested();
 
+        address[] memory childFunds = IMotherFund(base).getChildFunds();
+        uint256 childFundsLength = childFunds.length;
+
+        for (uint256 i = 0; i < childFundsLength;) {
+            total += oracleRouter.getQuote(0, childFunds[i], quote);
+
+            unchecked {
+                ++i;
+            }
+        }
+
         address[] memory assets = fund.getAssetsOfInterest();
         uint256 assetLength = assets.length;
 
