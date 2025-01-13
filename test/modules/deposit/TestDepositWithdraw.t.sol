@@ -183,7 +183,7 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
     modifier approveAll(address user) {
         vm.startPrank(user);
         mockToken1.approve(address(periphery), type(uint256).max);
-        periphery.vault().approve(address(periphery), type(uint256).max);
+        periphery.internalVault().approve(address(periphery), type(uint256).max);
         vm.stopPrank();
 
         _;
@@ -333,14 +333,14 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
             mockToken1.balanceOf(address(fund)), depositAmount, 0.1e18, "Fund balance wrong"
         );
         assertApproxEqRel(
-            periphery.vault().balanceOf(receiver),
+            periphery.internalVault().balanceOf(receiver),
             sharesOut - entranceFeeForBroker - entranceFeeForProtocol,
             0.1e18,
             "Broker entrance fee balance wrong"
         );
         if (brokerEntranceFeeInBps > 0) {
             assertApproxEqRel(
-                periphery.vault().balanceOf(alice),
+                periphery.internalVault().balanceOf(alice),
                 entranceFeeForBroker,
                 0.1e18,
                 "Broker entrance fee balance wrong"
@@ -348,7 +348,7 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
         }
         if (protocolEntranceFeeInBps > 0) {
             assertApproxEqRel(
-                periphery.vault().balanceOf(feeRecipient),
+                periphery.internalVault().balanceOf(feeRecipient),
                 entranceFeeForProtocol,
                 0.1e18,
                 "Protocol entrance fee balance wrong"
@@ -496,8 +496,8 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
             );
         }
 
-        assertEq(periphery.vault().balanceOf(alice), 0);
-        assertEq(mockToken1.balanceOf(address(fund)), periphery.vault().totalAssets());
+        assertEq(periphery.internalVault().balanceOf(alice), 0);
+        assertEq(mockToken1.balanceOf(address(fund)), periphery.internalVault().totalAssets());
     }
 
     function test_management_fee(
@@ -540,24 +540,28 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
 
         vm.prank(alice);
         periphery.deposit(_depositOrder(1, alice, address(mockToken1), type(uint256).max));
-        assertEq(periphery.vault().balanceOf(alice), periphery.vault().totalSupply());
+        assertEq(
+            periphery.internalVault().balanceOf(alice), periphery.internalVault().totalSupply()
+        );
 
         /// @notice that now blocks have passed, so no time has passed, so there is no management fee
-        assertEq(periphery.vault().balanceOf(managementFeeRecipient), 0);
+        assertEq(periphery.internalVault().balanceOf(managementFeeRecipient), 0);
 
         mockToken1.mint(alice, 50 ether);
 
         vm.prank(alice);
         periphery.withdraw(_withdrawOrder(1, alice, address(mockToken1), type(uint256).max));
-        assertEq(periphery.vault().balanceOf(alice), periphery.vault().totalSupply());
+        assertEq(
+            periphery.internalVault().balanceOf(alice), periphery.internalVault().totalSupply()
+        );
 
         /// @notice that now blocks have passed, so no time has passed, so there is no management fee
-        assertEq(periphery.vault().balanceOf(managementFeeRecipient), 0);
+        assertEq(periphery.internalVault().balanceOf(managementFeeRecipient), 0);
 
         /// now we simulate time passing
         vm.warp(block.timestamp + timeDelta1);
 
-        uint256 managementFee1 = periphery.vault().totalSupply() * timeDelta1
+        uint256 managementFee1 = periphery.internalVault().totalSupply() * timeDelta1
             * managementFeeRateInBps / BP_DIVISOR / 365 days;
 
         mockToken1.mint(alice, 50 ether);
@@ -565,16 +569,17 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
         vm.prank(alice);
         periphery.deposit(_depositOrder(1, alice, address(mockToken1), type(uint256).max));
         assertEq(
-            periphery.vault().balanceOf(alice), periphery.vault().totalSupply() - managementFee1
+            periphery.internalVault().balanceOf(alice),
+            periphery.internalVault().totalSupply() - managementFee1
         );
 
         /// @notice now the management fee should have been minted to the management fee recipient
         /// since time has passed between deposits
-        assertEq(periphery.vault().balanceOf(managementFeeRecipient), managementFee1);
+        assertEq(periphery.internalVault().balanceOf(managementFeeRecipient), managementFee1);
 
         vm.warp(block.timestamp + timeDelta2);
 
-        uint256 managementFee2 = periphery.vault().totalSupply() * timeDelta2
+        uint256 managementFee2 = periphery.internalVault().totalSupply() * timeDelta2
             * managementFeeRateInBps / BP_DIVISOR / 365 days;
 
         mockToken1.mint(alice, 50 ether);
@@ -583,14 +588,14 @@ contract TestDepositWithdraw is TestBaseFund, TestBaseProtocol {
         periphery.deposit(_depositOrder(1, alice, address(mockToken1), type(uint256).max));
 
         assertApproxEqRel(
-            periphery.vault().balanceOf(alice),
-            periphery.vault().totalSupply() - managementFee1 - managementFee2,
+            periphery.internalVault().balanceOf(alice),
+            periphery.internalVault().totalSupply() - managementFee1 - managementFee2,
             0.1e18,
             "Alice balance wrong"
         );
 
         assertApproxEqRel(
-            periphery.vault().balanceOf(managementFeeRecipient),
+            periphery.internalVault().balanceOf(managementFeeRecipient),
             managementFee1 + managementFee2,
             0.1e18,
             "Management fee recipient balance wrong"

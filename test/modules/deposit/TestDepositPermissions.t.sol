@@ -164,7 +164,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
     modifier approveAll(address user) {
         vm.startPrank(user);
         mockToken1.approve(address(periphery), type(uint256).max);
-        periphery.vault().approve(address(periphery), type(uint256).max);
+        periphery.internalVault().approve(address(periphery), type(uint256).max);
         vm.stopPrank();
 
         _;
@@ -422,12 +422,12 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
 
         vm.startPrank(alice);
         mockToken2.approve(address(periphery), type(uint256).max);
-        periphery.vault().approve(address(periphery), type(uint256).max);
+        periphery.internalVault().approve(address(periphery), type(uint256).max);
         vm.stopPrank();
 
         vm.startPrank(bob);
         mockToken2.approve(address(periphery), type(uint256).max);
-        periphery.vault().approve(address(periphery), type(uint256).max);
+        periphery.internalVault().approve(address(periphery), type(uint256).max);
         vm.stopPrank();
 
         SignedDepositIntent memory dOrder = _signDepositIntent(
@@ -490,7 +490,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         vm.prank(relayer);
         periphery.intentDeposit(dOrder);
 
-        assertTrue(periphery.vault().balanceOf(alice) > 0);
+        assertTrue(periphery.internalVault().balanceOf(alice) > 0);
         assertFalse(periphery.getAccountInfo(1).isExpired());
 
         vm.warp(100000000 * 2);
@@ -504,7 +504,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         vm.prank(relayer);
         periphery.intentWithdraw(wOrder);
 
-        assertTrue(periphery.vault().balanceOf(alice) == 0);
+        assertTrue(periphery.internalVault().balanceOf(alice) == 0);
     }
 
     function test_only_allowed_assets_can_be_deposited_or_withdrawn(address asset)

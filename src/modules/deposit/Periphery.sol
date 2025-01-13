@@ -29,10 +29,10 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
     IFund public immutable fund;
     /// @dev should be a Euler Oracle Router
     IPriceOracle public immutable oracleRouter;
-    /// @dev common unit of account for assets and vault
+    /// @dev common unit of account for assets and internalVault
     UnitOfAccount public immutable unitOfAccount;
     /// @dev used internally for yield accounting
-    FundShareVault public immutable vault;
+    FundShareVault public immutable internalVault;
 
     /// @dev the minter role
     address public admin;
@@ -76,10 +76,10 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         protocolFeeRecipient = protocolFeeRecipient_;
         lastManagementFeeTimestamp = block.timestamp;
         unitOfAccount = new UnitOfAccount("Liquidity", "UNIT", decimals_);
-        vault = new FundShareVault(address(unitOfAccount), vaultName_, vaultSymbol_);
+        internalVault = new FundShareVault(address(unitOfAccount), vaultName_, vaultSymbol_);
 
-        /// @notice infinite approval for the vault to manage periphery's balance
-        unitOfAccount.approve(address(vault), type(uint256).max);
+        /// @notice infinite approval for the internalVault to manage periphery's balance
+        unitOfAccount.approve(address(internalVault), type(uint256).max);
     }
 
     modifier notPaused() {
@@ -97,8 +97,8 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         _;
     }
 
-    /// @dev This modifier updates the balances of the vault and the fund
-    /// this ensures that the vault's total assets are always equal to the fund's total assets
+    /// @dev This modifier updates the balances of the internalVault and the fund
+    /// this ensures that the internalVault's total assets are always equal to the fund's total assets
     modifier rebalanceVault() {
         _updateVaultBalance();
 
@@ -265,7 +265,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         unitOfAccount.mint(address(this), liquidity);
 
         /// mint shares to the periphery using the liquidity that was just minted
-        sharesOut = vault.deposit(liquidity, address(this));
+        sharesOut = internalVault.deposit(liquidity, address(this));
 
         /// lets make sure slippage is acceptable
         if (sharesOut < order.minSharesOut) {
@@ -288,18 +288,20 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
 
         /// take the broker entrance fees
         if (brokerEntranceFeeInBps > 0) {
-            vault.transfer(broker, sharesOut.fullMulDivUp(brokerEntranceFeeInBps, BP_DIVISOR));
+            internalVault.transfer(
+                broker, sharesOut.fullMulDivUp(brokerEntranceFeeInBps, BP_DIVISOR)
+            );
         }
 
         /// take the protocol entrance fees
         if (protocolEntranceFeeInBps > 0) {
-            vault.transfer(
+            internalVault.transfer(
                 protocolFeeRecipient, sharesOut.fullMulDivUp(protocolEntranceFeeInBps, BP_DIVISOR)
             );
         }
 
         /// forward the remaining shares to the recipient
-        vault.transfer(order.recipient, vault.balanceOf(address(this)));
+        internalVault.transfer(order.recipient, internalVault.balanceOf(address(this)));
     }
 
     function intentWithdraw(SignedWithdrawIntent calldata order)
@@ -425,7 +427,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
 
         /// if shares to burn is max uint256, then burn all shares owned by broker
         if (sharesToBurn == type(uint256).max) {
-            sharesToBurn = vault.balanceOf(broker);
+            sharesToBurn = internalVault.balanceOf(broker);
         }
 
         /// make sure the broker has not exceeded their share burn limit
@@ -438,8 +440,8 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             accountInfo[order.accountId].totalSharesOutstanding -= sharesToBurn;
         }
 
-        /// burn vault shares in exchange for liquidity (unit of account) tokens
-        uint256 liquidity = vault.redeem(sharesToBurn, address(this), broker);
+        /// burn internalVault shares in exchange for liquidity (unit of account) tokens
+        uint256 liquidity = internalVault.redeem(sharesToBurn, address(this), broker);
 
         /// burn liquidity from periphery
         unitOfAccount.burn(address(this), liquidity);
@@ -540,10 +542,10 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             /// update the last management fee timestamp
             lastManagementFeeTimestamp = block.timestamp;
 
-            uint256 totalSupply = vault.totalSupply();
-            uint256 totalAssets = vault.totalAssets();
+            uint256 totalSupply = internalVault.totalSupply();
+            uint256 totalAssets = internalVault.totalAssets();
 
-            /// if the vault has no assets, then we don't take any fees
+            /// if the internalVault has no assets, then we don't take any fees
             if (totalAssets == 0 || totalSupply == 0) {
                 return;
             }
@@ -556,7 +558,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             uint256 managementFeeInShares = totalSupply.mulWadUp(annualizedFeeRate);
 
             /// mint the management fee to the fee recipient
-            vault.mintUnbacked(managementFeeInShares, protocolFeeRecipient);
+            internalVault.mintUnbacked(managementFeeInShares, protocolFeeRecipient);
         }
     }
 
@@ -600,20 +602,20 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
 
     function _updateVaultBalance() private {
         uint256 assetsInFund = oracleRouter.getQuote(0, address(fund), address(unitOfAccount));
-        uint256 assetsInVault = vault.totalAssets();
+        uint256 assetsInVault = internalVault.totalAssets();
 
         /// @notice assetsInFund is part of [0, uint256.max]
         int256 profitDelta = assetsInFund.toInt256() - assetsInVault.toInt256();
 
         if (profitDelta > 0) {
-            /// we transfer the mint into the vault
-            /// this will distribute the profit to the vault's shareholders
-            unitOfAccount.mint(address(vault), profitDelta.abs());
+            /// we transfer the mint into the internalVault
+            /// this will distribute the profit to the internalVault's shareholders
+            unitOfAccount.mint(address(internalVault), profitDelta.abs());
         } else if (profitDelta < 0) {
             /// if the fund has lost value, we need to account for it
-            /// so we decrease the vault's total assets to match the fund's total assets
+            /// so we decrease the internalVault's total assets to match the fund's total assets
             /// by burning the loss
-            unitOfAccount.burn(address(vault), profitDelta.abs());
+            unitOfAccount.burn(address(internalVault), profitDelta.abs());
         }
     }
 
@@ -680,6 +682,14 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
 
     function setAdmin(address admin_) external onlyFund {
         _setAdmin(admin_);
+    }
+
+    function getUnitOfAccountToken() external view returns (address) {
+        return address(unitOfAccount);
+    }
+
+    function getVault() external view returns (address) {
+        return address(internalVault);
     }
 
     function enableAsset(address asset_, AssetPolicy memory policy_) external notPaused onlyFund {

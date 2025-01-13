@@ -4,6 +4,8 @@ pragma solidity ^0.8.0;
 import "@src/interfaces/IFund.sol";
 import "@euler-price-oracle/interfaces/IPriceOracle.sol";
 import "@src/modules/deposit/Structs.sol";
+import {UnitOfAccount} from "@src/modules/deposit/UnitOfAccount.sol";
+import {FundShareVault} from "@src/modules/deposit/FundShareVault.sol";
 
 interface IPeriphery {
     event Paused();
@@ -59,6 +61,10 @@ interface IPeriphery {
     function oracleRouter() external returns (IPriceOracle);
     function paused() external returns (bool);
     function admin() external returns (address);
+    function internalVault() external returns (FundShareVault);
+    function unitOfAccount() external returns (UnitOfAccount);
+    function getVault() external returns (address);
+    function getUnitOfAccountToken() external returns (address);
     function protocolFeeRecipient() external returns (address);
     function managementFeeRateInBps() external returns (uint256);
     function intentDeposit(SignedDepositIntent calldata order)
