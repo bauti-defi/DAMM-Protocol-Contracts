@@ -206,6 +206,32 @@ abstract contract TestBaseDeposit is TestBaseFund, TestBaseProtocol {
         });
     }
 
+    function _unSignedDepositIntent(
+        uint256 accountId,
+        address user,
+        address token,
+        uint256 amount,
+        uint256 nonce,
+        uint256 relayerTip,
+        uint256 bribe
+    ) internal view returns (DepositIntent memory) {
+        return DepositIntent({
+            deposit: DepositOrder({
+                accountId: accountId,
+                recipient: user,
+                asset: token,
+                amount: amount,
+                deadline: block.timestamp + 1000,
+                minSharesOut: 0,
+                referralCode: 0
+            }),
+            chaindId: block.chainid,
+            relayerTip: relayerTip,
+            bribe: bribe,
+            nonce: nonce
+        });
+    }
+
     function _depositIntent(
         uint256 accountId,
         address user,
@@ -243,6 +269,32 @@ abstract contract TestBaseDeposit is TestBaseFund, TestBaseProtocol {
             deadline: block.timestamp + 1000,
             minAmountOut: 0,
             referralCode: 0
+        });
+    }
+
+    function _unSignedWithdrawIntent(
+        uint256 accountId,
+        address to,
+        address asset,
+        uint256 shares,
+        uint256 nonce,
+        uint256 relayerTip,
+        uint256 bribe
+    ) internal view returns (WithdrawIntent memory) {
+        return WithdrawIntent({
+            withdraw: WithdrawOrder({
+                accountId: accountId,
+                to: to,
+                asset: asset,
+                shares: shares,
+                deadline: block.timestamp + 1000,
+                minAmountOut: 0,
+                referralCode: 0
+            }),
+            chaindId: block.chainid,
+            relayerTip: relayerTip,
+            bribe: bribe,
+            nonce: nonce
         });
     }
 

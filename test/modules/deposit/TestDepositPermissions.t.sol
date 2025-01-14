@@ -14,162 +14,16 @@ import "@openzeppelin-contracts/utils/cryptography/MessageHashUtils.sol";
 import "@src/libs/Errors.sol";
 import {BP_DIVISOR} from "@src/libs/Constants.sol";
 import {DepositLibs} from "@src/modules/deposit/DepositLibs.sol";
+import {TestBaseDeposit} from "./TestBaseDeposit.sol";
 
-uint8 constant VALUATION_DECIMALS = 18;
-uint256 constant VAULT_DECIMAL_OFFSET = 1;
-
-contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
+contract TestDepositPermissions is TestBaseDeposit {
     using MessageHashUtils for bytes;
     using DepositLibs for BrokerAccountInfo;
 
-    address internal fundAdmin;
-    uint256 internal fundAdminPK;
-    EulerRouter internal oracleRouter;
-    Periphery internal periphery;
-    MockERC20 internal mockToken1;
-    MockERC20 internal mockToken2;
-
-    address alice;
-    uint256 internal alicePK;
-    address bob;
-    uint256 internal bobPK;
-    address relayer;
-    address feeRecipient;
-    uint256 internal feeRecipientPK;
-
-    uint256 mock1Unit;
-    uint256 mock2Unit;
-    uint256 oneUnitOfAccount;
-
-    function setUp() public override(TestBaseFund, TestBaseProtocol) {
-        TestBaseFund.setUp();
-        TestBaseProtocol.setUp();
-
-        (feeRecipient, feeRecipientPK) = makeAddrAndKey("FeeRecipient");
-
-        relayer = makeAddr("Relayer");
-
-        (alice, alicePK) = makeAddrAndKey("Alice");
-
-        (bob, bobPK) = makeAddrAndKey("Bob");
-
-        (fundAdmin, fundAdminPK) = makeAddrAndKey("FundAdmin");
-        vm.deal(fundAdmin, 1000 ether);
-
-        address[] memory admins = new address[](1);
-        admins[0] = fundAdmin;
-
-        fund =
-            fundFactory.deployFund(address(safeProxyFactory), address(safeSingleton), admins, 1, 1);
-        vm.label(address(fund), "Fund");
-
-        require(address(fund).balance == 0, "Fund should not have balance");
-
-        assertTrue(address(fund) != address(0), "Failed to deploy fund");
-        assertTrue(fund.isOwner(fundAdmin), "Fund admin not owner");
-
-        vm.prank(address(fund));
-        oracleRouter = new EulerRouter(address(1), address(fund));
-        vm.label(address(oracleRouter), "OracleRouter");
-
-        // deploy periphery using module factory
-        periphery = Periphery(
-            deployModule(
-                payable(address(fund)),
-                fundAdmin,
-                fundAdminPK,
-                bytes32("periphery"),
-                0,
-                abi.encodePacked(
-                    type(Periphery).creationCode,
-                    abi.encode(
-                        "TestVault",
-                        "TV",
-                        VALUATION_DECIMALS, // must be same as underlying oracles response denomination
-                        payable(address(fund)),
-                        address(oracleRouter),
-                        address(fund),
-                        /// fund is admin
-                        feeRecipient
-                    )
-                )
-            )
-        );
-
-        assertTrue(fund.isModuleEnabled(address(periphery)), "Periphery not module");
-
-        /// @notice this much match the vault implementation
-        oneUnitOfAccount = 1 * 10 ** (periphery.unitOfAccount().decimals() + VAULT_DECIMAL_OFFSET);
-
-        mockToken1 = new MockERC20(18);
-        vm.label(address(mockToken1), "MockToken1");
-
-        mockToken2 = new MockERC20(6);
-        vm.label(address(mockToken2), "MockToken2");
-
-        mock1Unit = 1 * 10 ** mockToken1.decimals();
-        mock2Unit = 1 * 10 ** mockToken2.decimals();
-
-        // lets enable assets on the fund
-        vm.startPrank(address(fund));
-        fund.setAssetOfInterest(address(mockToken1));
-        periphery.enableAsset(
-            address(mockToken1),
-            AssetPolicy({
-                minimumDeposit: 1000,
-                minimumWithdrawal: 1000,
-                canDeposit: true,
-                canWithdraw: true,
-                permissioned: false,
-                enabled: true
-            })
-        );
-
-        fund.setAssetOfInterest(address(mockToken2));
-        periphery.enableAsset(
-            address(mockToken2),
-            AssetPolicy({
-                minimumDeposit: 1000,
-                minimumWithdrawal: 1000,
-                canDeposit: true,
-                canWithdraw: true,
-                permissioned: true,
-                enabled: true
-            })
-        );
-        vm.stopPrank();
-
-        address unitOfAccount = address(periphery.unitOfAccount());
-
-        FundValuationOracle fundValuationOracle = new FundValuationOracle(address(oracleRouter));
-        vm.label(address(fundValuationOracle), "FundValuationOracle");
-        vm.prank(address(fund));
-        oracleRouter.govSetConfig(address(fund), unitOfAccount, address(fundValuationOracle));
-
-        MockPriceOracle mockPriceOracle = new MockPriceOracle(
-            address(mockToken1), unitOfAccount, 1 * 10 ** VALUATION_DECIMALS, VALUATION_DECIMALS
-        );
-        vm.label(address(mockPriceOracle), "MockPriceOracle1");
-        vm.prank(address(fund));
-        oracleRouter.govSetConfig(address(mockToken1), unitOfAccount, address(mockPriceOracle));
-
-        mockPriceOracle = new MockPriceOracle(
-            address(mockToken2), unitOfAccount, 2 * 10 ** VALUATION_DECIMALS, VALUATION_DECIMALS
-        );
-        vm.label(address(mockPriceOracle), "MockPriceOracle2");
-        vm.prank(address(fund));
-        oracleRouter.govSetConfig(address(mockToken2), unitOfAccount, address(mockPriceOracle));
+    function setUp() public override(TestBaseDeposit) {
+        TestBaseDeposit.setUp();
 
         mockToken1.mint(alice, 100_000_000 * mock1Unit);
-    }
-
-    modifier approveAll(address user) {
-        vm.startPrank(user);
-        mockToken1.approve(address(periphery), type(uint256).max);
-        periphery.internalVault().approve(address(periphery), type(uint256).max);
-        vm.stopPrank();
-
-        _;
     }
 
     modifier whitelistUser(address user_, uint256 ttl_, Role role_, bool transferable_) {
@@ -199,30 +53,6 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         vm.stopPrank();
     }
 
-    function _depositIntent(
-        uint256 accountId,
-        address user,
-        address token,
-        uint256 amount,
-        uint256 nonce
-    ) internal view returns (DepositIntent memory) {
-        return DepositIntent({
-            deposit: DepositOrder({
-                accountId: accountId,
-                recipient: user,
-                asset: token,
-                amount: amount,
-                deadline: block.timestamp + 1000,
-                minSharesOut: 0,
-                referralCode: 0
-            }),
-            chaindId: block.chainid,
-            relayerTip: 0,
-            bribe: 0,
-            nonce: nonce
-        });
-    }
-
     function _signDepositIntent(DepositIntent memory intent, uint256 userPK)
         internal
         pure
@@ -232,30 +62,6 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
             vm.sign(userPK, abi.encode(intent).toEthSignedMessageHash());
 
         return SignedDepositIntent({intent: intent, signature: abi.encodePacked(r, s, v)});
-    }
-
-    function _withdrawIntent(
-        uint256 accountId,
-        address to,
-        address asset,
-        uint256 shares,
-        uint256 nonce
-    ) internal view returns (WithdrawIntent memory) {
-        return WithdrawIntent({
-            withdraw: WithdrawOrder({
-                accountId: accountId,
-                to: to,
-                asset: asset,
-                shares: shares,
-                deadline: block.timestamp + 1000,
-                minAmountOut: 0,
-                referralCode: 0
-            }),
-            chaindId: block.chainid,
-            relayerTip: 0,
-            bribe: 0,
-            nonce: nonce
-        });
     }
 
     function _signWithdrawIntent(WithdrawIntent memory intent, uint256 userPK)
@@ -275,15 +81,16 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
     {
         (address user, uint256 userPK) = makeAddrAndKey(name);
 
-        SignedDepositIntent memory dOrder =
-            _signDepositIntent(_depositIntent(1, alice, address(mockToken1), mock1Unit, 0), userPK);
+        SignedDepositIntent memory dOrder = _signDepositIntent(
+            _unSignedDepositIntent(1, alice, address(mockToken1), mock1Unit, 0, 0, 0), userPK
+        );
 
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_InvalidSignature.selector);
         periphery.intentDeposit(dOrder);
 
         SignedWithdrawIntent memory wOrder = _signWithdrawIntent(
-            _withdrawIntent(1, alice, address(mockToken1), mock1Unit, 0), userPK
+            _unSignedWithdrawIntent(1, alice, address(mockToken1), mock1Unit, 0, 0, 0), userPK
         );
 
         vm.prank(relayer);
@@ -293,7 +100,8 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
 
     function test_only_enabled_account_can_deposit_withdraw(uint256 accountId_) public {
         SignedDepositIntent memory dOrder = _signDepositIntent(
-            _depositIntent(accountId_, alice, address(mockToken1), mock1Unit, 0), alicePK
+            _unSignedDepositIntent(accountId_, alice, address(mockToken1), mock1Unit, 0, 0, 0),
+            alicePK
         );
 
         vm.prank(relayer);
@@ -301,7 +109,8 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         periphery.intentDeposit(dOrder);
 
         SignedWithdrawIntent memory wOrder = _signWithdrawIntent(
-            _withdrawIntent(accountId_, alice, address(mockToken1), mock1Unit, 0), alicePK
+            _unSignedWithdrawIntent(accountId_, alice, address(mockToken1), mock1Unit, 0, 0, 0),
+            alicePK
         );
 
         vm.prank(relayer);
@@ -316,15 +125,16 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         vm.prank(address(fund));
         periphery.pauseAccount(1);
 
-        SignedDepositIntent memory dOrder =
-            _signDepositIntent(_depositIntent(1, alice, address(mockToken1), mock1Unit, 0), alicePK);
+        SignedDepositIntent memory dOrder = _signDepositIntent(
+            _unSignedDepositIntent(1, alice, address(mockToken1), mock1Unit, 0, 0, 0), alicePK
+        );
 
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_AccountNotActive.selector);
         periphery.intentDeposit(dOrder);
 
         SignedWithdrawIntent memory wOrder = _signWithdrawIntent(
-            _withdrawIntent(1, alice, address(mockToken1), mock1Unit, 0), alicePK
+            _unSignedWithdrawIntent(1, alice, address(mockToken1), mock1Unit, 0, 0, 0), alicePK
         );
 
         vm.prank(relayer);
@@ -339,7 +149,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         vm.assume(nonce_ > 1);
 
         SignedDepositIntent memory dOrder = _signDepositIntent(
-            _depositIntent(1, alice, address(mockToken1), mock1Unit, nonce_), alicePK
+            _unSignedDepositIntent(1, alice, address(mockToken1), mock1Unit, nonce_, 0, 0), alicePK
         );
 
         vm.prank(relayer);
@@ -347,7 +157,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         periphery.intentDeposit(dOrder);
 
         SignedWithdrawIntent memory wOrder = _signWithdrawIntent(
-            _withdrawIntent(1, alice, address(mockToken1), mock1Unit, nonce_), alicePK
+            _unSignedWithdrawIntent(1, alice, address(mockToken1), mock1Unit, nonce_, 0, 0), alicePK
         );
 
         vm.prank(relayer);
@@ -362,8 +172,9 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         vm.assume(timestamp_ > 10000);
         vm.assume(timestamp_ < 100000000 * 2);
 
-        SignedDepositIntent memory dOrder =
-            _signDepositIntent(_depositIntent(1, alice, address(mockToken1), mock1Unit, 0), alicePK);
+        SignedDepositIntent memory dOrder = _signDepositIntent(
+            _unSignedDepositIntent(1, alice, address(mockToken1), mock1Unit, 0, 0, 0), alicePK
+        );
 
         // increase timestamp
         vm.warp(timestamp_);
@@ -376,7 +187,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         vm.warp(0);
 
         SignedWithdrawIntent memory wOrder = _signWithdrawIntent(
-            _withdrawIntent(1, alice, address(mockToken1), mock1Unit, 0), alicePK
+            _unSignedWithdrawIntent(1, alice, address(mockToken1), mock1Unit, 0, 0, 0), alicePK
         );
 
         // increase timestamp
@@ -393,7 +204,8 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
     {
         vm.assume(chainId_ != block.chainid);
 
-        DepositIntent memory dIntent = _depositIntent(1, alice, address(mockToken1), mock1Unit, 0);
+        DepositIntent memory dIntent =
+            _unSignedDepositIntent(1, alice, address(mockToken1), mock1Unit, 0, 0, 0);
 
         dIntent.chaindId = chainId_;
 
@@ -403,7 +215,8 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         vm.expectRevert(Errors.Deposit_InvalidChain.selector);
         periphery.intentDeposit(dOrder);
 
-        WithdrawIntent memory wIntent = _withdrawIntent(1, alice, address(mockToken1), mock1Unit, 0);
+        WithdrawIntent memory wIntent =
+            _unSignedWithdrawIntent(1, alice, address(mockToken1), mock1Unit, 0, 0, 0);
 
         wIntent.chaindId = chainId_;
 
@@ -433,7 +246,7 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         vm.stopPrank();
 
         SignedDepositIntent memory dOrder = _signDepositIntent(
-            _depositIntent(1, alice, address(mockToken2), 1 * mock2Unit, 0), alicePK
+            _unSignedDepositIntent(1, alice, address(mockToken2), 1 * mock2Unit, 0, 0, 0), alicePK
         );
 
         vm.prank(relayer);
@@ -441,21 +254,22 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         periphery.intentDeposit(dOrder);
 
         dOrder = _signDepositIntent(
-            _depositIntent(2, bob, address(mockToken2), 10 * mock2Unit, 0), bobPK
+            _unSignedDepositIntent(2, bob, address(mockToken2), 10 * mock2Unit, 0, 0, 0), bobPK
         );
 
         vm.prank(relayer);
         periphery.intentDeposit(dOrder);
 
         SignedWithdrawIntent memory wOrder = _signWithdrawIntent(
-            _withdrawIntent(2, bob, address(mockToken2), type(uint256).max, 1), bobPK
+            _unSignedWithdrawIntent(2, bob, address(mockToken2), type(uint256).max, 1, 0, 0), bobPK
         );
 
         vm.prank(relayer);
         periphery.intentWithdraw(wOrder);
 
         wOrder = _signWithdrawIntent(
-            _withdrawIntent(1, alice, address(mockToken2), type(uint256).max, 0), alicePK
+            _unSignedWithdrawIntent(1, alice, address(mockToken2), type(uint256).max, 0, 0, 0),
+            alicePK
         );
 
         vm.prank(relayer);
@@ -466,15 +280,16 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
     function test_only_non_expired_account_can_deposit(uint256 timestamp)
         public
         whitelistUser(alice, 1, Role.USER, false)
-        approveAll(alice)
+        approveAllPeriphery(alice)
     {
         vm.assume(timestamp > 1);
         vm.assume(timestamp < 100000000 * 2);
 
         vm.warp(timestamp);
 
-        SignedDepositIntent memory dOrder =
-            _signDepositIntent(_depositIntent(1, alice, address(mockToken1), mock1Unit, 0), alicePK);
+        SignedDepositIntent memory dOrder = _signDepositIntent(
+            _unSignedDepositIntent(1, alice, address(mockToken1), mock1Unit, 0, 0, 0), alicePK
+        );
 
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_AccountExpired.selector);
@@ -484,10 +299,11 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
     function test_expired_account_can_withdraw()
         public
         whitelistUser(alice, 1000, Role.USER, false)
-        approveAll(alice)
+        approveAllPeriphery(alice)
     {
-        SignedDepositIntent memory dOrder =
-            _signDepositIntent(_depositIntent(1, alice, address(mockToken1), mock1Unit, 0), alicePK);
+        SignedDepositIntent memory dOrder = _signDepositIntent(
+            _unSignedDepositIntent(1, alice, address(mockToken1), mock1Unit, 0, 0, 0), alicePK
+        );
 
         vm.prank(relayer);
         periphery.intentDeposit(dOrder);
@@ -500,7 +316,8 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         assertTrue(periphery.getAccountInfo(1).isExpired());
 
         SignedWithdrawIntent memory wOrder = _signWithdrawIntent(
-            _withdrawIntent(1, alice, address(mockToken1), type(uint256).max, 1), alicePK
+            _unSignedWithdrawIntent(1, alice, address(mockToken1), type(uint256).max, 1, 0, 0),
+            alicePK
         );
 
         vm.prank(relayer);
@@ -517,14 +334,15 @@ contract TestDepositPermissions is TestBaseFund, TestBaseProtocol {
         vm.assume(asset != address(mockToken2));
 
         SignedDepositIntent memory dOrder =
-            _signDepositIntent(_depositIntent(1, alice, asset, mock2Unit, 0), alicePK);
+            _signDepositIntent(_unSignedDepositIntent(1, alice, asset, mock2Unit, 0, 0, 0), alicePK);
 
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_AssetUnavailable.selector);
         periphery.intentDeposit(dOrder);
 
-        SignedWithdrawIntent memory wOrder =
-            _signWithdrawIntent(_withdrawIntent(1, alice, asset, mock2Unit, 0), alicePK);
+        SignedWithdrawIntent memory wOrder = _signWithdrawIntent(
+            _unSignedWithdrawIntent(1, alice, asset, mock2Unit, 0, 0, 0), alicePK
+        );
 
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_AssetUnavailable.selector);
