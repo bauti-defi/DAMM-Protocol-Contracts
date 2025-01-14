@@ -5,6 +5,7 @@ import "@src/modules/deposit/Structs.sol";
 import "@openzeppelin-contracts/utils/math/SignedMath.sol";
 import "@src/libs/Constants.sol";
 import {TestBaseDeposit} from "./TestBaseDeposit.sol";
+import {Errors} from "@src/libs/Errors.sol";
 
 uint256 constant MAX_NET_EXIT_FEE_IN_BPS = 5_000;
 uint256 constant MAX_NET_PERFORMANCE_FEE_IN_BPS = 7_000;

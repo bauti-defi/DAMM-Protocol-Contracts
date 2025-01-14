@@ -265,6 +265,12 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         /// mint shares to the periphery using the liquidity that was just minted
         sharesOut = internalVault.deposit(liquidity, address(this));
 
+        /// @notice this edge case is possible if a big amount of token is transferred
+        /// to the fund before the deposit is processed
+        if (sharesOut == 0) {
+            revert Errors.Deposit_InsufficientShares();
+        }
+
         /// lets make sure slippage is acceptable
         if (sharesOut < order.minSharesOut) {
             revert Errors.Deposit_SlippageLimitExceeded();

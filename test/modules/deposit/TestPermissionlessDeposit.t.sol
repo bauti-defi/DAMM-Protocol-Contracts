@@ -69,6 +69,29 @@ contract TestPermissionlessDeposit is TestBaseDeposit {
         _;
     }
 
+    /// @notice if the bribe is greater than the deposit amount then we risk minting 0 shares
+    function test_deposit_must_mint_more_than_zero_shares(uint128 _amount, uint128 _bribe)
+        public
+        approveAllPeriphery(address(safe))
+        approveAllModule(alice)
+    {
+        uint256 amount = uint256(_amount);
+        uint256 bribe = uint256(_bribe);
+
+        vm.assume(bribe > amount ** 2);
+        vm.assume(amount > MINIMUM_DEPOSIT);
+
+        mockToken1.mint(alice, amount + bribe);
+
+        uint256 nonce = permissionlessDepositModule.nonces(alice);
+
+        vm.prank(relayer);
+        vm.expectRevert(Errors.Deposit_InsufficientShares.selector);
+        permissionlessDepositModule.intentDeposit(
+            _depositIntent(accountId, alice, alicePK, address(mockToken1), amount, 0, bribe, nonce)
+        );
+    }
+
     function test_deposit_withdraw(uint128 _amount, bool intent, bool relayerTip, bool bribe)
         public
         approveAllPeriphery(address(safe))
