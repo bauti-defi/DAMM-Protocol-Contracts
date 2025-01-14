@@ -42,6 +42,7 @@ library Errors {
     error Deposit_SlippageLimitExceeded();
     error Deposit_ShareMintLimitExceeded();
     error Deposit_ShareBurnLimitExceeded();
+    error Deposit_InsufficientShares();
 
     /// Asset policy errors
     error Deposit_InvalidAssetPolicy();
