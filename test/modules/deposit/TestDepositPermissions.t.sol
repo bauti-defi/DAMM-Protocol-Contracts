@@ -53,44 +53,20 @@ contract TestDepositPermissions is TestBaseDeposit {
         vm.stopPrank();
     }
 
-    function _signDepositIntent(DepositIntent memory intent, uint256 userPK)
-        internal
-        pure
-        returns (SignedDepositIntent memory)
-    {
-        (uint8 v, bytes32 r, bytes32 s) =
-            vm.sign(userPK, abi.encode(intent).toEthSignedMessageHash());
-
-        return SignedDepositIntent({intent: intent, signature: abi.encodePacked(r, s, v)});
-    }
-
-    function _signWithdrawIntent(WithdrawIntent memory intent, uint256 userPK)
-        internal
-        pure
-        returns (SignedWithdrawIntent memory)
-    {
-        (uint8 v, bytes32 r, bytes32 s) =
-            vm.sign(userPK, abi.encode(intent).toEthSignedMessageHash());
-
-        return SignedWithdrawIntent({intent: intent, signature: abi.encodePacked(r, s, v)});
-    }
-
-    function test_only_account_signature_is_valid(string memory name)
+    function test_only_account_signature_is_valid()
         public
         whitelistUser(alice, 10000, Role.USER, false)
     {
-        (address user, uint256 userPK) = makeAddrAndKey(name);
-
-        SignedDepositIntent memory dOrder = _signDepositIntent(
-            _unSignedDepositIntent(1, alice, address(mockToken1), mock1Unit, 0, 0, 0), userPK
+        SignedDepositIntent memory dOrder = signdepositIntent(
+            unsignedDepositIntent(1, alice, address(mockToken1), mock1Unit, 0, 0, 0), uint256(123)
         );
 
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_InvalidSignature.selector);
         periphery.intentDeposit(dOrder);
 
-        SignedWithdrawIntent memory wOrder = _signWithdrawIntent(
-            _unSignedWithdrawIntent(1, alice, address(mockToken1), mock1Unit, 0, 0, 0), userPK
+        SignedWithdrawIntent memory wOrder = signsignedWithdrawIntent(
+            unsignedWithdrawIntent(1, alice, address(mockToken1), mock1Unit, 0, 0, 0), uint256(123)
         );
 
         vm.prank(relayer);
@@ -99,18 +75,15 @@ contract TestDepositPermissions is TestBaseDeposit {
     }
 
     function test_only_enabled_account_can_deposit_withdraw(uint256 accountId_) public {
-        SignedDepositIntent memory dOrder = _signDepositIntent(
-            _unSignedDepositIntent(accountId_, alice, address(mockToken1), mock1Unit, 0, 0, 0),
-            alicePK
-        );
+        SignedDepositIntent memory dOrder =
+            depositIntent(accountId_, alice, alicePK, address(mockToken1), mock1Unit, 0, 0, 0);
 
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_AccountDoesNotExist.selector);
         periphery.intentDeposit(dOrder);
 
-        SignedWithdrawIntent memory wOrder = _signWithdrawIntent(
-            _unSignedWithdrawIntent(accountId_, alice, address(mockToken1), mock1Unit, 0, 0, 0),
-            alicePK
+        SignedWithdrawIntent memory wOrder = signedWithdrawIntent(
+            accountId_, alice, alicePK, address(mockToken1), mock1Unit, 0, 0, 0
         );
 
         vm.prank(relayer);
@@ -125,17 +98,15 @@ contract TestDepositPermissions is TestBaseDeposit {
         vm.prank(address(fund));
         periphery.pauseAccount(1);
 
-        SignedDepositIntent memory dOrder = _signDepositIntent(
-            _unSignedDepositIntent(1, alice, address(mockToken1), mock1Unit, 0, 0, 0), alicePK
-        );
+        SignedDepositIntent memory dOrder =
+            depositIntent(1, alice, alicePK, address(mockToken1), mock1Unit, 0, 0, 0);
 
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_AccountNotActive.selector);
         periphery.intentDeposit(dOrder);
 
-        SignedWithdrawIntent memory wOrder = _signWithdrawIntent(
-            _unSignedWithdrawIntent(1, alice, address(mockToken1), mock1Unit, 0, 0, 0), alicePK
-        );
+        SignedWithdrawIntent memory wOrder =
+            signedWithdrawIntent(1, alice, alicePK, address(mockToken1), mock1Unit, 0, 0, 0);
 
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_AccountNotActive.selector);
@@ -148,17 +119,15 @@ contract TestDepositPermissions is TestBaseDeposit {
     {
         vm.assume(nonce_ > 1);
 
-        SignedDepositIntent memory dOrder = _signDepositIntent(
-            _unSignedDepositIntent(1, alice, address(mockToken1), mock1Unit, nonce_, 0, 0), alicePK
-        );
+        SignedDepositIntent memory dOrder =
+            depositIntent(1, alice, alicePK, address(mockToken1), mock1Unit, 0, 0, nonce_);
 
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_InvalidNonce.selector);
         periphery.intentDeposit(dOrder);
 
-        SignedWithdrawIntent memory wOrder = _signWithdrawIntent(
-            _unSignedWithdrawIntent(1, alice, address(mockToken1), mock1Unit, nonce_, 0, 0), alicePK
-        );
+        SignedWithdrawIntent memory wOrder =
+            signedWithdrawIntent(1, alice, alicePK, address(mockToken1), mock1Unit, 0, 0, nonce_);
 
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_InvalidNonce.selector);
@@ -172,9 +141,8 @@ contract TestDepositPermissions is TestBaseDeposit {
         vm.assume(timestamp_ > 10000);
         vm.assume(timestamp_ < 100000000 * 2);
 
-        SignedDepositIntent memory dOrder = _signDepositIntent(
-            _unSignedDepositIntent(1, alice, address(mockToken1), mock1Unit, 0, 0, 0), alicePK
-        );
+        SignedDepositIntent memory dOrder =
+            depositIntent(1, alice, alicePK, address(mockToken1), mock1Unit, 0, 0, 0);
 
         // increase timestamp
         vm.warp(timestamp_);
@@ -186,9 +154,8 @@ contract TestDepositPermissions is TestBaseDeposit {
         // reset timestamp to generate valid order
         vm.warp(0);
 
-        SignedWithdrawIntent memory wOrder = _signWithdrawIntent(
-            _unSignedWithdrawIntent(1, alice, address(mockToken1), mock1Unit, 0, 0, 0), alicePK
-        );
+        SignedWithdrawIntent memory wOrder =
+            signedWithdrawIntent(1, alice, alicePK, address(mockToken1), mock1Unit, 0, 0, 0);
 
         // increase timestamp
         vm.warp(timestamp_);
@@ -205,22 +172,22 @@ contract TestDepositPermissions is TestBaseDeposit {
         vm.assume(chainId_ != block.chainid);
 
         DepositIntent memory dIntent =
-            _unSignedDepositIntent(1, alice, address(mockToken1), mock1Unit, 0, 0, 0);
+            unsignedDepositIntent(1, alice, address(mockToken1), mock1Unit, 0, 0, 0);
 
         dIntent.chaindId = chainId_;
 
-        SignedDepositIntent memory dOrder = _signDepositIntent(dIntent, alicePK);
+        SignedDepositIntent memory dOrder = signdepositIntent(dIntent, alicePK);
 
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_InvalidChain.selector);
         periphery.intentDeposit(dOrder);
 
         WithdrawIntent memory wIntent =
-            _unSignedWithdrawIntent(1, alice, address(mockToken1), mock1Unit, 0, 0, 0);
+            unsignedWithdrawIntent(1, alice, address(mockToken1), mock1Unit, 0, 0, 0);
 
         wIntent.chaindId = chainId_;
 
-        SignedWithdrawIntent memory wOrder = _signWithdrawIntent(wIntent, alicePK);
+        SignedWithdrawIntent memory wOrder = signsignedWithdrawIntent(wIntent, alicePK);
 
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_InvalidChain.selector);
@@ -232,6 +199,20 @@ contract TestDepositPermissions is TestBaseDeposit {
         whitelistUser(alice, 1000000 * 2, Role.USER, false)
         whitelistUser(bob, 1000000 * 2, Role.SUPER_USER, false)
     {
+        /// override asset policy to make it permissioned
+        vm.prank(address(fund));
+        periphery.enableAsset(
+            address(mockToken2),
+            AssetPolicy({
+                minimumDeposit: 1000,
+                minimumWithdrawal: 1000,
+                canDeposit: true,
+                canWithdraw: true,
+                permissioned: true,
+                enabled: true
+            })
+        );
+
         mockToken2.mint(bob, 100_000_000 * mock2Unit);
         mockToken2.mint(alice, 100_000_000 * mock2Unit);
 
@@ -245,32 +226,26 @@ contract TestDepositPermissions is TestBaseDeposit {
         periphery.internalVault().approve(address(periphery), type(uint256).max);
         vm.stopPrank();
 
-        SignedDepositIntent memory dOrder = _signDepositIntent(
-            _unSignedDepositIntent(1, alice, address(mockToken2), 1 * mock2Unit, 0, 0, 0), alicePK
-        );
+        SignedDepositIntent memory dOrder =
+            depositIntent(1, alice, alicePK, address(mockToken2), 1 * mock2Unit, 0, 0, 0);
 
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_OnlySuperUser.selector);
         periphery.intentDeposit(dOrder);
 
-        dOrder = _signDepositIntent(
-            _unSignedDepositIntent(2, bob, address(mockToken2), 10 * mock2Unit, 0, 0, 0), bobPK
-        );
+        dOrder = depositIntent(2, bob, bobPK, address(mockToken2), 10 * mock2Unit, 0, 0, 0);
 
         vm.prank(relayer);
         periphery.intentDeposit(dOrder);
 
-        SignedWithdrawIntent memory wOrder = _signWithdrawIntent(
-            _unSignedWithdrawIntent(2, bob, address(mockToken2), type(uint256).max, 1, 0, 0), bobPK
-        );
+        SignedWithdrawIntent memory wOrder =
+            signedWithdrawIntent(2, bob, bobPK, address(mockToken2), type(uint256).max, 0, 0, 1);
 
         vm.prank(relayer);
         periphery.intentWithdraw(wOrder);
 
-        wOrder = _signWithdrawIntent(
-            _unSignedWithdrawIntent(1, alice, address(mockToken2), type(uint256).max, 0, 0, 0),
-            alicePK
-        );
+        wOrder =
+            signedWithdrawIntent(1, alice, alicePK, address(mockToken2), type(uint256).max, 0, 0, 0);
 
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_OnlySuperUser.selector);
@@ -287,9 +262,8 @@ contract TestDepositPermissions is TestBaseDeposit {
 
         vm.warp(timestamp);
 
-        SignedDepositIntent memory dOrder = _signDepositIntent(
-            _unSignedDepositIntent(1, alice, address(mockToken1), mock1Unit, 0, 0, 0), alicePK
-        );
+        SignedDepositIntent memory dOrder =
+            depositIntent(1, alice, alicePK, address(mockToken1), mock1Unit, 0, 0, 0);
 
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_AccountExpired.selector);
@@ -301,9 +275,8 @@ contract TestDepositPermissions is TestBaseDeposit {
         whitelistUser(alice, 1000, Role.USER, false)
         approveAllPeriphery(alice)
     {
-        SignedDepositIntent memory dOrder = _signDepositIntent(
-            _unSignedDepositIntent(1, alice, address(mockToken1), mock1Unit, 0, 0, 0), alicePK
-        );
+        SignedDepositIntent memory dOrder =
+            depositIntent(1, alice, alicePK, address(mockToken1), mock1Unit, 0, 0, 0);
 
         vm.prank(relayer);
         periphery.intentDeposit(dOrder);
@@ -315,10 +288,8 @@ contract TestDepositPermissions is TestBaseDeposit {
 
         assertTrue(periphery.getAccountInfo(1).isExpired());
 
-        SignedWithdrawIntent memory wOrder = _signWithdrawIntent(
-            _unSignedWithdrawIntent(1, alice, address(mockToken1), type(uint256).max, 1, 0, 0),
-            alicePK
-        );
+        SignedWithdrawIntent memory wOrder =
+            signedWithdrawIntent(1, alice, alicePK, address(mockToken1), type(uint256).max, 0, 0, 1);
 
         vm.prank(relayer);
         periphery.intentWithdraw(wOrder);
@@ -334,15 +305,14 @@ contract TestDepositPermissions is TestBaseDeposit {
         vm.assume(asset != address(mockToken2));
 
         SignedDepositIntent memory dOrder =
-            _signDepositIntent(_unSignedDepositIntent(1, alice, asset, mock2Unit, 0, 0, 0), alicePK);
+            depositIntent(1, alice, alicePK, asset, mock2Unit, 0, 0, 0);
 
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_AssetUnavailable.selector);
         periphery.intentDeposit(dOrder);
 
-        SignedWithdrawIntent memory wOrder = _signWithdrawIntent(
-            _unSignedWithdrawIntent(1, alice, asset, mock2Unit, 0, 0, 0), alicePK
-        );
+        SignedWithdrawIntent memory wOrder =
+            signedWithdrawIntent(1, alice, alicePK, asset, mock2Unit, 0, 0, 0);
 
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_AssetUnavailable.selector);
