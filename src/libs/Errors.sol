@@ -6,6 +6,7 @@ library Errors {
     /// Shared errors
     error OnlyFund();
     error OnlyAdmin();
+    error AssetTransferFailed();
 
     /// Transaction module errors
     error Transaction_HookNotDefined();
@@ -46,7 +47,6 @@ library Errors {
     error Deposit_InvalidAssetPolicy();
 
     /// Asset errors
-    error Deposit_AssetTransferFailed();
     error Deposit_AssetUnavailable();
     error Deposit_AssetNotSupported();
 

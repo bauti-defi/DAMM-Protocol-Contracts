@@ -17,7 +17,7 @@ library DepositLibs {
         uint256 blockId,
         uint256 nonce,
         uint256 expectedNonce
-    ) internal {
+    ) internal view {
         if (
             !SignatureChecker.isValidSignatureNow(signer, intent.toEthSignedMessageHash(), signature)
         ) revert Errors.Deposit_InvalidSignature();

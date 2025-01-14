@@ -16,9 +16,11 @@ import "@src/interfaces/IPeriphery.sol";
 import "./UnitOfAccount.sol";
 import {FundShareVault} from "./FundShareVault.sol";
 import {DepositLibs} from "./DepositLibs.sol";
+import {SafeLib} from "@src/libs/SafeLib.sol";
 
 contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
     using DepositLibs for BrokerAccountInfo;
+    using SafeLib for IFund;
     using SafeTransferLib for ERC20;
     using SafeCast for uint256;
     using SignedMath for int256;
@@ -344,7 +346,9 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
 
         /// pay the relayer if required
         if (order.intent.relayerTip > 0) {
-            _transferAssetFromFund(order.intent.withdraw.asset, msg.sender, order.intent.relayerTip);
+            fund.transferAssetFromSafeOrRevert(
+                order.intent.withdraw.asset, msg.sender, order.intent.relayerTip
+            );
         }
 
         /// distribute the funds to the user, broker, and protocol
@@ -473,12 +477,12 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         uint256 toBroker,
         uint256 toProtocol
     ) private {
-        _transferAssetFromFund(asset, user, toUser);
+        fund.transferAssetFromSafeOrRevert(asset, user, toUser);
         if (toBroker > 0) {
-            _transferAssetFromFund(asset, broker, toBroker);
+            fund.transferAssetFromSafeOrRevert(asset, broker, toBroker);
         }
         if (toProtocol > 0) {
-            _transferAssetFromFund(asset, protocolFeeRecipient, toProtocol);
+            fund.transferAssetFromSafeOrRevert(asset, protocolFeeRecipient, toProtocol);
         }
     }
 
@@ -553,21 +557,6 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
 
             /// mint the management fee to the fee recipient
             internalVault.mintUnbacked(managementFeeInShares, protocolFeeRecipient);
-        }
-    }
-
-    function _transferAssetFromFund(address asset_, address to_, uint256 amount_) private {
-        /// call fund to transfer asset out
-        (bool success, bytes memory returnData) = fund.execTransactionFromModuleReturnData(
-            asset_,
-            0,
-            abi.encodeWithSignature("transfer(address,uint256)", to_, amount_),
-            Enum.Operation.Call
-        );
-
-        /// check transfer was successful
-        if (!success || (returnData.length > 0 && !abi.decode(returnData, (bool)))) {
-            revert Errors.Deposit_AssetTransferFailed();
         }
     }
 

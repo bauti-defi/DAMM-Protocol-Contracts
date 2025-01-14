@@ -3,6 +3,7 @@ pragma solidity ^0.8.0;
 
 import {ISafe} from "@src/interfaces/ISafe.sol";
 import {Enum} from "@safe-contracts/common/Enum.sol";
+import {Errors} from "@src/libs/Errors.sol";
 
 library SafeLib {
     function executeAndReturnDataOrRevert(
@@ -25,5 +26,23 @@ library SafeLib {
         }
 
         return returnData;
+    }
+
+    function transferAssetFromSafeOrRevert(ISafe safe, address asset_, address to_, uint256 amount_)
+        internal
+    {
+        /// call fund to transfer asset out
+        bytes memory returnData = executeAndReturnDataOrRevert(
+            safe,
+            asset_,
+            0,
+            abi.encodeWithSignature("transfer(address,uint256)", to_, amount_),
+            Enum.Operation.Call
+        );
+
+        /// check transfer was successful
+        if (returnData.length > 0 && !abi.decode(returnData, (bool))) {
+            revert Errors.AssetTransferFailed();
+        }
     }
 }
