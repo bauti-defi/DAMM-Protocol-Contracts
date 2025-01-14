@@ -88,7 +88,7 @@ contract TestPermissionlessDeposit is TestBaseDeposit {
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_InsufficientShares.selector);
         permissionlessDepositModule.intentDeposit(
-            _depositIntent(accountId, alice, alicePK, address(mockToken1), amount, 0, bribe, nonce)
+            depositIntent(accountId, alice, alicePK, address(mockToken1), amount, 0, bribe, nonce)
         );
     }
 
@@ -111,7 +111,7 @@ contract TestPermissionlessDeposit is TestBaseDeposit {
 
             vm.prank(relayer);
             sharesOut = permissionlessDepositModule.intentDeposit(
-                _depositIntent(
+                depositIntent(
                     accountId,
                     alice,
                     alicePK,
@@ -135,7 +135,7 @@ contract TestPermissionlessDeposit is TestBaseDeposit {
         } else {
             vm.prank(alice);
             sharesOut = permissionlessDepositModule.deposit(
-                _depositOrder(accountId, alice, address(mockToken1), amount)
+                depositOrder(accountId, alice, address(mockToken1), amount)
             );
             assertEq(
                 mockToken1.balanceOf(address(fund)),
@@ -167,10 +167,10 @@ contract TestPermissionlessDeposit is TestBaseDeposit {
 
             vm.prank(relayer);
             permissionlessDepositModule.intentWithdraw(
-                _withdrawIntent(
+                signedWithdrawIntent(
                     accountId,
-                    alicePK,
                     alice,
+                    alicePK,
                     address(mockToken1),
                     sharesOut,
                     relayerTip ? RELAYER_TIP : 0,
@@ -193,7 +193,7 @@ contract TestPermissionlessDeposit is TestBaseDeposit {
         } else {
             vm.prank(alice);
             permissionlessDepositModule.withdraw(
-                _withdrawOrder(accountId, alice, address(mockToken1), sharesOut)
+                withdrawOrder(accountId, alice, address(mockToken1), sharesOut)
             );
             assertEq(
                 mockToken1.balanceOf(address(fund)),
@@ -242,7 +242,7 @@ contract TestPermissionlessDeposit is TestBaseDeposit {
 
             vm.prank(relayer);
             sharesOut = permissionlessDepositModule.intentDeposit(
-                _depositIntent(
+                depositIntent(
                     accountId,
                     alice,
                     alicePK,
@@ -266,7 +266,7 @@ contract TestPermissionlessDeposit is TestBaseDeposit {
         } else {
             vm.prank(alice);
             sharesOut = permissionlessDepositModule.deposit(
-                _depositOrder(accountId, alice, address(mockToken1), type(uint256).max)
+                depositOrder(accountId, alice, address(mockToken1), type(uint256).max)
             );
 
             assertEq(
@@ -299,10 +299,10 @@ contract TestPermissionlessDeposit is TestBaseDeposit {
 
             vm.startPrank(relayer);
             permissionlessDepositModule.intentWithdraw(
-                _withdrawIntent(
+                signedWithdrawIntent(
                     accountId,
-                    alicePK,
                     alice,
+                    alicePK,
                     address(mockToken1),
                     type(uint256).max,
                     relayerTip ? RELAYER_TIP : 0,
@@ -325,7 +325,7 @@ contract TestPermissionlessDeposit is TestBaseDeposit {
         } else {
             vm.prank(alice);
             permissionlessDepositModule.withdraw(
-                _withdrawOrder(accountId, alice, address(mockToken1), type(uint256).max)
+                withdrawOrder(accountId, alice, address(mockToken1), type(uint256).max)
             );
             assertEq(
                 mockToken1.balanceOf(address(fund)),
@@ -405,14 +405,14 @@ contract TestPermissionlessDeposit is TestBaseDeposit {
             uint256 nonce = permissionlessDepositModule.nonces(alice);
             vm.expectRevert(Errors.Deposit_ModulePaused.selector);
             sharesOut = permissionlessDepositModule.intentDeposit(
-                _depositIntent(
+                depositIntent(
                     accountId, alice, alicePK, address(mockToken1), type(uint256).max, 0, 0, nonce
                 )
             );
         } else {
             vm.expectRevert(Errors.Deposit_ModulePaused.selector);
             sharesOut = permissionlessDepositModule.deposit(
-                _depositOrder(accountId, alice, address(mockToken1), type(uint256).max)
+                depositOrder(accountId, alice, address(mockToken1), type(uint256).max)
             );
         }
         vm.stopPrank();
@@ -422,14 +422,14 @@ contract TestPermissionlessDeposit is TestBaseDeposit {
             uint256 nonce = permissionlessDepositModule.nonces(alice);
             vm.expectRevert(Errors.Deposit_ModulePaused.selector);
             permissionlessDepositModule.intentWithdraw(
-                _withdrawIntent(
-                    accountId, alicePK, alice, address(mockToken1), type(uint256).max, 0, 0, nonce
+                signedWithdrawIntent(
+                    accountId, alice, alicePK, address(mockToken1), type(uint256).max, 0, 0, nonce
                 )
             );
         } else {
             vm.expectRevert(Errors.Deposit_ModulePaused.selector);
             permissionlessDepositModule.withdraw(
-                _withdrawOrder(accountId, alice, address(mockToken1), type(uint256).max)
+                withdrawOrder(accountId, alice, address(mockToken1), type(uint256).max)
             );
         }
         vm.stopPrank();

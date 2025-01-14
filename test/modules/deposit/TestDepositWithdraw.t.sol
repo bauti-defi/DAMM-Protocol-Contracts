@@ -67,7 +67,7 @@ contract TestDepositWithdraw is TestBaseDeposit {
         /// alice deposits
         if (params.useIntent) {
             sharesOut = periphery.intentDeposit(
-                _depositIntent(
+                depositIntent(
                     1,
                     receiver,
                     alicePK,
@@ -80,9 +80,8 @@ contract TestDepositWithdraw is TestBaseDeposit {
             );
         } else {
             vm.prank(alice);
-            sharesOut = periphery.deposit(
-                _depositOrder(1, receiver, address(mockToken1), type(uint256).max)
-            );
+            sharesOut =
+                periphery.deposit(depositOrder(1, receiver, address(mockToken1), type(uint256).max));
         }
 
         uint256 entranceFeeForBroker =
@@ -175,7 +174,7 @@ contract TestDepositWithdraw is TestBaseDeposit {
         /// alice deposits
         if (params.useIntent) {
             periphery.intentDeposit(
-                _depositIntent(
+                depositIntent(
                     1,
                     alice,
                     alicePK,
@@ -188,7 +187,7 @@ contract TestDepositWithdraw is TestBaseDeposit {
             );
         } else {
             vm.prank(alice);
-            periphery.deposit(_depositOrder(1, alice, address(mockToken1), type(uint256).max));
+            periphery.deposit(depositOrder(1, alice, address(mockToken1), type(uint256).max));
         }
 
         /// simulate that the fund makes profit or loses money
@@ -210,10 +209,10 @@ contract TestDepositWithdraw is TestBaseDeposit {
 
         if (params.useIntent) {
             periphery.intentWithdraw(
-                _withdrawIntent(
+                signedWithdrawIntent(
                     1,
-                    alicePK,
                     claimer,
+                    alicePK,
                     address(mockToken1),
                     type(uint256).max,
                     0,
@@ -223,7 +222,7 @@ contract TestDepositWithdraw is TestBaseDeposit {
             );
         } else {
             vm.prank(alice);
-            periphery.withdraw(_withdrawOrder(1, claimer, address(mockToken1), type(uint256).max));
+            periphery.withdraw(withdrawOrder(1, claimer, address(mockToken1), type(uint256).max));
         }
 
         uint256 performanceFeeForBroker = brokerPerformanceFeeInBps > 0 && profitAmount > 0
@@ -318,7 +317,7 @@ contract TestDepositWithdraw is TestBaseDeposit {
         mockToken1.mint(alice, 50 ether);
 
         vm.prank(alice);
-        periphery.deposit(_depositOrder(1, alice, address(mockToken1), type(uint256).max));
+        periphery.deposit(depositOrder(1, alice, address(mockToken1), type(uint256).max));
         assertEq(
             periphery.internalVault().balanceOf(alice), periphery.internalVault().totalSupply()
         );
@@ -329,7 +328,7 @@ contract TestDepositWithdraw is TestBaseDeposit {
         mockToken1.mint(alice, 50 ether);
 
         vm.prank(alice);
-        periphery.withdraw(_withdrawOrder(1, alice, address(mockToken1), type(uint256).max));
+        periphery.withdraw(withdrawOrder(1, alice, address(mockToken1), type(uint256).max));
         assertEq(
             periphery.internalVault().balanceOf(alice), periphery.internalVault().totalSupply()
         );
@@ -346,7 +345,7 @@ contract TestDepositWithdraw is TestBaseDeposit {
         mockToken1.mint(alice, 50 ether);
 
         vm.prank(alice);
-        periphery.deposit(_depositOrder(1, alice, address(mockToken1), type(uint256).max));
+        periphery.deposit(depositOrder(1, alice, address(mockToken1), type(uint256).max));
         assertEq(
             periphery.internalVault().balanceOf(alice),
             periphery.internalVault().totalSupply() - managementFee1
@@ -364,7 +363,7 @@ contract TestDepositWithdraw is TestBaseDeposit {
         mockToken1.mint(alice, 50 ether);
 
         vm.prank(alice);
-        periphery.deposit(_depositOrder(1, alice, address(mockToken1), type(uint256).max));
+        periphery.deposit(depositOrder(1, alice, address(mockToken1), type(uint256).max));
 
         assertApproxEqRel(
             periphery.internalVault().balanceOf(alice),

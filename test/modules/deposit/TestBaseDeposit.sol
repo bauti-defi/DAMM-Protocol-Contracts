@@ -190,7 +190,7 @@ abstract contract TestBaseDeposit is TestBaseFund, TestBaseProtocol {
         _;
     }
 
-    function _depositOrder(uint256 accountId, address user, address token, uint256 amount)
+    function depositOrder(uint256 accountId, address user, address token, uint256 amount)
         internal
         view
         returns (DepositOrder memory)
@@ -206,7 +206,33 @@ abstract contract TestBaseDeposit is TestBaseFund, TestBaseProtocol {
         });
     }
 
-    function _depositIntent(
+    function unsignedDepositIntent(
+        uint256 accountId,
+        address user,
+        address token,
+        uint256 amount,
+        uint256 nonce,
+        uint256 relayerTip,
+        uint256 bribe
+    ) internal view returns (DepositIntent memory) {
+        return DepositIntent({
+            deposit: DepositOrder({
+                accountId: accountId,
+                recipient: user,
+                asset: token,
+                amount: amount,
+                deadline: block.timestamp + 1000,
+                minSharesOut: 0,
+                referralCode: 0
+            }),
+            chaindId: block.chainid,
+            relayerTip: relayerTip,
+            bribe: bribe,
+            nonce: nonce
+        });
+    }
+
+    function depositIntent(
         uint256 accountId,
         address user,
         uint256 userPK,
@@ -217,7 +243,7 @@ abstract contract TestBaseDeposit is TestBaseFund, TestBaseProtocol {
         uint256 nonce
     ) internal view returns (SignedDepositIntent memory) {
         DepositIntent memory intent = DepositIntent({
-            deposit: _depositOrder(accountId, user, token, amount),
+            deposit: depositOrder(accountId, user, token, amount),
             chaindId: block.chainid,
             relayerTip: relayerTip,
             bribe: bribe,
@@ -230,7 +256,7 @@ abstract contract TestBaseDeposit is TestBaseFund, TestBaseProtocol {
         return SignedDepositIntent({intent: intent, signature: abi.encodePacked(r, s, v)});
     }
 
-    function _withdrawOrder(uint256 accountId, address to, address asset, uint256 shares)
+    function withdrawOrder(uint256 accountId, address to, address asset, uint256 shares)
         internal
         view
         returns (WithdrawOrder memory)
@@ -246,10 +272,36 @@ abstract contract TestBaseDeposit is TestBaseFund, TestBaseProtocol {
         });
     }
 
-    function _withdrawIntent(
+    function unsignedWithdrawIntent(
         uint256 accountId,
-        uint256 userPK,
         address to,
+        address asset,
+        uint256 shares,
+        uint256 nonce,
+        uint256 relayerTip,
+        uint256 bribe
+    ) internal view returns (WithdrawIntent memory) {
+        return WithdrawIntent({
+            withdraw: WithdrawOrder({
+                accountId: accountId,
+                to: to,
+                asset: asset,
+                shares: shares,
+                deadline: block.timestamp + 1000,
+                minAmountOut: 0,
+                referralCode: 0
+            }),
+            chaindId: block.chainid,
+            relayerTip: relayerTip,
+            bribe: bribe,
+            nonce: nonce
+        });
+    }
+
+    function signedWithdrawIntent(
+        uint256 accountId,
+        address to,
+        uint256 userPK,
         address asset,
         uint256 shares,
         uint256 relayerTip,
@@ -257,13 +309,35 @@ abstract contract TestBaseDeposit is TestBaseFund, TestBaseProtocol {
         uint256 nonce
     ) internal view returns (SignedWithdrawIntent memory) {
         WithdrawIntent memory intent = WithdrawIntent({
-            withdraw: _withdrawOrder(accountId, to, asset, shares),
+            withdraw: withdrawOrder(accountId, to, asset, shares),
             chaindId: block.chainid,
             relayerTip: relayerTip,
             bribe: bribe,
             nonce: nonce
         });
 
+        (uint8 v, bytes32 r, bytes32 s) =
+            vm.sign(userPK, abi.encode(intent).toEthSignedMessageHash());
+
+        return SignedWithdrawIntent({intent: intent, signature: abi.encodePacked(r, s, v)});
+    }
+
+    function signdepositIntent(DepositIntent memory intent, uint256 userPK)
+        internal
+        pure
+        returns (SignedDepositIntent memory)
+    {
+        (uint8 v, bytes32 r, bytes32 s) =
+            vm.sign(userPK, abi.encode(intent).toEthSignedMessageHash());
+
+        return SignedDepositIntent({intent: intent, signature: abi.encodePacked(r, s, v)});
+    }
+
+    function signsignedWithdrawIntent(WithdrawIntent memory intent, uint256 userPK)
+        internal
+        pure
+        returns (SignedWithdrawIntent memory)
+    {
         (uint8 v, bytes32 r, bytes32 s) =
             vm.sign(userPK, abi.encode(intent).toEthSignedMessageHash());
 
