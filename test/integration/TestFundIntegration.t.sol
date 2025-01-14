@@ -330,7 +330,7 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
         // configure mock tokens as assets of interest for Fund A
         fundA.setAssetOfInterest(ARB_USDT);
         // we must include the Fund B LP token as an asset of interest
-        fundA.setAssetOfInterest(address(peripheryB.vault()));
+        fundA.setAssetOfInterest(address(peripheryB.internalVault()));
         fundA.setAssetOfInterest(ARB_USDC);
 
         // also enable assets on the periphery for Fund A
@@ -446,7 +446,7 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
         // give periphery B allowance to deposit funds from Fund A
         USDC.approve(address(peripheryB), type(uint256).max);
         USDT.approve(address(peripheryB), type(uint256).max);
-        peripheryB.vault().approve(address(peripheryB), type(uint256).max);
+        peripheryB.internalVault().approve(address(peripheryB), type(uint256).max);
         vm.stopPrank();
 
         // need to approve the mother fund to transfer funds from child funds
@@ -683,8 +683,8 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
         vm.startPrank(protocolAdmin);
         oracleRouter.govSetConfig(address(fundA), unitOfAccountA, address(fundOracle));
         oracleRouter.govSetConfig(address(fundB), unitOfAccountB, address(fundOracle));
-        oracleRouter.govSetResolvedVault(address(peripheryB.vault()), true);
-        oracleRouter.govSetResolvedVault(address(peripheryA.vault()), true);
+        oracleRouter.govSetResolvedVault(address(peripheryB.internalVault()), true);
+        oracleRouter.govSetResolvedVault(address(peripheryA.internalVault()), true);
         vm.stopPrank();
 
         vm.startPrank(broker);
@@ -715,16 +715,16 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
 
         assertEq(USDC.balanceOf(broker), 8_000_000);
         assertEq(USDC.balanceOf(address(fundA)), 2_000_000);
-        assertGt(peripheryA.vault().balanceOf(broker), 0);
+        assertGt(peripheryA.internalVault().balanceOf(broker), 0);
 
         // we check the fund A tvl using the oracle router
         uint256 fundATvl =
             oracleRouter.getQuote(0, address(fundA), address(peripheryA.unitOfAccount()));
-        uint256 totalAssets = peripheryA.vault().totalAssets();
-        uint256 totalSupply = peripheryA.vault().totalSupply();
+        uint256 totalAssets = peripheryA.internalVault().totalAssets();
+        uint256 totalSupply = peripheryA.internalVault().totalSupply();
 
         assertEq(fundATvl, totalAssets);
-        assertEq(peripheryA.vault().balanceOf(broker), totalSupply);
+        assertEq(peripheryA.internalVault().balanceOf(broker), totalSupply);
 
         // now we transfer half of the USDC from Fund A to its children
         // operator will do this through transaction module

@@ -3,8 +3,6 @@ pragma solidity ^0.8.0;
 
 import "@solmate/tokens/ERC20.sol";
 import "@openzeppelin-contracts/token/ERC721/ERC721.sol";
-import "@openzeppelin-contracts/utils/cryptography/MessageHashUtils.sol";
-import "@openzeppelin-contracts/utils/cryptography/SignatureChecker.sol";
 import "@openzeppelin-contracts/utils/math/SignedMath.sol";
 import "@openzeppelin-contracts/utils/math/SafeCast.sol";
 import "@solady/utils/FixedPointMathLib.sol";
@@ -17,11 +15,14 @@ import "@src/libs/Errors.sol";
 import "@src/interfaces/IPeriphery.sol";
 import "./UnitOfAccount.sol";
 import {FundShareVault} from "./FundShareVault.sol";
+import {DepositLibs} from "./DepositLibs.sol";
+import {SafeLib} from "@src/libs/SafeLib.sol";
 
 contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
+    using DepositLibs for BrokerAccountInfo;
+    using SafeLib for IFund;
     using SafeTransferLib for ERC20;
     using SafeCast for uint256;
-    using MessageHashUtils for bytes;
     using SignedMath for int256;
     using FixedPointMathLib for uint256;
 
@@ -29,10 +30,10 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
     IFund public immutable fund;
     /// @dev should be a Euler Oracle Router
     IPriceOracle public immutable oracleRouter;
-    /// @dev common unit of account for assets and vault
+    /// @dev common unit of account for assets and internalVault
     UnitOfAccount public immutable unitOfAccount;
     /// @dev used internally for yield accounting
-    FundShareVault public immutable vault;
+    FundShareVault public immutable internalVault;
 
     /// @dev the minter role
     address public admin;
@@ -76,10 +77,10 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         protocolFeeRecipient = protocolFeeRecipient_;
         lastManagementFeeTimestamp = block.timestamp;
         unitOfAccount = new UnitOfAccount("Liquidity", "UNIT", decimals_);
-        vault = new FundShareVault(address(unitOfAccount), vaultName_, vaultSymbol_);
+        internalVault = new FundShareVault(address(unitOfAccount), vaultName_, vaultSymbol_);
 
-        /// @notice infinite approval for the vault to manage periphery's balance
-        unitOfAccount.approve(address(vault), type(uint256).max);
+        /// @notice infinite approval for the internalVault to manage periphery's balance
+        unitOfAccount.approve(address(internalVault), type(uint256).max);
     }
 
     modifier notPaused() {
@@ -97,8 +98,8 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         _;
     }
 
-    /// @dev This modifier updates the balances of the vault and the fund
-    /// this ensures that the vault's total assets are always equal to the fund's total assets
+    /// @dev This modifier updates the balances of the internalVault and the fund
+    /// this ensures that the internalVault's total assets are always equal to the fund's total assets
     modifier rebalanceVault() {
         _updateVaultBalance();
 
@@ -128,26 +129,23 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             revert Errors.Deposit_AccountDoesNotExist();
         }
 
-        if (
-            !SignatureChecker.isValidSignatureNow(
-                minter, abi.encode(order.intent).toEthSignedMessageHash(), order.signature
-            )
-        ) revert Errors.Deposit_InvalidSignature();
+        AssetPolicy memory policy = assetPolicy[order.intent.deposit.asset];
+        BrokerAccountInfo memory account = accountInfo[order.intent.deposit.accountId];
 
-        if (order.intent.nonce != accountInfo[order.intent.deposit.accountId].nonce++) {
-            revert Errors.Deposit_InvalidNonce();
-        }
+        DepositLibs.validateAccountAssetPolicy(policy, account, true);
 
-        if (order.intent.chaindId != block.chainid) revert Errors.Deposit_InvalidChain();
+        DepositLibs.validateIntent(
+            abi.encode(order.intent),
+            order.signature,
+            minter,
+            order.intent.chaindId,
+            accountInfo[order.intent.deposit.accountId].nonce++,
+            order.intent.nonce
+        );
 
         /// @notice The management fee should be charged before the deposit is processed
         /// otherwise, the management fee will be charged on the deposit amount
         _takeManagementFee();
-
-        AssetPolicy memory policy = assetPolicy[order.intent.deposit.asset];
-        BrokerAccountInfo memory account = accountInfo[order.intent.deposit.accountId];
-
-        _validateAccountAssetPolicy(policy, account, true);
 
         /// pay the relayer if required
         if (order.intent.relayerTip > 0) {
@@ -207,7 +205,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         AssetPolicy memory policy = assetPolicy[order.asset];
         BrokerAccountInfo memory account = accountInfo[order.accountId];
 
-        _validateAccountAssetPolicy(policy, account, true);
+        DepositLibs.validateAccountAssetPolicy(policy, account, true);
 
         sharesOut = _deposit(
             order,
@@ -265,7 +263,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         unitOfAccount.mint(address(this), liquidity);
 
         /// mint shares to the periphery using the liquidity that was just minted
-        sharesOut = vault.deposit(liquidity, address(this));
+        sharesOut = internalVault.deposit(liquidity, address(this));
 
         /// lets make sure slippage is acceptable
         if (sharesOut < order.minSharesOut) {
@@ -288,18 +286,20 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
 
         /// take the broker entrance fees
         if (brokerEntranceFeeInBps > 0) {
-            vault.transfer(broker, sharesOut.fullMulDivUp(brokerEntranceFeeInBps, BP_DIVISOR));
+            internalVault.transfer(
+                broker, sharesOut.fullMulDivUp(brokerEntranceFeeInBps, BP_DIVISOR)
+            );
         }
 
         /// take the protocol entrance fees
         if (protocolEntranceFeeInBps > 0) {
-            vault.transfer(
+            internalVault.transfer(
                 protocolFeeRecipient, sharesOut.fullMulDivUp(protocolEntranceFeeInBps, BP_DIVISOR)
             );
         }
 
         /// forward the remaining shares to the recipient
-        vault.transfer(order.recipient, vault.balanceOf(address(this)));
+        internalVault.transfer(order.recipient, internalVault.balanceOf(address(this)));
     }
 
     function intentWithdraw(SignedWithdrawIntent calldata order)
@@ -314,22 +314,20 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         if (burner == address(0)) {
             revert Errors.Deposit_AccountDoesNotExist();
         }
-        if (
-            !SignatureChecker.isValidSignatureNow(
-                burner, abi.encode(order.intent).toEthSignedMessageHash(), order.signature
-            )
-        ) revert Errors.Deposit_InvalidSignature();
-
-        if (order.intent.nonce != accountInfo[order.intent.withdraw.accountId].nonce++) {
-            revert Errors.Deposit_InvalidNonce();
-        }
-
-        if (order.intent.chaindId != block.chainid) revert Errors.Deposit_InvalidChain();
 
         AssetPolicy memory policy = assetPolicy[order.intent.withdraw.asset];
         BrokerAccountInfo memory account = accountInfo[order.intent.withdraw.accountId];
 
-        _validateAccountAssetPolicy(policy, account, false);
+        DepositLibs.validateAccountAssetPolicy(policy, account, false);
+
+        DepositLibs.validateIntent(
+            abi.encode(order.intent),
+            order.signature,
+            burner,
+            order.intent.chaindId,
+            accountInfo[order.intent.withdraw.accountId].nonce++,
+            order.intent.nonce
+        );
 
         (uint256 netAssetAmountOut, uint256 netBrokerFee, uint256 netProtocolFee) =
             _withdraw(burner, order.intent.withdraw, account, policy.minimumWithdrawal);
@@ -348,7 +346,9 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
 
         /// pay the relayer if required
         if (order.intent.relayerTip > 0) {
-            _transferAssetFromFund(order.intent.withdraw.asset, msg.sender, order.intent.relayerTip);
+            fund.transferAssetFromSafeOrRevert(
+                order.intent.withdraw.asset, msg.sender, order.intent.relayerTip
+            );
         }
 
         /// distribute the funds to the user, broker, and protocol
@@ -392,7 +392,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         AssetPolicy memory policy = assetPolicy[order.asset];
         BrokerAccountInfo memory account = accountInfo[order.accountId];
 
-        _validateAccountAssetPolicy(policy, account, false);
+        DepositLibs.validateAccountAssetPolicy(policy, account, false);
 
         (uint256 netAssetAmountOut, uint256 netBrokerFee, uint256 netProtocolFee) =
             _withdraw(burner, order, account, policy.minimumWithdrawal);
@@ -425,7 +425,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
 
         /// if shares to burn is max uint256, then burn all shares owned by broker
         if (sharesToBurn == type(uint256).max) {
-            sharesToBurn = vault.balanceOf(broker);
+            sharesToBurn = internalVault.balanceOf(broker);
         }
 
         /// make sure the broker has not exceeded their share burn limit
@@ -438,8 +438,8 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             accountInfo[order.accountId].totalSharesOutstanding -= sharesToBurn;
         }
 
-        /// burn vault shares in exchange for liquidity (unit of account) tokens
-        uint256 liquidity = vault.redeem(sharesToBurn, address(this), broker);
+        /// burn internalVault shares in exchange for liquidity (unit of account) tokens
+        uint256 liquidity = internalVault.redeem(sharesToBurn, address(this), broker);
 
         /// burn liquidity from periphery
         unitOfAccount.burn(address(this), liquidity);
@@ -477,12 +477,12 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         uint256 toBroker,
         uint256 toProtocol
     ) private {
-        _transferAssetFromFund(asset, user, toUser);
+        fund.transferAssetFromSafeOrRevert(asset, user, toUser);
         if (toBroker > 0) {
-            _transferAssetFromFund(asset, broker, toBroker);
+            fund.transferAssetFromSafeOrRevert(asset, broker, toBroker);
         }
         if (toProtocol > 0) {
-            _transferAssetFromFund(asset, protocolFeeRecipient, toProtocol);
+            fund.transferAssetFromSafeOrRevert(asset, protocolFeeRecipient, toProtocol);
         }
     }
 
@@ -540,10 +540,10 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             /// update the last management fee timestamp
             lastManagementFeeTimestamp = block.timestamp;
 
-            uint256 totalSupply = vault.totalSupply();
-            uint256 totalAssets = vault.totalAssets();
+            uint256 totalSupply = internalVault.totalSupply();
+            uint256 totalAssets = internalVault.totalAssets();
 
-            /// if the vault has no assets, then we don't take any fees
+            /// if the internalVault has no assets, then we don't take any fees
             if (totalAssets == 0 || totalSupply == 0) {
                 return;
             }
@@ -556,64 +556,26 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
             uint256 managementFeeInShares = totalSupply.mulWadUp(annualizedFeeRate);
 
             /// mint the management fee to the fee recipient
-            vault.mintUnbacked(managementFeeInShares, protocolFeeRecipient);
-        }
-    }
-
-    function _transferAssetFromFund(address asset_, address to_, uint256 amount_) private {
-        /// call fund to transfer asset out
-        (bool success, bytes memory returnData) = fund.execTransactionFromModuleReturnData(
-            asset_,
-            0,
-            abi.encodeWithSignature("transfer(address,uint256)", to_, amount_),
-            Enum.Operation.Call
-        );
-
-        /// check transfer was successful
-        if (!success || (returnData.length > 0 && !abi.decode(returnData, (bool)))) {
-            revert Errors.Deposit_AssetTransferFailed();
-        }
-    }
-
-    function _validateAccountAssetPolicy(
-        AssetPolicy memory policy,
-        BrokerAccountInfo memory account,
-        bool isDeposit
-    ) private view {
-        if (!account.isActive()) revert Errors.Deposit_AccountNotActive();
-
-        if (account.isExpired() && isDeposit) {
-            revert Errors.Deposit_AccountExpired();
-        }
-
-        if (
-            (!policy.canDeposit && isDeposit) || (!policy.canWithdraw && !isDeposit)
-                || !policy.enabled
-        ) {
-            revert Errors.Deposit_AssetUnavailable();
-        }
-
-        if (policy.permissioned && !account.isSuperUser()) {
-            revert Errors.Deposit_OnlySuperUser();
+            internalVault.mintUnbacked(managementFeeInShares, protocolFeeRecipient);
         }
     }
 
     function _updateVaultBalance() private {
         uint256 assetsInFund = oracleRouter.getQuote(0, address(fund), address(unitOfAccount));
-        uint256 assetsInVault = vault.totalAssets();
+        uint256 assetsInVault = internalVault.totalAssets();
 
         /// @notice assetsInFund is part of [0, uint256.max]
         int256 profitDelta = assetsInFund.toInt256() - assetsInVault.toInt256();
 
         if (profitDelta > 0) {
-            /// we transfer the mint into the vault
-            /// this will distribute the profit to the vault's shareholders
-            unitOfAccount.mint(address(vault), profitDelta.abs());
+            /// we transfer the mint into the internalVault
+            /// this will distribute the profit to the internalVault's shareholders
+            unitOfAccount.mint(address(internalVault), profitDelta.abs());
         } else if (profitDelta < 0) {
             /// if the fund has lost value, we need to account for it
-            /// so we decrease the vault's total assets to match the fund's total assets
+            /// so we decrease the internalVault's total assets to match the fund's total assets
             /// by burning the loss
-            unitOfAccount.burn(address(vault), profitDelta.abs());
+            unitOfAccount.burn(address(internalVault), profitDelta.abs());
         }
     }
 
@@ -680,6 +642,14 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
 
     function setAdmin(address admin_) external onlyFund {
         _setAdmin(admin_);
+    }
+
+    function getUnitOfAccountToken() external view returns (address) {
+        return address(unitOfAccount);
+    }
+
+    function getVault() external view returns (address) {
+        return address(internalVault);
     }
 
     function enableAsset(address asset_, AssetPolicy memory policy_) external notPaused onlyFund {
