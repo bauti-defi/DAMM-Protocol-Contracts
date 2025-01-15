@@ -1,4 +1,5 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: CC-BY-NC-4.0
+
 pragma solidity ^0.8.0;
 
 struct DepositIntent {
@@ -16,6 +17,7 @@ struct DepositOrder {
     uint256 amount;
     uint256 deadline;
     uint256 minSharesOut;
+    uint16 referralCode;
 }
 
 struct SignedDepositIntent {
@@ -30,6 +32,7 @@ struct WithdrawOrder {
     uint256 shares;
     uint256 deadline;
     uint256 minAmountOut;
+    uint16 referralCode;
 }
 
 struct WithdrawIntent {
@@ -72,8 +75,8 @@ struct BrokerAccountInfo {
     Role role;
     bool transferable;
     AccountState state;
+    address feeRecipient;
     uint256 expirationTimestamp;
-    uint256 nonce;
     uint256 shareMintLimit;
     uint256 cumulativeSharesMinted;
     uint256 cumulativeUnitsDeposited;
@@ -84,6 +87,7 @@ struct BrokerAccountInfo {
     uint256 protocolEntranceFeeInBps;
     uint256 brokerExitFeeInBps;
     uint256 protocolExitFeeInBps;
+    uint256 nonce;
 }
 
 struct CreateAccountParams {
@@ -95,31 +99,8 @@ struct CreateAccountParams {
     uint256 protocolEntranceFeeInBps;
     uint256 brokerExitFeeInBps;
     uint256 protocolExitFeeInBps;
+    address feeRecipient;
     address user;
     bool transferable;
     Role role;
 }
-
-library AccountLib {
-    function isActive(BrokerAccountInfo memory account) internal pure returns (bool) {
-        return account.state == AccountState.ACTIVE;
-    }
-
-    function isPaused(BrokerAccountInfo memory account) internal pure returns (bool) {
-        return account.state == AccountState.PAUSED;
-    }
-
-    function canBeClosed(BrokerAccountInfo memory account) internal pure returns (bool) {
-        return account.state == AccountState.ACTIVE || account.state == AccountState.PAUSED;
-    }
-
-    function isSuperUser(BrokerAccountInfo memory account) internal pure returns (bool) {
-        return account.role == Role.SUPER_USER;
-    }
-
-    function isExpired(BrokerAccountInfo memory account) internal view returns (bool) {
-        return account.expirationTimestamp != 0 && block.timestamp >= account.expirationTimestamp;
-    }
-}
-
-using AccountLib for BrokerAccountInfo global;

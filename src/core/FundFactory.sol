@@ -1,10 +1,11 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: CC-BY-NC-4.0
+
 pragma solidity ^0.8.0;
 
 import {IFund} from "@src/interfaces/IFund.sol";
 import {ISafe} from "@src/interfaces/ISafe.sol";
 import {IFundFactory} from "@src/interfaces/IFundFactory.sol";
-import {FundCallbackHandler} from "@src/FundCallbackHandler.sol";
+import {FundCallbackHandler} from "./FundCallbackHandler.sol";
 import "@src/libs/Errors.sol";
 
 interface ISafeProxyFactory {
@@ -13,13 +14,18 @@ interface ISafeProxyFactory {
         returns (address);
 }
 
-/// @dev Factory contract for deploying funds
+/// @title FundFactory
+/// @notice Implementation of IFundFactory for deploying Safe-based investment funds
+/// @dev Uses Safe's proxy factory for deterministic deployments and handles callback initialization
 contract FundFactory is IFundFactory {
+    /// @notice Address of this contract, used for delegatecall checks
     address private immutable self;
 
-    /// @dev variable declaration order is important for delegate call back in to work
+    /// @notice Deployment lock to prevent reentrant calls
+    /// @dev Variable declaration order is important for delegate call back in to work
     bool private deploying;
 
+    /// @notice Prevents reentrant calls during fund deployment
     modifier lock() {
         if (deploying) revert Errors.FundFactory_DeploymentLockViolated();
         deploying = true;
@@ -27,6 +33,7 @@ contract FundFactory is IFundFactory {
         deploying = false;
     }
 
+    /// @notice Ensures function is called via delegatecall
     modifier isDelegateCall() {
         if (address(this) == self) revert Errors.FundFactory_OnlyDelegateCall();
         _;
@@ -36,7 +43,7 @@ contract FundFactory is IFundFactory {
         self = address(this);
     }
 
-    /// @notice calling this as a fund will break it. only call as a safe
+    /// @inheritdoc IFundFactory
     function convertSafeToFund() external lock isDelegateCall {
         /// instantiate fresh callback handler for each fund
         FundCallbackHandler handler = new FundCallbackHandler(address(this));
@@ -44,7 +51,7 @@ contract FundFactory is IFundFactory {
         IFund(address(this)).setFallbackHandler(address(handler));
     }
 
-    /// this should be a delegate call from the fund right after creation.
+    /// @inheritdoc IFundFactory
     function fundDeploymentCallback() external override {
         if (!deploying) revert Errors.FundFactory_DeploymentLockViolated();
 
@@ -54,6 +61,8 @@ contract FundFactory is IFundFactory {
         IFund(address(this)).setFallbackHandler(address(handler));
     }
 
+    /// @notice Internal implementation of fund deployment
+    /// @dev Protected by lock modifier to prevent reentrant calls
     function _deployFund(
         address safeProxyFactory,
         address safeSingleton,
@@ -68,21 +77,13 @@ contract FundFactory is IFundFactory {
         /// create gnosis safe initializer payload
         bytes memory initializerPayload = abi.encodeWithSelector(
             ISafe.setup.selector,
-            /// fund admins
             admins,
-            /// multisig signer threshold
             threshold,
-            /// @notice callback target is this factory
             address(this),
-            /// @notice callback data is the callback payload
             callbackPayload,
-            /// @notice dont include for now, will be set in the callback
             address(0),
-            /// no payment token
             address(0),
-            /// payment amount
             0,
-            /// payment receiver
             payable(address(0))
         );
 
@@ -97,6 +98,7 @@ contract FundFactory is IFundFactory {
         return IFund(fund);
     }
 
+    /// @inheritdoc IFundFactory
     function deployFund(
         address safeProxyFactory,
         address safeSingleton,
@@ -104,9 +106,7 @@ contract FundFactory is IFundFactory {
         uint256 nonce,
         uint256 threshold
     ) external returns (IFund fund) {
-        /// deploy the fund
         fund = _deployFund(safeProxyFactory, safeSingleton, admins, nonce, threshold);
-
         emit FundDeployed(address(fund), msg.sender, admins, threshold, safeSingleton);
     }
 }

@@ -1,4 +1,5 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: CC-BY-NC-4.0
+
 pragma solidity ^0.8.0;
 
 import {Test} from "@forge-std/Test.sol";
@@ -40,6 +41,9 @@ contract TestUniswapV3 is TestBaseFund, TestBaseProtocol, BaseUniswapV3, TokenMi
 
         vm.selectFork(arbitrumFork);
         assertEq(vm.activeFork(), arbitrumFork);
+
+        /// @notice fixed block to avoid flakiness
+        vm.rollFork(218796378);
 
         BaseUniswapV3.setUp();
         TestBaseFund.setUp();
@@ -401,6 +405,9 @@ contract TestUniswapV3 is TestBaseFund, TestBaseProtocol, BaseUniswapV3, TokenMi
         enableAsset(ARB_USDC)
         enableAsset(ARB_USDCe)
     {
+        vm.assume(attacker != address(fund));
+        vm.assume(attacker != address(0));
+
         INonfungiblePositionManager.MintParams memory mintParams = INonfungiblePositionManager
             .MintParams({
             token0: ARB_USDC,

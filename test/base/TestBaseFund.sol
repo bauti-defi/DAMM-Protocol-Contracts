@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 
 import {Test} from "@forge-std/Test.sol";
 import {TestBaseGnosis} from "@test/base/TestBaseGnosis.sol";
-import {FundFactory} from "@src/FundFactory.sol";
+import {FundFactory} from "@src/core/FundFactory.sol";
 import {IFund} from "@src/interfaces/IFund.sol";
 
 abstract contract TestBaseFund is TestBaseGnosis {

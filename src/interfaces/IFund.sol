@@ -1,9 +1,11 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: CC-BY-NC-4.0
+
 pragma solidity ^0.8.0;
 
 import "./IPortfolio.sol";
 import "./ISafe.sol";
 import "./IOwnable.sol";
 import "./IMotherFund.sol";
+import "./IPauser.sol";
 
-interface IFund is IPortfolio, IMotherFund, ISafe, IOwnable {}
+interface IFund is IPortfolio, IMotherFund, ISafe, IOwnable, IPauser {}

@@ -1,4 +1,5 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: CC-BY-NC-4.0
+
 pragma solidity ^0.8.0;
 
 import {BaseAdapter} from "@euler-price-oracle/adapter/BaseAdapter.sol";
@@ -32,7 +33,18 @@ contract FundValuationOracle is BaseAdapter {
 
         if (fund.hasOpenPositions()) revert Errors.FundValuationOracle_FundNotFullyDivested();
 
-        address[] memory assets = fund.getAssetsOfInterest();
+        address[] memory childFunds = IMotherFund(base).getChildFunds();
+        uint256 childFundsLength = childFunds.length;
+
+        for (uint256 i = 0; i < childFundsLength;) {
+            total += oracleRouter.getQuote(0, childFunds[i], quote);
+
+            unchecked {
+                ++i;
+            }
+        }
+
+        address[] memory assets = fund.getAssetsToValuate();
         uint256 assetLength = assets.length;
 
         for (uint256 i = 0; i < assetLength;) {

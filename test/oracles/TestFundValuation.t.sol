@@ -4,7 +4,7 @@ pragma solidity ^0.8.0;
 import {TestBaseProtocol} from "@test/base/TestBaseProtocol.sol";
 import {TestBaseGnosis} from "@test/base/TestBaseGnosis.sol";
 import {SafeL2} from "@safe-contracts/SafeL2.sol";
-import {FundCallbackHandler} from "@src/FundCallbackHandler.sol";
+import {FundCallbackHandler} from "@src/core/FundCallbackHandler.sol";
 import {MockERC20} from "@test/mocks/MockERC20.sol";
 import {TokenMinter} from "@test/forked/TokenMinter.sol";
 import {EulerRouter} from "@euler-price-oracle/EulerRouter.sol";
@@ -127,13 +127,13 @@ contract TestFundValuation is TestBaseProtocol, TestBaseGnosis, TokenMinter {
 
         // lets enable assets on the fund
         vm.startPrank(address(fund));
-        IFund(address(fund)).setAssetOfInterest(ARB_USDC);
-        IFund(address(fund)).setAssetOfInterest(ARB_USDT);
-        IFund(address(fund)).setAssetOfInterest(ARB_DAI);
-        IFund(address(fund)).setAssetOfInterest(ARB_USDCe);
+        IFund(address(fund)).setAssetToValuate(ARB_USDC);
+        IFund(address(fund)).setAssetToValuate(ARB_USDT);
+        IFund(address(fund)).setAssetToValuate(ARB_DAI);
+        IFund(address(fund)).setAssetToValuate(ARB_USDCe);
 
         // native eth
-        IFund(address(fund)).setAssetOfInterest(NATIVE_ASSET);
+        IFund(address(fund)).setAssetToValuate(NATIVE_ASSET);
         vm.stopPrank();
 
         unitOfAccount = address(periphery.unitOfAccount());
