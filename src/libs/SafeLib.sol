@@ -6,7 +6,18 @@ import {ISafe} from "@src/interfaces/ISafe.sol";
 import {Enum} from "@safe-contracts/common/Enum.sol";
 import {Errors} from "@src/libs/Errors.sol";
 
+/// @title SafeLib
+/// @notice Implementation of Safe transaction execution utilities
+/// @dev Provides helper functions for executing transactions and transferring assets from Safe contracts
 library SafeLib {
+    /// @notice Executes a transaction through a Safe contract from a module
+    /// @dev The transaction is executed by the Safe contract itself, but initiated by a module
+    /// @param safe The Safe contract to execute the transaction from
+    /// @param target Destination address of the transaction
+    /// @param value Native token value to send with the transaction
+    /// @param data Data payload of the transaction
+    /// @param operation Operation type (Call or DelegateCall)
+    /// @return bytes The return data from the transaction
     function executeAndReturnDataOrRevert(
         ISafe safe,
         address target,
@@ -29,6 +40,11 @@ library SafeLib {
         return returnData;
     }
 
+    /// @notice Transfers an asset from a Safe to a specified address
+    /// @param safe The Safe contract to transfer from
+    /// @param asset_ The token address to transfer (or native token address)
+    /// @param to_ The recipient address
+    /// @param amount_ The amount to transfer
     function transferAssetFromSafeOrRevert(ISafe safe, address asset_, address to_, uint256 amount_)
         internal
     {
