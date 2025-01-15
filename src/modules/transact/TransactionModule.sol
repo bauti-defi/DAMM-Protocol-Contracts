@@ -11,8 +11,9 @@ import "./Structs.sol";
 import {BP_DIVISOR} from "@src/libs/Constants.sol";
 import {SafeLib} from "@src/libs/SafeLib.sol";
 import {IFund} from "@src/interfaces/IFund.sol";
+import {Pausable} from "@src/core/Pausable.sol";
 
-contract TransactionModule is ReentrancyGuard, ITransactionModule {
+contract TransactionModule is ReentrancyGuard, Pausable, ITransactionModule {
     using SafeLib for ISafe;
 
     address public immutable fund;
@@ -20,11 +21,6 @@ contract TransactionModule is ReentrancyGuard, ITransactionModule {
 
     modifier onlyFund() {
         if (msg.sender != fund) revert Errors.OnlyFund();
-        _;
-    }
-
-    modifier notPaused() {
-        if (IFund(fund).paused()) revert Errors.Transaction_ModulePaused();
         _;
     }
 
@@ -44,7 +40,7 @@ contract TransactionModule is ReentrancyGuard, ITransactionModule {
         }
     }
 
-    constructor(address owner, address _hookRegistry) {
+    constructor(address owner, address _hookRegistry) Pausable(owner) {
         fund = owner;
         hookRegistry = IHookRegistry(_hookRegistry);
     }

@@ -7,6 +7,7 @@ library Errors {
     error OnlyFund();
     error OnlyAdmin();
     error AssetTransferFailed();
+    error Paused();
 
     /// Transaction module errors
     error Transaction_HookNotDefined();
@@ -79,9 +80,6 @@ library Errors {
     /// Admin errors
     error Deposit_InvalidAdmin();
     error Deposit_InvalidUser();
-
-    /// Module errors
-    error Deposit_ModulePaused();
 
     /// ModuleLib errors
     error ModuleLib_DeploymentFailed();

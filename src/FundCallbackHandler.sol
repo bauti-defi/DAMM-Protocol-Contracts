@@ -8,12 +8,9 @@ import {ISafe} from "@src/interfaces/ISafe.sol";
 import {IPortfolio} from "@src/interfaces/IPortfolio.sol";
 import {IOwnable} from "@src/interfaces/IOwnable.sol";
 import {IMotherFund} from "@src/interfaces/IMotherFund.sol";
+import {IPauser} from "@src/interfaces/IPauser.sol";
 import "@src/libs/Errors.sol";
 import {POSITION_OPENER_ROLE, POSITION_CLOSER_ROLE} from "@src/libs/Constants.sol";
-
-event Paused();
-
-event Unpaused();
 
 /// @dev should only be truly global variables.
 contract FundCallbackHandler is
@@ -21,6 +18,7 @@ contract FundCallbackHandler is
     HandlerContext,
     IPortfolio,
     IMotherFund,
+    IPauser,
     IOwnable
 {
     using EnumerableSet for EnumerableSet.Bytes32Set;
@@ -33,7 +31,8 @@ contract FundCallbackHandler is
     EnumerableSet.AddressSet private childFunds;
 
     mapping(address module => uint256 role) private moduleRoles;
-    bool public paused;
+    mapping(address target => bool paused) private pausedTargets;
+    bool private globalPause;
 
     /// @dev Ordered time series of blocks the fund was liquidated at
     /// can be used for external inference
@@ -161,15 +160,31 @@ contract FundCallbackHandler is
         return childFunds.contains(_childFund);
     }
 
-    function pause() external onlyFund {
-        paused = true;
-
-        emit Paused();
+    function paused(address caller) external view override returns (bool) {
+        return globalPause || pausedTargets[caller];
     }
 
-    function unpause() external onlyFund {
-        paused = false;
+    function pause(address target) external onlyFund {
+        pausedTargets[target] = true;
 
-        emit Unpaused();
+        emit Paused(target);
+    }
+
+    function unpause(address target) external onlyFund {
+        pausedTargets[target] = false;
+
+        emit Unpaused(target);
+    }
+
+    function pauseGlobal() external onlyFund {
+        globalPause = true;
+
+        emit PausedGlobal();
+    }
+
+    function unpauseGlobal() external onlyFund {
+        globalPause = false;
+
+        emit UnpausedGlobal();
     }
 }

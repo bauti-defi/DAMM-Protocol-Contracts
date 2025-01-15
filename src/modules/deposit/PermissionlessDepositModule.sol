@@ -18,11 +18,12 @@ import {Enum} from "@safe-contracts/common/Enum.sol";
 import {DepositLibs} from "./DepositLibs.sol";
 import {IPermissionlessDepositModule} from "@src/interfaces/IPermissionlessDepositModule.sol";
 import {SafeLib} from "@src/libs/SafeLib.sol";
+import {Pausable} from "@src/core/Pausable.sol";
 
 /// @dev A module that when added to a gnosis safe, allows for anyone to deposit into the fund
 /// the gnosis safe must have a valid broker account (nft) with the periphery to be able to deposit
 /// on behalf of the caller.
-contract PermissionlessDepositModule is IPermissionlessDepositModule {
+contract PermissionlessDepositModule is Pausable, IPermissionlessDepositModule {
     using DepositLibs for BrokerAccountInfo;
     using SafeLib for ISafe;
     using SafeTransferLib for ERC20;
@@ -30,20 +31,14 @@ contract PermissionlessDepositModule is IPermissionlessDepositModule {
     address public immutable periphery;
     address public immutable safe;
     mapping(address user => uint256 nonce) public nonces;
-    bool public paused;
 
-    constructor(address safe_, address periphery_) {
+    constructor(address fund_, address safe_, address periphery_) Pausable(fund_) {
         safe = safe_;
         periphery = periphery_;
     }
 
     modifier onlyAdmin() {
         if (msg.sender != safe) revert Errors.OnlyAdmin();
-        _;
-    }
-
-    modifier notPaused() {
-        if (paused) revert Errors.Deposit_ModulePaused();
         _;
     }
 
@@ -178,17 +173,5 @@ contract PermissionlessDepositModule is IPermissionlessDepositModule {
 
     function increaseNonce(uint256 increment_) external {
         nonces[msg.sender] += increment_ > 1 ? increment_ : 1;
-    }
-
-    function pause() external onlyAdmin {
-        paused = true;
-
-        emit Paused();
-    }
-
-    function unpause() external onlyAdmin {
-        paused = false;
-
-        emit Unpaused();
     }
 }

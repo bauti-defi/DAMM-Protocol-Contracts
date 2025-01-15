@@ -5,10 +5,6 @@ import "./IPortfolio.sol";
 import "./ISafe.sol";
 import "./IOwnable.sol";
 import "./IMotherFund.sol";
+import "./IPauser.sol";
 
-interface IFund is IPortfolio, IMotherFund, ISafe, IOwnable {
-    function paused() external returns (bool);
-
-    function pause() external;
-    function unpause() external;
-}
+interface IFund is IPortfolio, IMotherFund, ISafe, IOwnable, IPauser {}

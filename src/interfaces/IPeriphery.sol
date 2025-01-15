@@ -6,8 +6,9 @@ import "@euler-price-oracle/interfaces/IPriceOracle.sol";
 import "@src/modules/deposit/Structs.sol";
 import {UnitOfAccount} from "@src/modules/deposit/UnitOfAccount.sol";
 import {FundShareVault} from "@src/modules/deposit/FundShareVault.sol";
+import {IPausable} from "@src/interfaces/IPausable.sol";
 
-interface IPeriphery {
+interface IPeriphery is IPausable {
     event AccountOpened(
         uint256 indexed accountId,
         Role role,
