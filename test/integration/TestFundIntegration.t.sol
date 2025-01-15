@@ -278,23 +278,23 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
         /// @notice ALL THE INFRA IS DEPLOYED, NOW WE MUST CONFIGURE IT
 
         vm.startPrank(address(fundAChild1));
-        fundAChild1.setAssetOfInterest(ARB_USDC);
-        fundAChild1.setAssetOfInterest(ARB_USDT);
+        fundAChild1.setAssetToValuate(ARB_USDC);
+        fundAChild1.setAssetToValuate(ARB_USDT);
         vm.stopPrank();
 
         vm.startPrank(address(fundAChild2));
-        fundAChild2.setAssetOfInterest(ARB_USDC);
-        fundAChild2.setAssetOfInterest(ARB_USDT);
+        fundAChild2.setAssetToValuate(ARB_USDC);
+        fundAChild2.setAssetToValuate(ARB_USDT);
         vm.stopPrank();
 
         vm.startPrank(address(fundBChild1));
-        fundBChild1.setAssetOfInterest(ARB_USDC);
-        fundBChild1.setAssetOfInterest(ARB_USDT);
+        fundBChild1.setAssetToValuate(ARB_USDC);
+        fundBChild1.setAssetToValuate(ARB_USDT);
         vm.stopPrank();
 
         vm.startPrank(address(fundBChild2));
-        fundBChild2.setAssetOfInterest(ARB_USDC);
-        fundBChild2.setAssetOfInterest(ARB_USDT);
+        fundBChild2.setAssetToValuate(ARB_USDC);
+        fundBChild2.setAssetToValuate(ARB_USDT);
         vm.stopPrank();
 
         // configure the vault connector for Fund A
@@ -328,10 +328,10 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
         fundA.addChildFund(address(fundAChild2));
 
         // configure mock tokens as assets of interest for Fund A
-        fundA.setAssetOfInterest(ARB_USDT);
+        fundA.setAssetToValuate(ARB_USDT);
         // we must include the Fund B LP token as an asset of interest
-        fundA.setAssetOfInterest(address(peripheryB.internalVault()));
-        fundA.setAssetOfInterest(ARB_USDC);
+        fundA.setAssetToValuate(address(peripheryB.internalVault()));
+        fundA.setAssetToValuate(ARB_USDC);
 
         // also enable assets on the periphery for Fund A
         peripheryA.enableAsset(
@@ -519,8 +519,8 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
         fundB.addChildFund(address(fundBChild2));
 
         // configure mock tokens as assets of interest for Fund B
-        fundB.setAssetOfInterest(ARB_USDC);
-        fundB.setAssetOfInterest(ARB_USDT);
+        fundB.setAssetToValuate(ARB_USDC);
+        fundB.setAssetToValuate(ARB_USDT);
         // also enable assets on the periphery for Fund B
         peripheryB.enableAsset(
             ARB_USDC,

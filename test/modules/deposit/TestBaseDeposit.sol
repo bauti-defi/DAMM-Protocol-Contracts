@@ -113,7 +113,7 @@ abstract contract TestBaseDeposit is TestBaseFund, TestBaseProtocol {
 
         // lets enable assets on the fund
         vm.startPrank(address(fund));
-        fund.setAssetOfInterest(address(mockToken1));
+        fund.setAssetToValuate(address(mockToken1));
         periphery.enableAsset(
             address(mockToken1),
             AssetPolicy({
@@ -126,7 +126,7 @@ abstract contract TestBaseDeposit is TestBaseFund, TestBaseProtocol {
             })
         );
 
-        fund.setAssetOfInterest(address(mockToken2));
+        fund.setAssetToValuate(address(mockToken2));
         periphery.enableAsset(
             address(mockToken2),
             AssetPolicy({
@@ -140,7 +140,7 @@ abstract contract TestBaseDeposit is TestBaseFund, TestBaseProtocol {
         );
 
         // native eth
-        fund.setAssetOfInterest(NATIVE_ASSET);
+        fund.setAssetToValuate(NATIVE_ASSET);
         periphery.enableAsset(
             NATIVE_ASSET,
             AssetPolicy({

@@ -25,7 +25,7 @@ contract FundCallbackHandler is
     address public immutable fund;
 
     EnumerableSet.Bytes32Set private openPositions;
-    EnumerableSet.AddressSet private assetsOfInterest;
+    EnumerableSet.AddressSet private assetsToValuate;
     EnumerableSet.AddressSet private childFunds;
 
     mapping(address module => uint256 role) private moduleRoles;
@@ -115,29 +115,29 @@ contract FundCallbackHandler is
     }
 
     /// @notice native asset = address(0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF)
-    function setAssetOfInterest(address _asset) external override onlyFund returns (bool result) {
-        result = assetsOfInterest.add(_asset);
+    function setAssetToValuate(address _asset) external override onlyFund returns (bool result) {
+        result = assetsToValuate.add(_asset);
 
         if (result) emit AssetOfInterestSet(_asset);
     }
 
-    function removeAssetOfInterest(address _asset)
+    function removeAssetToValuate(address _asset)
         external
         override
         onlyFund
         returns (bool result)
     {
-        result = assetsOfInterest.remove(_asset);
+        result = assetsToValuate.remove(_asset);
 
-        if (result) emit AssetOfInterestRemoved(_asset);
+        if (result) emit AssetToValuateRemoved(_asset);
     }
 
-    function isAssetOfInterest(address asset) external view override returns (bool) {
-        return assetsOfInterest.contains(asset);
+    function isAssetToValuate(address asset) external view override returns (bool) {
+        return assetsToValuate.contains(asset);
     }
 
-    function getAssetsOfInterest() external view override returns (address[] memory) {
-        return assetsOfInterest.values();
+    function getAssetsToValuate() external view override returns (address[] memory) {
+        return assetsToValuate.values();
     }
 
     function getChildFunds() external view override returns (address[] memory) {

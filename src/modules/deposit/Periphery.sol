@@ -659,7 +659,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
     }
 
     function enableAsset(address asset_, AssetPolicy memory policy_) external notPaused onlyFund {
-        if (!fund.isAssetOfInterest(asset_)) {
+        if (!fund.isAssetToValuate(asset_)) {
             revert Errors.Deposit_AssetNotSupported();
         }
         if (!policy_.enabled) {

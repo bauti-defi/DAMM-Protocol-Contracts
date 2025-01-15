@@ -43,7 +43,7 @@ contract FundValuationOracle is BaseAdapter {
             }
         }
 
-        address[] memory assets = fund.getAssetsOfInterest();
+        address[] memory assets = fund.getAssetsToValuate();
         uint256 assetLength = assets.length;
 
         for (uint256 i = 0; i < assetLength;) {

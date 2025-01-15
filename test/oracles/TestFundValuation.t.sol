@@ -127,13 +127,13 @@ contract TestFundValuation is TestBaseProtocol, TestBaseGnosis, TokenMinter {
 
         // lets enable assets on the fund
         vm.startPrank(address(fund));
-        IFund(address(fund)).setAssetOfInterest(ARB_USDC);
-        IFund(address(fund)).setAssetOfInterest(ARB_USDT);
-        IFund(address(fund)).setAssetOfInterest(ARB_DAI);
-        IFund(address(fund)).setAssetOfInterest(ARB_USDCe);
+        IFund(address(fund)).setAssetToValuate(ARB_USDC);
+        IFund(address(fund)).setAssetToValuate(ARB_USDT);
+        IFund(address(fund)).setAssetToValuate(ARB_DAI);
+        IFund(address(fund)).setAssetToValuate(ARB_USDCe);
 
         // native eth
-        IFund(address(fund)).setAssetOfInterest(NATIVE_ASSET);
+        IFund(address(fund)).setAssetToValuate(NATIVE_ASSET);
         vm.stopPrank();
 
         unitOfAccount = address(periphery.unitOfAccount());

@@ -128,13 +128,13 @@ contract TestMotherFundValuation is TestBaseProtocol, TestBaseGnosis, TokenMinte
 
         // lets enable assets on the fundA
         vm.startPrank(address(fundA));
-        fundA.setAssetOfInterest(ARB_USDC);
-        fundA.setAssetOfInterest(ARB_USDT);
-        fundA.setAssetOfInterest(ARB_DAI);
-        fundA.setAssetOfInterest(ARB_USDCe);
+        fundA.setAssetToValuate(ARB_USDC);
+        fundA.setAssetToValuate(ARB_USDT);
+        fundA.setAssetToValuate(ARB_DAI);
+        fundA.setAssetToValuate(ARB_USDCe);
 
         // native eth
-        fundA.setAssetOfInterest(NATIVE_ASSET);
+        fundA.setAssetToValuate(NATIVE_ASSET);
         vm.stopPrank();
 
         // now lets set fundB as child of fundA
@@ -143,13 +143,13 @@ contract TestMotherFundValuation is TestBaseProtocol, TestBaseGnosis, TokenMinte
 
         // now lets enable assets on the fundB
         vm.startPrank(address(fundB));
-        fundB.setAssetOfInterest(ARB_USDC);
-        fundB.setAssetOfInterest(ARB_USDT);
-        fundB.setAssetOfInterest(ARB_DAI);
-        fundB.setAssetOfInterest(ARB_USDCe);
+        fundB.setAssetToValuate(ARB_USDC);
+        fundB.setAssetToValuate(ARB_USDT);
+        fundB.setAssetToValuate(ARB_DAI);
+        fundB.setAssetToValuate(ARB_USDCe);
 
         // native eth
-        fundB.setAssetOfInterest(NATIVE_ASSET);
+        fundB.setAssetToValuate(NATIVE_ASSET);
         vm.stopPrank();
 
         unitOfAccount = address(periphery.unitOfAccount());

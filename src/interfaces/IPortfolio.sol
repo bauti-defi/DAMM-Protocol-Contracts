@@ -4,7 +4,7 @@ pragma solidity ^0.8.0;
 interface IPortfolio {
     event AssetOfInterestSet(address indexed asset);
 
-    event AssetOfInterestRemoved(address indexed asset);
+    event AssetToValuateRemoved(address indexed asset);
 
     event PositionOpened(address indexed by, bytes32 positionPointer);
 
@@ -24,11 +24,11 @@ interface IPortfolio {
 
     function getFundLiquidationTimeSeries() external view returns (uint256[] memory);
 
-    function setAssetOfInterest(address _asset) external returns (bool);
+    function setAssetToValuate(address _asset) external returns (bool);
 
-    function removeAssetOfInterest(address _asset) external returns (bool);
+    function removeAssetToValuate(address _asset) external returns (bool);
 
-    function isAssetOfInterest(address asset) external view returns (bool);
+    function isAssetToValuate(address asset) external view returns (bool);
 
-    function getAssetsOfInterest() external view returns (address[] memory);
+    function getAssetsToValuate() external view returns (address[] memory);
 }
