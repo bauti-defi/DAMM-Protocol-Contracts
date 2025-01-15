@@ -41,4 +41,22 @@ interface IGMXRouter {
         address[] memory tokens,
         address receiver
     ) external payable returns (uint256[] memory);
+
+    function updateOrder(
+        bytes32 key,
+        uint256 sizeDeltaUsd,
+        uint256 acceptablePrice,
+        uint256 triggerPrice,
+        uint256 minOutputAmount,
+        uint256 validFromTime,
+        bool autoCancel,
+        uint256 executionFee
+    ) external payable;
+
+    function cancelOrder(bytes32 key) external payable;
+
+    function createOrder(IBaseOrderUtils.CreateOrderParams calldata params)
+        external
+        payable
+        returns (bytes32);
 }

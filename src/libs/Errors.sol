@@ -13,6 +13,8 @@ library Errors {
     error AssetTransferFailed();
     /// @notice Thrown when trying to execute a function while the contract is paused
     error Paused();
+    /// @notice Thrown when a function must be called via delegatecall
+    error OnlyDelegateCall();
 
     /// Transaction module errors
     /// @notice Thrown when a transaction hook is not defined for a given operation
@@ -145,8 +147,6 @@ library Errors {
     error ModuleLib_InsufficientBalance();
     /// @notice Thrown when attempting to deploy a module with empty bytecode
     error ModuleLib_EmptyBytecode();
-    /// @notice Thrown when a function must be called via delegatecall
-    error ModuleLib_OnlyDelegateCall();
 
     /// FundCallbackHandler errors
     /// @notice Thrown when a caller is not a registered module

@@ -34,10 +34,14 @@ contract GMXPerpHook is BaseHook, IBeforeTransaction, IAfterTransaction, IOrderC
     mapping(bytes32 key => bool enabled) public gmxInteractionWhitelist;
     address public immutable gmxRouter;
     address public immutable gmxOrderHandler;
+    address public immutable gmxProxy;
 
-    constructor(address _fund, address _gmxRouter, address _gmxOrderHandler) BaseHook(_fund) {
+    constructor(address _fund, address _gmxRouter, address _gmxOrderHandler, address _gmxProxy)
+        BaseHook(_fund)
+    {
         gmxRouter = _gmxRouter;
         gmxOrderHandler = _gmxOrderHandler;
+        gmxProxy = _gmxProxy;
     }
 
     modifier onlyGmxOrderHandler() {
@@ -53,18 +57,23 @@ contract GMXPerpHook is BaseHook, IBeforeTransaction, IAfterTransaction, IOrderC
         uint8 operation,
         uint256,
         bytes calldata data
-    ) external view override onlyFund expectOperation(operation, CALL) {
-        if (target != gmxRouter) {
-            revert Errors.Hook_InvalidTargetAddress();
-        }
+    ) external override onlyFund {
+        if (selector == IGMXRouter.createOrder.selector) {
+            _validateTargetAndCallType(target, gmxProxy, operation, DELEGATE_CALL);
 
-        if (selector == IExchangeRouter.createOrder.selector) {
             _parseAndValidateCreateOrder(data);
-        } else if (selector == IExchangeRouter.cancelOrder.selector) {
+        } else if (selector == IGMXRouter.cancelOrder.selector) {
+            _validateTargetAndCallType(target, gmxRouter, operation, CALL);
+
             _parseAndValidatePositionKey(data);
-        } else if (selector == IExchangeRouter.updateOrder.selector) {
+        } else if (selector == IGMXRouter.updateOrder.selector) {
+            _validateTargetAndCallType(target, gmxProxy, operation, DELEGATE_CALL);
+
+            /// TODO: this is not validating everything correctly!
             _parseAndValidatePositionKey(data);
         } else if (selector == IGMXRouter.claimFundingFees.selector) {
+            _validateTargetAndCallType(target, gmxRouter, operation, CALL);
+
             _parseAndValidateClaimFunding(data);
         } else {
             revert Errors.Hook_InvalidTargetSelector();
@@ -78,7 +87,7 @@ contract GMXPerpHook is BaseHook, IBeforeTransaction, IAfterTransaction, IOrderC
         uint256,
         bytes calldata,
         bytes calldata returnData
-    ) external override onlyFund expectOperation(operation, CALL) {
+    ) external override onlyFund {
         if (selector == IExchangeRouter.createOrder.selector) {
             bytes32 key = abi.decode(returnData, (bytes32));
             fund.onPositionOpened(_positionPointer(key));
@@ -106,6 +115,19 @@ contract GMXPerpHook is BaseHook, IBeforeTransaction, IAfterTransaction, IOrderC
         override
     {
         revert GMXPerpHook_UnsupportedAction();
+    }
+
+    function _validateTargetAndCallType(
+        address target,
+        address expectedTarget,
+        uint8 operation,
+        uint8 expectedOperation
+    ) internal view {
+        if (target != expectedTarget) {
+            revert Errors.Hook_InvalidTargetAddress();
+        } else if (operation != expectedOperation) {
+            revert Errors.Hook_InvalidOperation();
+        }
     }
 
     function _positionPointer(bytes32 key) internal pure returns (bytes32) {

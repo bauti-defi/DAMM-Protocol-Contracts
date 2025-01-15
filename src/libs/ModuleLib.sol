@@ -20,7 +20,7 @@ contract ModuleLib is IModuleLib {
 
     /// @notice Ensures function is called via delegatecall
     modifier isDelegateCall() {
-        if (address(this) == self) revert Errors.ModuleLib_OnlyDelegateCall();
+        if (address(this) == self) revert Errors.OnlyDelegateCall();
         _;
     }
 
