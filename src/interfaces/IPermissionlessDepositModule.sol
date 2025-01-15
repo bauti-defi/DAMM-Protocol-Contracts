@@ -7,14 +7,10 @@ import {
     SignedDepositIntent,
     WithdrawOrder
 } from "@src/modules/deposit/Structs.sol";
+import {IPausable} from "@src/interfaces/IPausable.sol";
 
-interface IPermissionlessDepositModule {
-    event Paused();
-
-    event Unpaused();
-
+interface IPermissionlessDepositModule is IPausable {
     function periphery() external view returns (address);
-    function paused() external view returns (bool);
     function nonces(address user) external view returns (uint256);
     function safe() external view returns (address);
     function withdraw(WithdrawOrder calldata order) external returns (uint256 assetAmountOut);
@@ -26,6 +22,4 @@ interface IPermissionlessDepositModule {
         external
         returns (uint256 sharesOut);
     function increaseNonce(uint256 increment_) external;
-    function pause() external;
-    function unpause() external;
 }

@@ -8,15 +8,17 @@ import {ISafe} from "@src/interfaces/ISafe.sol";
 import {IPortfolio} from "@src/interfaces/IPortfolio.sol";
 import {IOwnable} from "@src/interfaces/IOwnable.sol";
 import {IMotherFund} from "@src/interfaces/IMotherFund.sol";
+import {IPauser} from "@src/interfaces/IPauser.sol";
 import "@src/libs/Errors.sol";
-import {POSITION_OPENER_ROLE, POSITION_CLOSER_ROLE} from "@src/libs/Constants.sol";
+import {POSITION_OPENER_ROLE, POSITION_CLOSER_ROLE, PAUSER_ROLE} from "@src/libs/Constants.sol";
 
-/// @dev should only be truly global variables. nothing module specific.
+/// @dev should only be truly global variables.
 contract FundCallbackHandler is
     TokenCallbackHandler,
     HandlerContext,
     IPortfolio,
     IMotherFund,
+    IPauser,
     IOwnable
 {
     using EnumerableSet for EnumerableSet.Bytes32Set;
@@ -29,6 +31,8 @@ contract FundCallbackHandler is
     EnumerableSet.AddressSet private childFunds;
 
     mapping(address module => uint256 role) private moduleRoles;
+    mapping(address target => bool paused) private pausedTargets;
+    bool private globalPause;
 
     /// @dev Ordered time series of blocks the fund was liquidated at
     /// can be used for external inference
@@ -50,6 +54,13 @@ contract FundCallbackHandler is
 
     modifier onlyFund() {
         if (_msgSender() != fund) revert Errors.OnlyFund();
+        _;
+    }
+
+    modifier onlyFundOrRole(uint256 roles) {
+        if (_msgSender() != fund && moduleRoles[_msgSender()] & roles != roles) {
+            revert Errors.Fund_NotAuthorized();
+        }
         _;
     }
 
@@ -154,5 +165,33 @@ contract FundCallbackHandler is
 
     function isChildFund(address _childFund) external view override returns (bool) {
         return childFunds.contains(_childFund);
+    }
+
+    function paused(address caller) external view override returns (bool) {
+        return globalPause || pausedTargets[caller];
+    }
+
+    function pause(address target) external onlyFundOrRole(PAUSER_ROLE) {
+        pausedTargets[target] = true;
+
+        emit Paused(target);
+    }
+
+    function unpause(address target) external onlyFundOrRole(PAUSER_ROLE) {
+        pausedTargets[target] = false;
+
+        emit Unpaused(target);
+    }
+
+    function pauseGlobal() external onlyFundOrRole(PAUSER_ROLE) {
+        globalPause = true;
+
+        emit PausedGlobal();
+    }
+
+    function unpauseGlobal() external onlyFundOrRole(PAUSER_ROLE) {
+        globalPause = false;
+
+        emit UnpausedGlobal();
     }
 }

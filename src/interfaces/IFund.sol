@@ -5,5 +5,6 @@ import "./IPortfolio.sol";
 import "./ISafe.sol";
 import "./IOwnable.sol";
 import "./IMotherFund.sol";
+import "./IPauser.sol";
 
-interface IFund is IPortfolio, IMotherFund, ISafe, IOwnable {}
+interface IFund is IPortfolio, IMotherFund, ISafe, IOwnable, IPauser {}

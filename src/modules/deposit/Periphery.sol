@@ -17,8 +17,9 @@ import "./UnitOfAccount.sol";
 import {FundShareVault} from "./FundShareVault.sol";
 import {DepositLibs} from "./DepositLibs.sol";
 import {SafeLib} from "@src/libs/SafeLib.sol";
+import {Pausable} from "@src/core/Pausable.sol";
 
-contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
+contract Periphery is ERC721, ReentrancyGuard, Pausable, IPeriphery {
     using DepositLibs for BrokerAccountInfo;
     using SafeLib for IFund;
     using SafeTransferLib for ERC20;
@@ -47,7 +48,6 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
     mapping(uint256 tokenId => BrokerAccountInfo account) private accountInfo;
 
     uint256 private tokenId = 0;
-    bool public paused;
 
     constructor(
         string memory vaultName_,
@@ -57,7 +57,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
         address oracleRouter_,
         address admin_,
         address protocolFeeRecipient_
-    ) ERC721(vaultName_, vaultSymbol_) {
+    ) ERC721(vaultName_, vaultSymbol_) Pausable(fund_) {
         if (fund_ == address(0)) {
             revert Errors.Deposit_InvalidConstructorParam();
         }
@@ -81,11 +81,6 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
 
         /// @notice infinite approval for the internalVault to manage periphery's balance
         unitOfAccount.approve(address(internalVault), type(uint256).max);
-    }
-
-    modifier notPaused() {
-        if (paused) revert Errors.Deposit_ModulePaused();
-        _;
     }
 
     modifier onlyFund() {
@@ -805,17 +800,5 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
 
     function fundIsOpen() external view returns (bool) {
         return !fund.hasOpenPositions();
-    }
-
-    function pause() external onlyFund {
-        paused = true;
-
-        emit Paused();
-    }
-
-    function unpause() external onlyFund {
-        paused = false;
-
-        emit Unpaused();
     }
 }

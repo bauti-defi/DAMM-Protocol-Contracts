@@ -6,7 +6,7 @@ import {console2} from "forge-std/console2.sol";
 import {TestBaseGnosis} from "@test/base/TestBaseGnosis.sol";
 import {TestBaseProtocol} from "@test/base/TestBaseProtocol.sol";
 import {IFund} from "@src/interfaces/IFund.sol";
-import {FundFactory} from "@src/FundFactory.sol";
+import {FundFactory} from "@src/core/FundFactory.sol";
 import {EulerRouter} from "@euler-price-oracle/EulerRouter.sol";
 import {FixedRateOracle} from "@euler-price-oracle/adapter/fixed/FixedRateOracle.sol";
 import {Periphery} from "@src/modules/deposit/Periphery.sol";

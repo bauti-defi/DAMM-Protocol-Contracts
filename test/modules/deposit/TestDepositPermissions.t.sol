@@ -7,7 +7,7 @@ import {EulerRouter} from "@euler-price-oracle/EulerRouter.sol";
 import {Periphery} from "@src/modules/deposit/Periphery.sol";
 import {FundValuationOracle} from "@src/oracles/FundValuationOracle.sol";
 import "@src/modules/deposit/Structs.sol";
-import {NATIVE_ASSET} from "@src/libs/Constants.sol";
+import {NATIVE_ASSET, PAUSER_ROLE} from "@src/libs/Constants.sol";
 import {MockERC20} from "@test/mocks/MockERC20.sol";
 import {MockPriceOracle} from "@test/mocks/MockPriceOracle.sol";
 import "@openzeppelin-contracts/utils/cryptography/MessageHashUtils.sol";
@@ -362,26 +362,44 @@ contract TestDepositPermissions is TestBaseDeposit {
         periphery.ownerOf(1);
     }
 
-    function test_only_fund_can_pause_unpause_module(address attacker) public {
+    function test_only_fund_or_pauser_can_pause_unpause_module(address attacker, address pauser)
+        public
+    {
         vm.assume(attacker != address(fund));
-
-        vm.prank(attacker);
-        vm.expectRevert(Errors.OnlyFund.selector);
-        periphery.pause();
-
-        vm.prank(address(fund));
-        periphery.pause();
-
-        assertTrue(periphery.paused());
-
-        vm.prank(attacker);
-        vm.expectRevert(Errors.OnlyFund.selector);
-        periphery.unpause();
+        vm.assume(pauser != address(fund));
+        vm.assume(pauser != address(0));
+        vm.assume(pauser != attacker);
 
         vm.prank(address(fund));
-        periphery.unpause();
+        fund.grantRoles(pauser, PAUSER_ROLE);
 
-        assertTrue(!periphery.paused());
+        vm.prank(attacker);
+        vm.expectRevert(Errors.Fund_NotAuthorized.selector);
+        fund.pause(address(periphery));
+
+        vm.prank(address(fund));
+        fund.pause(address(periphery));
+
+        assertTrue(fund.paused(address(periphery)));
+
+        vm.prank(attacker);
+        vm.expectRevert(Errors.Fund_NotAuthorized.selector);
+        fund.unpause(address(periphery));
+
+        vm.prank(address(fund));
+        fund.unpause(address(periphery));
+
+        assertTrue(!fund.paused(address(periphery)));
+
+        vm.prank(pauser);
+        fund.pause(address(periphery));
+
+        assertTrue(fund.paused(address(periphery)));
+
+        vm.prank(pauser);
+        fund.unpause(address(periphery));
+
+        assertTrue(!fund.paused(address(periphery)));
     }
 
     function test_cannot_transfer_souldbound_broker_account(address attacker)
