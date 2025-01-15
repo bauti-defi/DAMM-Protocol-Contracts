@@ -7,7 +7,7 @@ import {EulerRouter} from "@euler-price-oracle/EulerRouter.sol";
 import {Periphery} from "@src/modules/deposit/Periphery.sol";
 import {FundValuationOracle} from "@src/oracles/FundValuationOracle.sol";
 import "@src/modules/deposit/Structs.sol";
-import {NATIVE_ASSET} from "@src/libs/Constants.sol";
+import {NATIVE_ASSET, PAUSER_ROLE} from "@src/libs/Constants.sol";
 import {MockERC20} from "@test/mocks/MockERC20.sol";
 import {MockPriceOracle} from "@test/mocks/MockPriceOracle.sol";
 import "@openzeppelin-contracts/utils/cryptography/MessageHashUtils.sol";
@@ -362,11 +362,17 @@ contract TestDepositPermissions is TestBaseDeposit {
         periphery.ownerOf(1);
     }
 
-    function test_only_fund_can_pause_unpause_module(address attacker) public {
+    function test_only_fund_can_pause_unpause_module(address attacker, address pauser) public {
         vm.assume(attacker != address(fund));
+        vm.assume(pauser != address(fund));
+        vm.assume(pauser != address(0));
+        vm.assume(pauser != attacker);
+
+        vm.prank(address(fund));
+        fund.grantRoles(pauser, PAUSER_ROLE);
 
         vm.prank(attacker);
-        vm.expectRevert(Errors.OnlyFund.selector);
+        vm.expectRevert(Errors.Fund_NotAuthorized.selector);
         fund.pause(address(periphery));
 
         vm.prank(address(fund));
@@ -375,10 +381,20 @@ contract TestDepositPermissions is TestBaseDeposit {
         assertTrue(fund.paused(address(periphery)));
 
         vm.prank(attacker);
-        vm.expectRevert(Errors.OnlyFund.selector);
+        vm.expectRevert(Errors.Fund_NotAuthorized.selector);
         fund.unpause(address(periphery));
 
         vm.prank(address(fund));
+        fund.unpause(address(periphery));
+
+        assertTrue(!fund.paused(address(periphery)));
+
+        vm.prank(pauser);
+        fund.pause(address(periphery));
+
+        assertTrue(fund.paused(address(periphery)));
+
+        vm.prank(pauser);
         fund.unpause(address(periphery));
 
         assertTrue(!fund.paused(address(periphery)));
