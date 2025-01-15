@@ -4,7 +4,7 @@ pragma solidity ^0.8.0;
 import {TestBaseProtocol} from "@test/base/TestBaseProtocol.sol";
 import {TestBaseGnosis} from "@test/base/TestBaseGnosis.sol";
 import {SafeL2} from "@safe-contracts/SafeL2.sol";
-import {FundCallbackHandler} from "@src/FundCallbackHandler.sol";
+import {FundCallbackHandler} from "@src/core/FundCallbackHandler.sol";
 import {MockERC20} from "@test/mocks/MockERC20.sol";
 import {TokenMinter} from "@test/forked/TokenMinter.sol";
 import {EulerRouter} from "@euler-price-oracle/EulerRouter.sol";
@@ -19,7 +19,7 @@ import {
 import {Periphery} from "@src/modules/deposit/Periphery.sol";
 import {AssetPolicy} from "@src/modules/deposit/Structs.sol";
 import {IFund} from "@src/interfaces/IFund.sol";
-import {FundFactory} from "@src/FundFactory.sol";
+import {FundFactory} from "@src/core/FundFactory.sol";
 import "@src/interfaces/IOwnable.sol";
 import "@src/libs/Constants.sol";
 import "@src/libs/Errors.sol";

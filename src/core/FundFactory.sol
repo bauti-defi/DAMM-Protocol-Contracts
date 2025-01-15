@@ -4,7 +4,7 @@ pragma solidity ^0.8.0;
 import {IFund} from "@src/interfaces/IFund.sol";
 import {ISafe} from "@src/interfaces/ISafe.sol";
 import {IFundFactory} from "@src/interfaces/IFundFactory.sol";
-import {FundCallbackHandler} from "@src/FundCallbackHandler.sol";
+import {FundCallbackHandler} from "./FundCallbackHandler.sol";
 import "@src/libs/Errors.sol";
 
 interface ISafeProxyFactory {
