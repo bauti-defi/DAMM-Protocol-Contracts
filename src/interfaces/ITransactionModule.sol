@@ -5,15 +5,8 @@ import "@src/modules/transact/Structs.sol";
 import "@src/interfaces/IHookRegistry.sol";
 
 interface ITransactionModule {
-    event Paused();
-    event Unpaused();
-
-    function paused() external returns (bool);
     function fund() external returns (address);
     function hookRegistry() external returns (IHookRegistry);
 
     function execute(Transaction[] calldata transactions) external;
-
-    function pause() external;
-    function unpause() external;
 }

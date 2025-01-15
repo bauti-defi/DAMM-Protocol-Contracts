@@ -8,10 +8,6 @@ import {UnitOfAccount} from "@src/modules/deposit/UnitOfAccount.sol";
 import {FundShareVault} from "@src/modules/deposit/FundShareVault.sol";
 
 interface IPeriphery {
-    event Paused();
-
-    event Unpaused();
-
     event AccountOpened(
         uint256 indexed accountId,
         Role role,
@@ -59,7 +55,6 @@ interface IPeriphery {
 
     function fund() external returns (IFund);
     function oracleRouter() external returns (IPriceOracle);
-    function paused() external returns (bool);
     function admin() external returns (address);
     function internalVault() external returns (FundShareVault);
     function unitOfAccount() external returns (UnitOfAccount);

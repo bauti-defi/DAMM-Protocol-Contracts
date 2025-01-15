@@ -47,7 +47,6 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
     mapping(uint256 tokenId => BrokerAccountInfo account) private accountInfo;
 
     uint256 private tokenId = 0;
-    bool public paused;
 
     constructor(
         string memory vaultName_,
@@ -84,7 +83,7 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
     }
 
     modifier notPaused() {
-        if (paused) revert Errors.Deposit_ModulePaused();
+        if (fund.paused()) revert Errors.Deposit_ModulePaused();
         _;
     }
 
@@ -805,17 +804,5 @@ contract Periphery is ERC721, ReentrancyGuard, IPeriphery {
 
     function fundIsOpen() external view returns (bool) {
         return !fund.hasOpenPositions();
-    }
-
-    function pause() external onlyFund {
-        paused = true;
-
-        emit Paused();
-    }
-
-    function unpause() external onlyFund {
-        paused = false;
-
-        emit Unpaused();
     }
 }

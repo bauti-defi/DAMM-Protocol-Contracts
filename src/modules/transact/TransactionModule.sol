@@ -10,13 +10,13 @@ import "@src/interfaces/ITransactionModule.sol";
 import "./Structs.sol";
 import {BP_DIVISOR} from "@src/libs/Constants.sol";
 import {SafeLib} from "@src/libs/SafeLib.sol";
+import {IFund} from "@src/interfaces/IFund.sol";
 
 contract TransactionModule is ReentrancyGuard, ITransactionModule {
     using SafeLib for ISafe;
 
     address public immutable fund;
     IHookRegistry public immutable hookRegistry;
-    bool public paused;
 
     modifier onlyFund() {
         if (msg.sender != fund) revert Errors.OnlyFund();
@@ -24,7 +24,7 @@ contract TransactionModule is ReentrancyGuard, ITransactionModule {
     }
 
     modifier notPaused() {
-        if (paused) revert Errors.Transaction_ModulePaused();
+        if (IFund(fund).paused()) revert Errors.Transaction_ModulePaused();
         _;
     }
 
@@ -136,17 +136,5 @@ contract TransactionModule is ReentrancyGuard, ITransactionModule {
                 ++i;
             }
         }
-    }
-
-    function pause() external onlyFund {
-        paused = true;
-
-        emit Paused();
-    }
-
-    function unpause() external onlyFund {
-        paused = false;
-
-        emit Unpaused();
     }
 }

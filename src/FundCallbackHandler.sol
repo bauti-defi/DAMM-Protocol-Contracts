@@ -11,7 +11,11 @@ import {IMotherFund} from "@src/interfaces/IMotherFund.sol";
 import "@src/libs/Errors.sol";
 import {POSITION_OPENER_ROLE, POSITION_CLOSER_ROLE} from "@src/libs/Constants.sol";
 
-/// @dev should only be truly global variables. nothing module specific.
+event Paused();
+
+event Unpaused();
+
+/// @dev should only be truly global variables.
 contract FundCallbackHandler is
     TokenCallbackHandler,
     HandlerContext,
@@ -29,6 +33,7 @@ contract FundCallbackHandler is
     EnumerableSet.AddressSet private childFunds;
 
     mapping(address module => uint256 role) private moduleRoles;
+    bool public paused;
 
     /// @dev Ordered time series of blocks the fund was liquidated at
     /// can be used for external inference
@@ -154,5 +159,17 @@ contract FundCallbackHandler is
 
     function isChildFund(address _childFund) external view override returns (bool) {
         return childFunds.contains(_childFund);
+    }
+
+    function pause() external onlyFund {
+        paused = true;
+
+        emit Paused();
+    }
+
+    function unpause() external onlyFund {
+        paused = false;
+
+        emit Unpaused();
     }
 }

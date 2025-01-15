@@ -367,21 +367,21 @@ contract TestDepositPermissions is TestBaseDeposit {
 
         vm.prank(attacker);
         vm.expectRevert(Errors.OnlyFund.selector);
-        periphery.pause();
+        fund.pause();
 
         vm.prank(address(fund));
-        periphery.pause();
+        fund.pause();
 
-        assertTrue(periphery.paused());
+        assertTrue(fund.paused());
 
         vm.prank(attacker);
         vm.expectRevert(Errors.OnlyFund.selector);
-        periphery.unpause();
+        fund.unpause();
 
         vm.prank(address(fund));
-        periphery.unpause();
+        fund.unpause();
 
-        assertTrue(!periphery.paused());
+        assertTrue(!fund.paused());
     }
 
     function test_cannot_transfer_souldbound_broker_account(address attacker)
