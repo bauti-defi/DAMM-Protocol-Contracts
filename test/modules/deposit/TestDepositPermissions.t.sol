@@ -362,7 +362,9 @@ contract TestDepositPermissions is TestBaseDeposit {
         periphery.ownerOf(1);
     }
 
-    function test_only_fund_can_pause_unpause_module(address attacker, address pauser) public {
+    function test_only_fund_or_pauser_can_pause_unpause_module(address attacker, address pauser)
+        public
+    {
         vm.assume(attacker != address(fund));
         vm.assume(pauser != address(fund));
         vm.assume(pauser != address(0));
