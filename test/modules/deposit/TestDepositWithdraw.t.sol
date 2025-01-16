@@ -282,13 +282,16 @@ contract TestDepositWithdraw is TestBaseDeposit {
     function test_management_fee(
         uint16 managementFeeRateInBps,
         uint256 timeDelta1,
-        uint256 timeDelta2
+        uint256 timeDelta2,
+        uint256 timeDelta3
     ) public approveAllPeriphery(alice) {
         vm.assume(managementFeeRateInBps < MAX_NET_MANAGEMENT_FEE_IN_BPS);
         vm.assume(timeDelta1 > 0);
         vm.assume(timeDelta1 < 10 * 365 days);
         vm.assume(timeDelta2 > 0);
         vm.assume(timeDelta2 < 10 * 365 days);
+        vm.assume(timeDelta3 > 0);
+        vm.assume(timeDelta3 < 10 * 365 days);
 
         address managementFeeRecipient = makeAddr("ManagementFeeRecipient");
 
@@ -379,5 +382,22 @@ contract TestDepositWithdraw is TestBaseDeposit {
             0.1e18,
             "Management fee recipient balance wrong"
         );
+
+        vm.warp(block.timestamp + timeDelta3);
+
+        uint256 managementFee3 = periphery.internalVault().totalSupply() * timeDelta3
+            * managementFeeRateInBps / BP_DIVISOR / 365 days;
+
+        vm.prank(alice);
+        periphery.withdraw(withdrawOrder(1, alice, address(mockToken1), type(uint256).max));
+
+        assertApproxEqRel(
+            periphery.internalVault().balanceOf(managementFeeRecipient),
+            managementFee1 + managementFee2 + managementFee3,
+            0.1e18,
+            "Management fee recipient balance wrong"
+        );
+
+        assertEq(periphery.internalVault().balanceOf(alice), 0);
     }
 }

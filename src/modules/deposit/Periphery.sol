@@ -355,6 +355,10 @@ contract Periphery is ERC721, ReentrancyGuard, Pausable, IPeriphery {
             order.intent.nonce
         );
 
+        /// @notice The management fee should be charged before the withdrawal is processed
+        /// otherwise, the management fee will be charged on the withdrawal amount
+        _takeManagementFee();
+
         (uint256 netAssetAmountOut, uint256 netBrokerFee, uint256 netProtocolFee) =
             _withdraw(burner, order.intent.withdraw, account, policy.minimumWithdrawal);
 
@@ -419,6 +423,10 @@ contract Periphery is ERC721, ReentrancyGuard, Pausable, IPeriphery {
         BrokerAccountInfo memory account = accountInfo[order.accountId];
 
         DepositLibs.validateAccountAssetPolicy(policy, account, false);
+
+        /// @notice The management fee should be charged before the withdrawal is processed
+        /// otherwise, the management fee will be charged on the withdrawal amount
+        _takeManagementFee();
 
         (uint256 netAssetAmountOut, uint256 netBrokerFee, uint256 netProtocolFee) =
             _withdraw(burner, order, account, policy.minimumWithdrawal);
