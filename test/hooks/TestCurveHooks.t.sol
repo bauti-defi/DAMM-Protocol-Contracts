@@ -37,7 +37,7 @@ contract TestCurveHooks is Test {
         emit CurveCallValidator_AssetPoolEnabled(pool, i, j);
         validator.enableAssetPool(pool, i, j);
 
-        bytes32 pointer = keccak256(abi.encodePacked(pool, i, j));
+        bytes32 pointer = keccak256(abi.encode(pool, i, j, type(ICurvePool).interfaceId));
         assertTrue(validator.assetPoolWhitelist(pointer), "Asset pool not whitelisted");
 
         vm.prank(fund);

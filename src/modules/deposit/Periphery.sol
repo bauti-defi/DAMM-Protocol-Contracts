@@ -488,7 +488,6 @@ contract Periphery is ERC721, ReentrancyGuard, Pausable, IPeriphery {
         netProtocolFee = netProtocolFeeInLiquidity.divWadUp(liquidity).mulWadUp(netAssetAmountOut);
 
         /// make sure slippage is acceptable
-        /// TODO: make this use type(uint256).max instead of 0
         ///@notice if minAmountOut is 0, then slippage is not checked
         if (order.minAmountOut != 0 && netAssetAmountOut < order.minAmountOut) {
             revert Errors.Deposit_SlippageLimitExceeded();

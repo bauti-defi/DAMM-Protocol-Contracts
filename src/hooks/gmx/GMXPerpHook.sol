@@ -57,7 +57,7 @@ contract GMXPerpHook is BaseHook, IBeforeTransaction, IAfterTransaction, IOrderC
         uint8 operation,
         uint256,
         bytes calldata data
-    ) external override onlyFund {
+    ) external view override onlyFund {
         if (selector == IGMXRouter.createOrder.selector) {
             _validateTargetAndCallType(target, gmxProxy, operation, DELEGATE_CALL);
 
@@ -81,9 +81,9 @@ contract GMXPerpHook is BaseHook, IBeforeTransaction, IAfterTransaction, IOrderC
     }
 
     function checkAfterTransaction(
-        address target,
+        address,
         bytes4 selector,
-        uint8 operation,
+        uint8,
         uint256,
         bytes calldata,
         bytes calldata returnData
@@ -112,6 +112,7 @@ contract GMXPerpHook is BaseHook, IBeforeTransaction, IAfterTransaction, IOrderC
 
     function afterOrderFrozen(bytes32, Order.Props memory, EventUtils.EventLogData memory)
         external
+        pure
         override
     {
         revert GMXPerpHook_UnsupportedAction();
@@ -122,7 +123,7 @@ contract GMXPerpHook is BaseHook, IBeforeTransaction, IAfterTransaction, IOrderC
         address expectedTarget,
         uint8 operation,
         uint8 expectedOperation
-    ) internal view {
+    ) internal pure {
         if (target != expectedTarget) {
             revert Errors.Hook_InvalidTargetAddress();
         } else if (operation != expectedOperation) {

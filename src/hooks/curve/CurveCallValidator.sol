@@ -44,7 +44,7 @@ contract CurveCallValidator is BaseHook, IBeforeTransaction {
     }
 
     function _createPointer(address pool, int128 i, int128 j) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked(pool, i, j));
+        return keccak256(abi.encode(pool, i, j, type(ICurvePool).interfaceId));
     }
 
     function enableAssetPool(address pool, int128 i, int128 j) external onlyFund {
