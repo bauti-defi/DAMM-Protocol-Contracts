@@ -15,6 +15,8 @@ library Errors {
     error Paused();
     /// @notice Thrown when a function must be called via delegatecall
     error OnlyDelegateCall();
+    /// @notice Thrown when a function can only be called by a whitelisted user
+    error OnlyWhitelisted();
 
     /// Transaction module errors
     /// @notice Thrown when a transaction hook is not defined for a given operation

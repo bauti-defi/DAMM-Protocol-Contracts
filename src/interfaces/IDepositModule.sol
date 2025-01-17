@@ -10,7 +10,7 @@ import {
 } from "@src/modules/deposit/Structs.sol";
 import {IPausable} from "@src/interfaces/IPausable.sol";
 
-interface IPermissionlessDepositModule is IPausable {
+interface IDepositModule is IPausable {
     function periphery() external view returns (address);
     function nonces(address user) external view returns (uint256);
     function safe() external view returns (address);
