@@ -56,6 +56,11 @@ contract Periphery is ERC721, ReentrancyGuard, Pausable, IPeriphery {
     /// @dev The management fee rate in basis points
     uint256 public managementFeeRateInBps;
 
+    /// @dev The maximum amount of assets that can be deposited into the fund
+    /// @notice fund valuation must be less than or equal to this value to accept deposits
+    /// @notice default is set to type(uint256).max
+    uint256 public netDepositLimit;
+
     /// @dev Maps assets to their deposit/withdrawal policies
     mapping(address asset => AssetPolicy policy) private assetPolicy;
     /// @dev Maps token IDs to their brokerage account information
@@ -99,6 +104,7 @@ contract Periphery is ERC721, ReentrancyGuard, Pausable, IPeriphery {
         admin = admin_;
         protocolFeeRecipient = protocolFeeRecipient_;
         lastManagementFeeTimestamp = block.timestamp;
+        netDepositLimit = type(uint256).max;
         unitOfAccount = new UnitOfAccount("Liquidity", "UNIT", decimals_);
         internalVault = new FundShareVault(address(unitOfAccount), vaultName_, vaultSymbol_);
 
@@ -284,6 +290,11 @@ contract Periphery is ERC721, ReentrancyGuard, Pausable, IPeriphery {
 
         /// mint shares to the periphery using the liquidity that was just minted
         sharesOut = internalVault.deposit(liquidity, address(this));
+
+        /// check if the net deposit limit is exceeded
+        if (internalVault.totalAssets() > netDepositLimit) {
+            revert Errors.Deposit_NetDepositLimitExceeded();
+        }
 
         /// @notice this edge case is possible if a big amount of token is transferred
         /// to the fund before the deposit is processed
@@ -660,6 +671,19 @@ contract Periphery is ERC721, ReentrancyGuard, Pausable, IPeriphery {
         managementFeeRateInBps = rateInBps_;
 
         emit ManagementFeeRateUpdated(previous, rateInBps_);
+    }
+
+    /// @inheritdoc IPeriphery
+    function setNetDepositLimit(uint256 limit_) external onlyFund {
+        if (limit_ == 0) {
+            revert Errors.Deposit_InvalidNetDepositLimit();
+        }
+
+        uint256 previous = netDepositLimit;
+
+        netDepositLimit = limit_;
+
+        emit NetDepositLimitUpdated(previous, limit_);
     }
 
     function _setAdmin(address admin_) private {

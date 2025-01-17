@@ -79,6 +79,8 @@ library Errors {
     error Deposit_ShareBurnLimitExceeded();
     /// @notice Thrown when share minting would result in zero or insufficient shares
     error Deposit_InsufficientShares();
+    /// @notice Thrown when the net deposit limit is exceeded
+    error Deposit_NetDepositLimitExceeded();
 
     /// Asset policy errors
     /// @notice Thrown when an asset policy is invalid
@@ -133,6 +135,8 @@ library Errors {
     error Deposit_InvalidShareMintLimit();
     /// @notice Thrown when a broker fee recipient address is invalid
     error Deposit_InvalidBrokerFeeRecipient();
+    /// @notice Thrown when a net deposit limit is invalid
+    error Deposit_InvalidNetDepositLimit();
 
     /// Admin errors
     /// @notice Thrown when an admin address is invalid
