@@ -75,6 +75,43 @@ contract TestDepositPermissions is TestBaseDeposit {
         periphery.intentWithdraw(wOrder);
     }
 
+    function test_set_net_deposit_limit(uint256 limit_, address attacker) public {
+        vm.assume(limit_ > 0);
+        vm.assume(attacker != address(fund));
+
+        vm.prank(attacker);
+        vm.expectRevert(Errors.OnlyFund.selector);
+        periphery.setNetDepositLimit(limit_);
+
+        vm.prank(address(fund));
+        periphery.setNetDepositLimit(limit_);
+
+        vm.prank(address(fund));
+        vm.expectRevert(Errors.Deposit_InvalidNetDepositLimit.selector);
+        periphery.setNetDepositLimit(0);
+    }
+
+    function test_net_deposit_limit_cannot_be_exceeded(uint256 limit_)
+        public
+        whitelistUser(alice, 10000, Role.USER, false)
+        approveAllPeriphery(alice)
+    {
+        vm.assume(limit_ > 0);
+        vm.assume(limit_ < type(uint256).max / 10 ** 8);
+
+        vm.prank(address(fund));
+        periphery.setNetDepositLimit(limit_);
+
+        mockToken1.mint(alice, limit_ + 1);
+
+        vm.prank(address(fund));
+        vm.expectRevert(Errors.Deposit_NetDepositLimitExceeded.selector);
+        // deposit max amount
+        periphery.intentDeposit(
+            depositIntent(1, alice, alicePK, address(mockToken1), type(uint256).max, 0, 0, 0)
+        );
+    }
+
     function test_only_enabled_account_can_deposit_withdraw(uint256 accountId_) public {
         SignedDepositIntent memory dOrder =
             depositIntent(accountId_, alice, alicePK, address(mockToken1), mock1Unit, 0, 0, 0);

@@ -58,6 +58,8 @@ interface IPeriphery is IPausable {
         uint16 referralCode
     );
 
+    event NetDepositLimitUpdated(uint256 oldLimit, uint256 newLimit);
+
     /// @notice The Fund contract this Periphery is associated with
     function fund() external returns (IFund);
 
@@ -117,6 +119,9 @@ interface IPeriphery is IPausable {
 
     /// @notice Updates the management fee rate
     function setManagementFeeRateInBps(uint256 rateInBps) external;
+
+    /// @notice Updates the net deposit limit
+    function setNetDepositLimit(uint256 limit) external;
 
     /// @notice Enables an asset for deposits and withdrawals
     /// @param asset The asset to enable
