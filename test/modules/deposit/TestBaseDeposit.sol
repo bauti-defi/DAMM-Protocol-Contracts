@@ -115,41 +115,38 @@ abstract contract TestBaseDeposit is TestBaseFund, TestBaseProtocol {
         // lets enable assets on the fund
         vm.startPrank(address(fund));
         fund.setAssetToValuate(address(mockToken1));
-        periphery.enableAsset(
+        periphery.enableGlobalAssetPolicy(
             address(mockToken1),
             AssetPolicy({
                 minimumDeposit: MINIMUM_DEPOSIT,
                 minimumWithdrawal: MINIMUM_WITHDRAWAL,
                 canDeposit: true,
                 canWithdraw: true,
-                permissioned: false,
                 enabled: true
             })
         );
 
         fund.setAssetToValuate(address(mockToken2));
-        periphery.enableAsset(
+        periphery.enableGlobalAssetPolicy(
             address(mockToken2),
             AssetPolicy({
                 minimumDeposit: MINIMUM_DEPOSIT,
                 minimumWithdrawal: MINIMUM_WITHDRAWAL,
                 canDeposit: true,
                 canWithdraw: true,
-                permissioned: false,
                 enabled: true
             })
         );
 
         // native eth
         fund.setAssetToValuate(NATIVE_ASSET);
-        periphery.enableAsset(
+        periphery.enableGlobalAssetPolicy(
             NATIVE_ASSET,
             AssetPolicy({
                 minimumDeposit: MINIMUM_DEPOSIT,
                 minimumWithdrawal: MINIMUM_WITHDRAWAL,
                 canDeposit: false,
                 canWithdraw: false,
-                permissioned: false,
                 enabled: true
             })
         );
@@ -178,6 +175,54 @@ abstract contract TestBaseDeposit is TestBaseFund, TestBaseProtocol {
 
         vm.startPrank(address(fund));
         oracleRouter.govSetResolvedVault(periphery.getVault(), true);
+        vm.stopPrank();
+    }
+
+    function _enableBrokerAssetPolicy(
+        address enabler,
+        uint256 accountId,
+        address asset,
+        bool isDeposit
+    ) internal {
+        vm.startPrank(enabler);
+        periphery.enableBrokerAssetPolicy(accountId, asset, isDeposit);
+        vm.stopPrank();
+    }
+
+    modifier enableBrokerAssetPolicy(
+        address enabler,
+        uint256 accountId,
+        address asset,
+        bool isDeposit
+    ) {
+        _enableBrokerAssetPolicy(enabler, accountId, asset, isDeposit);
+
+        _;
+    }
+
+    modifier openAccount(address user_, uint256 ttl_, bool transferable_) {
+        _openAccount(user_, ttl_, transferable_);
+
+        _;
+    }
+
+    function _openAccount(address user_, uint256 ttl_, bool transferable_) internal {
+        vm.startPrank(address(fund));
+        periphery.openAccount(
+            CreateAccountParams({
+                transferable: transferable_,
+                user: user_,
+                ttl: ttl_,
+                shareMintLimit: type(uint256).max,
+                brokerPerformanceFeeInBps: 0,
+                protocolPerformanceFeeInBps: 0,
+                brokerEntranceFeeInBps: 0,
+                protocolEntranceFeeInBps: 0,
+                brokerExitFeeInBps: 0,
+                protocolExitFeeInBps: 0,
+                feeRecipient: address(0)
+            })
+        );
         vm.stopPrank();
     }
 

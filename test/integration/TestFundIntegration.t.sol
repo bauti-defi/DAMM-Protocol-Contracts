@@ -334,25 +334,23 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
         fundA.setAssetToValuate(ARB_USDC);
 
         // also enable assets on the periphery for Fund A
-        peripheryA.enableAsset(
+        peripheryA.enableGlobalAssetPolicy(
             ARB_USDC,
             AssetPolicy({
                 minimumDeposit: 100,
                 minimumWithdrawal: 100,
                 canDeposit: true,
                 canWithdraw: true,
-                permissioned: false,
                 enabled: true
             })
         );
-        peripheryA.enableAsset(
+        peripheryA.enableGlobalAssetPolicy(
             ARB_USDT,
             AssetPolicy({
                 minimumDeposit: 100,
                 minimumWithdrawal: 100,
                 canDeposit: true,
                 canWithdraw: false,
-                permissioned: false,
                 enabled: true
             })
         );
@@ -435,13 +433,16 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
                 protocolEntranceFeeInBps: 0,
                 brokerExitFeeInBps: 0,
                 protocolExitFeeInBps: 0,
-                role: Role.USER,
                 transferable: false,
                 ttl: 365 days,
                 shareMintLimit: type(uint256).max,
                 feeRecipient: address(0)
             })
         );
+
+        peripheryA.enableBrokerAssetPolicy(brokerAId, ARB_USDC, true);
+        peripheryA.enableBrokerAssetPolicy(brokerAId, ARB_USDC, false);
+        peripheryA.enableBrokerAssetPolicy(brokerAId, ARB_USDT, true);
 
         // give periphery B allowance to deposit funds from Fund A
         USDC.approve(address(peripheryB), type(uint256).max);
@@ -471,7 +472,6 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
                 protocolEntranceFeeInBps: 0,
                 brokerExitFeeInBps: 0,
                 protocolExitFeeInBps: 0,
-                role: Role.USER,
                 transferable: false,
                 ttl: 365 days,
                 shareMintLimit: type(uint256).max,
@@ -507,7 +507,6 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
                 protocolEntranceFeeInBps: 0,
                 brokerExitFeeInBps: 0,
                 protocolExitFeeInBps: 0,
-                role: Role.USER,
                 transferable: false,
                 ttl: 365 days,
                 shareMintLimit: type(uint256).max,
@@ -522,28 +521,30 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
         fundB.setAssetToValuate(ARB_USDC);
         fundB.setAssetToValuate(ARB_USDT);
         // also enable assets on the periphery for Fund B
-        peripheryB.enableAsset(
+        peripheryB.enableGlobalAssetPolicy(
             ARB_USDC,
             AssetPolicy({
                 minimumDeposit: 100,
                 minimumWithdrawal: 100,
                 canDeposit: true,
                 canWithdraw: true,
-                permissioned: false,
                 enabled: true
             })
         );
-        peripheryB.enableAsset(
+        peripheryB.enableGlobalAssetPolicy(
             ARB_USDT,
             AssetPolicy({
                 minimumDeposit: 100,
                 minimumWithdrawal: 100,
                 canDeposit: true,
                 canWithdraw: false,
-                permissioned: false,
                 enabled: true
             })
         );
+
+        peripheryB.enableBrokerAssetPolicy(fundABrokerId, ARB_USDC, true);
+        peripheryB.enableBrokerAssetPolicy(fundABrokerId, ARB_USDC, false);
+        peripheryB.enableBrokerAssetPolicy(fundABrokerId, ARB_USDT, true);
 
         // transfer from Fund B to Fund B Child 1
         hookRegistryB.setHooks(
@@ -693,6 +694,32 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
         USDC.approve(address(peripheryB), type(uint256).max);
         USDT.approve(address(peripheryB), type(uint256).max);
         vm.stopPrank();
+
+        assertTrue(
+            peripheryA.isBrokerAssetPolicyEnabled(brokerAId, ARB_USDC, true),
+            "USDC deposit policy not enabled for brokerAId on peripheryA"
+        );
+        assertTrue(
+            peripheryA.isBrokerAssetPolicyEnabled(brokerAId, ARB_USDC, false),
+            "USDC withdraw policy not enabled for brokerAId on peripheryA"
+        );
+        assertTrue(
+            peripheryA.isBrokerAssetPolicyEnabled(brokerAId, ARB_USDT, true),
+            "USDT deposit policy not enabled for brokerAId on peripheryA"
+        );
+
+        assertTrue(
+            peripheryB.isBrokerAssetPolicyEnabled(fundABrokerId, ARB_USDC, true),
+            "USDC deposit policy not enabled for fundABrokerId on peripheryB"
+        );
+        assertTrue(
+            peripheryB.isBrokerAssetPolicyEnabled(fundABrokerId, ARB_USDC, false),
+            "USDC withdraw policy not enabled for fundABrokerId on peripheryB"
+        );
+        assertTrue(
+            peripheryB.isBrokerAssetPolicyEnabled(fundABrokerId, ARB_USDT, true),
+            "USDT deposit policy not enabled for fundABrokerId on peripheryB"
+        );
     }
 
     function test_valuation() public {

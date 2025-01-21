@@ -31,6 +31,7 @@ import {Pausable} from "@src/core/Pausable.sol";
 ///      - Fee collection and distribution
 contract Periphery is ERC721, ReentrancyGuard, Pausable, IPeriphery {
     using DepositLibs for BrokerAccountInfo;
+    using DepositLibs for address;
     using SafeLib for IFund;
     using SafeTransferLib for ERC20;
     using SafeCast for uint256;
@@ -63,8 +64,9 @@ contract Periphery is ERC721, ReentrancyGuard, Pausable, IPeriphery {
 
     /// @dev Maps assets to their deposit/withdrawal policies
     mapping(address asset => AssetPolicy policy) private assetPolicy;
+
     /// @dev Maps token IDs to their brokerage account information
-    mapping(uint256 tokenId => BrokerAccountInfo account) private accountInfo;
+    mapping(uint256 tokenId => Broker broker) private brokers;
 
     /// @dev Counter for brokerage account token IDs
     uint256 private tokenId = 0;
@@ -135,9 +137,9 @@ contract Periphery is ERC721, ReentrancyGuard, Pausable, IPeriphery {
     /// @dev this modifier ensures that the account info is zeroed out if the broker has no shares outstanding
     modifier zeroOutAccountInfo(uint256 accountId_) {
         _;
-        if (accountInfo[accountId_].totalSharesOutstanding == 0) {
-            accountInfo[accountId_].cumulativeSharesMinted = 0;
-            accountInfo[accountId_].cumulativeUnitsDeposited = 0;
+        if (brokers[accountId_].account.totalSharesOutstanding == 0) {
+            brokers[accountId_].account.cumulativeSharesMinted = 0;
+            brokers[accountId_].account.cumulativeUnitsDeposited = 0;
         }
     }
 
@@ -155,16 +157,16 @@ contract Periphery is ERC721, ReentrancyGuard, Pausable, IPeriphery {
         }
 
         AssetPolicy memory policy = assetPolicy[order.intent.deposit.asset];
-        BrokerAccountInfo memory account = accountInfo[order.intent.deposit.accountId];
+        Broker storage broker = brokers[order.intent.deposit.accountId];
 
-        DepositLibs.validateAccountAssetPolicy(policy, account, true);
+        DepositLibs.validateBrokerAssetPolicy(order.intent.deposit.asset, broker, policy, true);
 
         DepositLibs.validateIntent(
             abi.encode(order.intent),
             order.signature,
             minter,
             order.intent.chaindId,
-            accountInfo[order.intent.deposit.accountId].nonce++,
+            broker.account.nonce++,
             order.intent.nonce
         );
 
@@ -190,10 +192,10 @@ contract Periphery is ERC721, ReentrancyGuard, Pausable, IPeriphery {
             order.intent.deposit,
             minter,
             policy.minimumDeposit,
-            account.totalSharesOutstanding,
-            account.shareMintLimit,
-            account.brokerEntranceFeeInBps,
-            account.protocolEntranceFeeInBps
+            broker.account.totalSharesOutstanding,
+            broker.account.shareMintLimit,
+            broker.account.brokerEntranceFeeInBps,
+            broker.account.protocolEntranceFeeInBps
         );
 
         emit Deposit(
@@ -229,18 +231,18 @@ contract Periphery is ERC721, ReentrancyGuard, Pausable, IPeriphery {
         _takeManagementFee();
 
         AssetPolicy memory policy = assetPolicy[order.asset];
-        BrokerAccountInfo memory account = accountInfo[order.accountId];
+        Broker storage broker = brokers[order.accountId];
 
-        DepositLibs.validateAccountAssetPolicy(policy, account, true);
+        DepositLibs.validateBrokerAssetPolicy(order.asset, broker, policy, true);
 
         sharesOut = _deposit(
             order,
             minter,
             policy.minimumDeposit,
-            account.totalSharesOutstanding,
-            account.shareMintLimit,
-            account.brokerEntranceFeeInBps,
-            account.protocolEntranceFeeInBps
+            broker.account.totalSharesOutstanding,
+            broker.account.shareMintLimit,
+            broker.account.brokerEntranceFeeInBps,
+            broker.account.protocolEntranceFeeInBps
         );
 
         emit Deposit(
@@ -313,13 +315,13 @@ contract Periphery is ERC721, ReentrancyGuard, Pausable, IPeriphery {
         }
 
         /// update the broker's cumulative units deposited
-        accountInfo[order.accountId].cumulativeUnitsDeposited += liquidity;
+        brokers[order.accountId].account.cumulativeUnitsDeposited += liquidity;
 
         /// update the broker's total shares outstanding
-        accountInfo[order.accountId].totalSharesOutstanding += sharesOut;
+        brokers[order.accountId].account.totalSharesOutstanding += sharesOut;
 
         /// update the broker's cumulative shares minted
-        accountInfo[order.accountId].cumulativeSharesMinted += sharesOut;
+        brokers[order.accountId].account.cumulativeSharesMinted += sharesOut;
 
         /// take the broker entrance fees
         if (brokerEntranceFeeInBps > 0) {
@@ -353,16 +355,16 @@ contract Periphery is ERC721, ReentrancyGuard, Pausable, IPeriphery {
         }
 
         AssetPolicy memory policy = assetPolicy[order.intent.withdraw.asset];
-        BrokerAccountInfo memory account = accountInfo[order.intent.withdraw.accountId];
+        Broker storage broker = brokers[order.intent.withdraw.accountId];
 
-        DepositLibs.validateAccountAssetPolicy(policy, account, false);
+        DepositLibs.validateBrokerAssetPolicy(order.intent.withdraw.asset, broker, policy, false);
 
         DepositLibs.validateIntent(
             abi.encode(order.intent),
             order.signature,
             burner,
             order.intent.chaindId,
-            accountInfo[order.intent.withdraw.accountId].nonce++,
+            broker.account.nonce++,
             order.intent.nonce
         );
 
@@ -371,7 +373,7 @@ contract Periphery is ERC721, ReentrancyGuard, Pausable, IPeriphery {
         _takeManagementFee();
 
         (uint256 netAssetAmountOut, uint256 netBrokerFee, uint256 netProtocolFee) =
-            _withdraw(burner, order.intent.withdraw, account, policy.minimumWithdrawal);
+            _withdraw(burner, order.intent.withdraw, broker.account, policy.minimumWithdrawal);
 
         /// start calculating the amount of asset to transfer to the user
         assetAmountOut = netAssetAmountOut - netBrokerFee - netProtocolFee;
@@ -431,16 +433,16 @@ contract Periphery is ERC721, ReentrancyGuard, Pausable, IPeriphery {
         }
 
         AssetPolicy memory policy = assetPolicy[order.asset];
-        BrokerAccountInfo memory account = accountInfo[order.accountId];
+        Broker storage broker = brokers[order.accountId];
 
-        DepositLibs.validateAccountAssetPolicy(policy, account, false);
+        DepositLibs.validateBrokerAssetPolicy(order.asset, broker, policy, false);
 
         /// @notice The management fee should be charged before the withdrawal is processed
         /// otherwise, the management fee will be charged on the withdrawal amount
         _takeManagementFee();
 
         (uint256 netAssetAmountOut, uint256 netBrokerFee, uint256 netProtocolFee) =
-            _withdraw(burner, order, account, policy.minimumWithdrawal);
+            _withdraw(burner, order, broker.account, policy.minimumWithdrawal);
 
         assetAmountOut = netAssetAmountOut - netBrokerFee - netProtocolFee;
 
@@ -480,7 +482,7 @@ contract Periphery is ERC721, ReentrancyGuard, Pausable, IPeriphery {
             }
 
             /// update the broker's total shares outstanding
-            accountInfo[order.accountId].totalSharesOutstanding -= sharesToBurn;
+            brokers[order.accountId].account.totalSharesOutstanding -= sharesToBurn;
         }
 
         /// burn internalVault shares in exchange for liquidity (unit of account) tokens
@@ -624,7 +626,7 @@ contract Periphery is ERC721, ReentrancyGuard, Pausable, IPeriphery {
     }
 
     function getAccountNonce(uint256 accountId_) external view returns (uint256) {
-        return accountInfo[accountId_].nonce;
+        return brokers[accountId_].account.nonce;
     }
 
     /// @inheritdoc IPeriphery
@@ -653,9 +655,9 @@ contract Periphery is ERC721, ReentrancyGuard, Pausable, IPeriphery {
             revert Errors.Deposit_InvalidBrokerFeeRecipient();
         }
 
-        address previous = accountInfo[accountId_].feeRecipient;
+        address previous = brokers[accountId_].account.feeRecipient;
 
-        accountInfo[accountId_].feeRecipient = recipient_;
+        brokers[accountId_].account.feeRecipient = recipient_;
 
         emit BrokerFeeRecipientUpdated(accountId_, recipient_, previous);
     }
@@ -713,7 +715,11 @@ contract Periphery is ERC721, ReentrancyGuard, Pausable, IPeriphery {
         return address(internalVault);
     }
 
-    function enableAsset(address asset_, AssetPolicy memory policy_) external notPaused onlyFund {
+    function enableGlobalAssetPolicy(address asset_, AssetPolicy memory policy_)
+        external
+        notPaused
+        onlyFund
+    {
         if (!fund.isAssetToValuate(asset_)) {
             revert Errors.Deposit_AssetNotSupported();
         }
@@ -723,22 +729,71 @@ contract Periphery is ERC721, ReentrancyGuard, Pausable, IPeriphery {
 
         assetPolicy[asset_] = policy_;
 
-        emit AssetEnabled(asset_, policy_);
+        emit GlobalAssetPolicyEnabled(asset_, policy_);
     }
 
-    function disableAsset(address asset_) external onlyFund {
+    function disableGlobalAssetPolicy(address asset_) external onlyFund {
         assetPolicy[asset_].enabled = false;
 
-        emit AssetDisabled(asset_);
+        emit GlobalAssetPolicyDisabled(asset_);
     }
 
-    function getAssetPolicy(address asset_) external view returns (AssetPolicy memory) {
+    function getGlobalAssetPolicy(address asset_) external view returns (AssetPolicy memory) {
         return assetPolicy[asset_];
+    }
+
+    function enableBrokerAssetPolicy(uint256 accountId_, address asset_, bool isDeposit_)
+        external
+        notPaused
+        onlyFund
+    {
+        if (!assetPolicy[asset_].enabled) {
+            revert Errors.Deposit_AssetNotSupported();
+        }
+
+        Broker storage broker = brokers[accountId_];
+
+        if (!broker.account.isActive()) {
+            revert Errors.Deposit_AccountNotActive();
+        }
+        if (broker.account.isExpired()) {
+            revert Errors.Deposit_AccountExpired();
+        }
+
+        broker.assetPolicy[asset_.brokerAssetPolicyPointer(isDeposit_)] = true;
+
+        emit BrokerAssetPolicyEnabled(accountId_, asset_, isDeposit_);
+    }
+
+    function disableBrokerAssetPolicy(uint256 accountId_, address asset_, bool isDeposit_)
+        external
+        onlyFund
+    {
+        Broker storage broker = brokers[accountId_];
+
+        if (!broker.account.isActive()) {
+            revert Errors.Deposit_AccountNotActive();
+        }
+        if (broker.account.isExpired()) {
+            revert Errors.Deposit_AccountExpired();
+        }
+
+        broker.assetPolicy[asset_.brokerAssetPolicyPointer(isDeposit_)] = false;
+
+        emit BrokerAssetPolicyDisabled(accountId_, asset_, isDeposit_);
+    }
+
+    function isBrokerAssetPolicyEnabled(uint256 accountId_, address asset_, bool isDeposit_)
+        external
+        view
+        returns (bool)
+    {
+        return brokers[accountId_].assetPolicy[asset_.brokerAssetPolicyPointer(isDeposit_)];
     }
 
     /// @notice restricting the transfer makes this a soulbound token
     function transferFrom(address from_, address to_, uint256 tokenId_) public override {
-        if (!accountInfo[tokenId_].transferable) revert Errors.Deposit_AccountNotTransferable();
+        if (!brokers[tokenId_].account.transferable) revert Errors.Deposit_AccountNotTransferable();
 
         super.transferFrom(from_, to_, tokenId_);
     }
@@ -763,9 +818,6 @@ contract Periphery is ERC721, ReentrancyGuard, Pausable, IPeriphery {
         if (params_.brokerExitFeeInBps + params_.protocolExitFeeInBps >= BP_DIVISOR) {
             revert Errors.Deposit_InvalidExitFee();
         }
-        if (params_.role == Role.NONE) {
-            revert Errors.Deposit_InvalidRole();
-        }
         if (params_.ttl == 0) {
             revert Errors.Deposit_InvalidTTL();
         }
@@ -783,9 +835,8 @@ contract Periphery is ERC721, ReentrancyGuard, Pausable, IPeriphery {
         /// @notice If `to` refers to a smart contract, it must implement {IERC721Receiver-onERC721Received}, which is called upon a safe transfer.
         _safeMint(params_.user, nextTokenId);
 
-        accountInfo[nextTokenId] = BrokerAccountInfo({
+        brokers[nextTokenId].account = BrokerAccountInfo({
             transferable: params_.transferable,
-            role: params_.role,
             state: AccountState.ACTIVE,
             expirationTimestamp: block.timestamp + params_.ttl,
             nonce: 0,
@@ -804,7 +855,6 @@ contract Periphery is ERC721, ReentrancyGuard, Pausable, IPeriphery {
 
         emit AccountOpened(
             nextTokenId,
-            params_.role,
             block.timestamp + params_.ttl,
             params_.shareMintLimit,
             feeRecipient,
@@ -813,50 +863,52 @@ contract Periphery is ERC721, ReentrancyGuard, Pausable, IPeriphery {
     }
 
     function closeAccount(uint256 accountId_) public onlyAdmin {
-        if (!accountInfo[accountId_].canBeClosed()) revert Errors.Deposit_AccountCannotBeClosed();
+        if (!brokers[accountId_].account.canBeClosed()) {
+            revert Errors.Deposit_AccountCannotBeClosed();
+        }
         /// @notice this will revert if the token does not exist
         _burn(accountId_);
-        accountInfo[accountId_].state = AccountState.CLOSED;
+        brokers[accountId_].account.state = AccountState.CLOSED;
     }
 
     /// @inheritdoc IPeriphery
     function pauseAccount(uint256 accountId_) public onlyAdmin {
-        if (!accountInfo[accountId_].isActive()) {
+        if (!brokers[accountId_].account.isActive()) {
             revert Errors.Deposit_AccountNotActive();
         }
         if (_ownerOf(accountId_) == address(0)) revert Errors.Deposit_AccountDoesNotExist();
-        accountInfo[accountId_].state = AccountState.PAUSED;
+        brokers[accountId_].account.state = AccountState.PAUSED;
 
         emit AccountPaused(accountId_);
     }
 
     /// @inheritdoc IPeriphery
     function unpauseAccount(uint256 accountId_) public notPaused onlyAdmin {
-        if (!accountInfo[accountId_].isPaused()) {
+        if (!brokers[accountId_].account.isPaused()) {
             revert Errors.Deposit_AccountNotPaused();
         }
         if (_ownerOf(accountId_) == address(0)) revert Errors.Deposit_AccountDoesNotExist();
-        accountInfo[accountId_].state = AccountState.ACTIVE;
+        brokers[accountId_].account.state = AccountState.ACTIVE;
 
         /// increase nonce to avoid replay attacks
-        accountInfo[accountId_].nonce++;
+        brokers[accountId_].account.nonce++;
 
         emit AccountUnpaused(accountId_);
     }
 
     /// @inheritdoc IPeriphery
     function getAccountInfo(uint256 accountId_) public view returns (BrokerAccountInfo memory) {
-        return accountInfo[accountId_];
+        return brokers[accountId_].account;
     }
 
     /// @inheritdoc IPeriphery
     function increaseAccountNonce(uint256 accountId_, uint256 increment_) external notPaused {
         if (_ownerOf(accountId_) != msg.sender) revert Errors.Deposit_OnlyAccountOwner();
-        if (accountInfo[accountId_].isActive()) {
+        if (brokers[accountId_].account.isActive()) {
             revert Errors.Deposit_AccountNotActive();
         }
 
-        accountInfo[accountId_].nonce += increment_ > 1 ? increment_ : 1;
+        brokers[accountId_].account.nonce += increment_ > 1 ? increment_ : 1;
     }
 
     /// @inheritdoc IPeriphery

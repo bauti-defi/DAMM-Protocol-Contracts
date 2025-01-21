@@ -4,7 +4,7 @@ pragma solidity ^0.8.0;
 
 import {TestBaseDeposit, MINIMUM_DEPOSIT} from "./TestBaseDeposit.sol";
 import {PermissionlessDepositModule} from "@src/modules/deposit/PermissionlessDepositModule.sol";
-import {CreateAccountParams, Role} from "@src/modules/deposit/Structs.sol";
+import {CreateAccountParams} from "@src/modules/deposit/Structs.sol";
 import {SafeL2} from "@safe-contracts/SafeL2.sol";
 import {Errors} from "@src/libs/Errors.sol";
 
@@ -53,10 +53,14 @@ contract TestPermissionlessDeposit is TestBaseDeposit {
                 protocolExitFeeInBps: 0,
                 feeRecipient: feeRecipient,
                 user: address(safe),
-                transferable: false,
-                role: Role.USER
+                transferable: false
             })
         );
+
+        periphery.enableBrokerAssetPolicy(accountId, address(mockToken1), true);
+        periphery.enableBrokerAssetPolicy(accountId, address(mockToken1), false);
+        periphery.enableBrokerAssetPolicy(accountId, address(mockToken2), true);
+        periphery.enableBrokerAssetPolicy(accountId, address(mockToken2), false);
         vm.stopPrank();
     }
 

@@ -4,7 +4,7 @@ pragma solidity ^0.8.0;
 
 import {TestBaseDeposit, MINIMUM_DEPOSIT} from "./TestBaseDeposit.sol";
 import {WhitelistDepositModule} from "@src/modules/deposit/WhitelistDepositModule.sol";
-import {CreateAccountParams, Role} from "@src/modules/deposit/Structs.sol";
+import {CreateAccountParams} from "@src/modules/deposit/Structs.sol";
 import {SafeL2} from "@safe-contracts/SafeL2.sol";
 import {Errors} from "@src/libs/Errors.sol";
 
@@ -53,11 +53,13 @@ contract TestWhitelistDeposit is TestBaseDeposit {
                 protocolExitFeeInBps: 0,
                 feeRecipient: feeRecipient,
                 user: address(safe),
-                transferable: false,
-                role: Role.USER
+                transferable: false
             })
         );
         vm.stopPrank();
+
+        _enableBrokerAssetPolicy(address(fund), 1, address(mockToken1), true);
+        _enableBrokerAssetPolicy(address(fund), 1, address(mockToken1), false);
     }
 
     modifier approveAllModule(address user) {

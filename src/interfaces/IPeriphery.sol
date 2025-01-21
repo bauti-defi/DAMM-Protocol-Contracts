@@ -15,7 +15,6 @@ import {IPausable} from "@src/interfaces/IPausable.sol";
 interface IPeriphery is IPausable {
     event AccountOpened(
         uint256 indexed accountId,
-        Role role,
         uint256 expirationTimestamp,
         uint256 shareMintLimit,
         address feeRecipient,
@@ -26,13 +25,17 @@ interface IPeriphery is IPausable {
 
     event BrokerFeeRecipientUpdated(uint256 accountId, address oldRecipient, address newRecipient);
 
-    event AssetEnabled(address asset, AssetPolicy policy);
+    event GlobalAssetPolicyEnabled(address asset, AssetPolicy policy);
+
+    event GlobalAssetPolicyDisabled(address asset);
+
+    event BrokerAssetPolicyEnabled(uint256 accountId, address asset, bool isDeposit);
+
+    event BrokerAssetPolicyDisabled(uint256 accountId, address asset, bool isDeposit);
 
     event AccountPaused(uint256 accountId);
 
     event AccountUnpaused(uint256 accountId);
-
-    event AssetDisabled(address asset);
 
     event AdminUpdated(address oldAdmin, address newAdmin);
 
@@ -126,16 +129,37 @@ interface IPeriphery is IPausable {
     /// @notice Enables an asset for deposits and withdrawals
     /// @param asset The asset to enable
     /// @param policy The deposit/withdrawal policy for the asset
-    function enableAsset(address asset, AssetPolicy memory policy) external;
+    function enableGlobalAssetPolicy(address asset, AssetPolicy memory policy) external;
 
     /// @notice Disables an asset for deposits and withdrawals
     /// @param asset The asset to disable
-    function disableAsset(address asset) external;
+    function disableGlobalAssetPolicy(address asset) external;
 
     /// @notice Gets the deposit/withdrawal policy for an asset
     /// @param asset The asset to get the policy for
     /// @return The asset's policy
-    function getAssetPolicy(address asset) external returns (AssetPolicy memory);
+    function getGlobalAssetPolicy(address asset) external returns (AssetPolicy memory);
+
+    /// @notice Enables an asset for deposits and withdrawals for a specific brokerage account
+    /// @param accountId The ID of the brokerage account
+    /// @param asset The asset to enable
+    /// @param isDeposit Whether the asset is for deposits or withdrawals
+    function enableBrokerAssetPolicy(uint256 accountId, address asset, bool isDeposit) external;
+
+    /// @notice Disables an asset for deposits and withdrawals for a specific brokerage account
+    /// @param accountId The ID of the brokerage account
+    /// @param asset The asset to disable
+    /// @param isDeposit Whether the asset is for deposits or withdrawals
+    function disableBrokerAssetPolicy(uint256 accountId, address asset, bool isDeposit) external;
+
+    /// @notice Checks if an asset is enabled for deposits or withdrawals for a specific brokerage account
+    /// @param accountId The ID of the brokerage account
+    /// @param asset The asset to check
+    /// @param isDeposit Whether the asset is for deposits or withdrawals
+    /// @return Whether the asset is enabled for deposits or withdrawals
+    function isBrokerAssetPolicyEnabled(uint256 accountId, address asset, bool isDeposit)
+        external
+        returns (bool);
 
     /// @notice Increases the nonce for a brokerage account
     /// @param accountId The ID of the account to increase the nonce for

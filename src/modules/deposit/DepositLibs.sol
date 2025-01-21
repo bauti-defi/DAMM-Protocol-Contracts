@@ -5,7 +5,7 @@ pragma solidity ^0.8.0;
 import {Errors} from "@src/libs/Errors.sol";
 import "@openzeppelin-contracts/utils/cryptography/MessageHashUtils.sol";
 import "@openzeppelin-contracts/utils/cryptography/SignatureChecker.sol";
-import {BrokerAccountInfo, Role, AccountState, AssetPolicy} from "./Structs.sol";
+import {BrokerAccountInfo, AccountState, AssetPolicy, Broker} from "./Structs.sol";
 
 library DepositLibs {
     using MessageHashUtils for bytes;
@@ -26,11 +26,21 @@ library DepositLibs {
         if (blockId != block.chainid) revert Errors.Deposit_InvalidChain();
     }
 
-    function validateAccountAssetPolicy(
+    function brokerAssetPolicyPointer(address asset, bool isDeposit)
+        internal
+        pure
+        returns (bytes32)
+    {
+        return keccak256(abi.encode(asset, isDeposit));
+    }
+
+    function validateBrokerAssetPolicy(
+        address asset,
+        Broker storage broker,
         AssetPolicy memory policy,
-        BrokerAccountInfo memory account,
         bool isDeposit
     ) internal view {
+        BrokerAccountInfo memory account = broker.account;
         if (!isActive(account)) revert Errors.Deposit_AccountNotActive();
 
         if (isExpired(account) && isDeposit) {
@@ -44,8 +54,8 @@ library DepositLibs {
             revert Errors.Deposit_AssetUnavailable();
         }
 
-        if (policy.permissioned && !isSuperUser(account)) {
-            revert Errors.Deposit_OnlySuperUser();
+        if (!broker.assetPolicy[brokerAssetPolicyPointer(asset, isDeposit)]) {
+            revert Errors.Deposit_AssetUnavailable();
         }
     }
 
@@ -59,10 +69,6 @@ library DepositLibs {
 
     function canBeClosed(BrokerAccountInfo memory account) internal pure returns (bool) {
         return account.state == AccountState.ACTIVE || account.state == AccountState.PAUSED;
-    }
-
-    function isSuperUser(BrokerAccountInfo memory account) internal pure returns (bool) {
-        return account.role == Role.SUPER_USER;
     }
 
     function isExpired(BrokerAccountInfo memory account) internal view returns (bool) {

@@ -41,11 +41,10 @@ contract TestDepositWithdraw is TestBaseDeposit {
         uint256 depositAmount = params.depositAmount * mock1Unit;
 
         vm.startPrank(address(fund));
-        periphery.openAccount(
+        uint256 accountId = periphery.openAccount(
             CreateAccountParams({
                 transferable: false,
                 user: alice,
-                role: Role.USER,
                 ttl: 100000000,
                 shareMintLimit: type(uint256).max,
                 brokerPerformanceFeeInBps: 0,
@@ -57,6 +56,10 @@ contract TestDepositWithdraw is TestBaseDeposit {
                 feeRecipient: address(0)
             })
         );
+        periphery.enableBrokerAssetPolicy(accountId, address(mockToken1), true);
+        periphery.enableBrokerAssetPolicy(accountId, address(mockToken1), false);
+        periphery.enableBrokerAssetPolicy(accountId, address(mockToken2), true);
+        periphery.enableBrokerAssetPolicy(accountId, address(mockToken2), false);
         vm.stopPrank();
 
         mockToken1.mint(alice, depositAmount);
@@ -152,11 +155,10 @@ contract TestDepositWithdraw is TestBaseDeposit {
         vm.assume(profitAmount.abs() < depositAmount);
 
         vm.startPrank(address(fund));
-        periphery.openAccount(
+        uint256 accountId = periphery.openAccount(
             CreateAccountParams({
                 transferable: false,
                 user: alice,
-                role: Role.USER,
                 ttl: 100000000,
                 shareMintLimit: type(uint256).max,
                 brokerPerformanceFeeInBps: brokerPerformanceFeeInBps,
@@ -168,6 +170,11 @@ contract TestDepositWithdraw is TestBaseDeposit {
                 feeRecipient: address(0)
             })
         );
+
+        periphery.enableBrokerAssetPolicy(accountId, address(mockToken1), true);
+        periphery.enableBrokerAssetPolicy(accountId, address(mockToken1), false);
+        periphery.enableBrokerAssetPolicy(accountId, address(mockToken2), true);
+        periphery.enableBrokerAssetPolicy(accountId, address(mockToken2), false);
         vm.stopPrank();
 
         mockToken1.mint(alice, depositAmount);
@@ -300,11 +307,10 @@ contract TestDepositWithdraw is TestBaseDeposit {
         vm.startPrank(address(fund));
         periphery.setManagementFeeRateInBps(managementFeeRateInBps);
         periphery.setProtocolFeeRecipient(managementFeeRecipient);
-        periphery.openAccount(
+        uint256 accountId = periphery.openAccount(
             CreateAccountParams({
                 transferable: false,
                 user: alice,
-                role: Role.USER,
                 ttl: timeDelta1 + timeDelta2 + 1,
                 shareMintLimit: type(uint256).max,
                 brokerPerformanceFeeInBps: 0,
@@ -316,6 +322,10 @@ contract TestDepositWithdraw is TestBaseDeposit {
                 feeRecipient: address(0)
             })
         );
+        periphery.enableBrokerAssetPolicy(accountId, address(mockToken1), true);
+        periphery.enableBrokerAssetPolicy(accountId, address(mockToken1), false);
+        periphery.enableBrokerAssetPolicy(accountId, address(mockToken2), true);
+        periphery.enableBrokerAssetPolicy(accountId, address(mockToken2), false);
         vm.stopPrank();
 
         mockToken1.mint(alice, 50 ether);

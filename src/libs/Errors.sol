@@ -127,8 +127,6 @@ library Errors {
     error Deposit_InvalidProtocolFeeRecipient();
     /// @notice Thrown when a management fee rate is invalid
     error Deposit_InvalidManagementFeeRate();
-    /// @notice Thrown when a role parameter is invalid
-    error Deposit_InvalidRole();
     /// @notice Thrown when a time-to-live parameter is invalid
     error Deposit_InvalidTTL();
     /// @notice Thrown when a share mint limit parameter is invalid
