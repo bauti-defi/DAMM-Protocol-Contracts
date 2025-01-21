@@ -64,8 +64,6 @@ contract Periphery is ERC721, ReentrancyGuard, Pausable, IPeriphery {
 
     /// @dev Maps assets to their deposit/withdrawal policies
     mapping(address asset => AssetPolicy policy) private assetPolicy;
-    /// @dev Maps token IDs to their brokerage account information
-    // mapping(uint256 tokenId => BrokerAccountInfo account) private accountInfo;
 
     /// @dev Maps token IDs to their brokerage account information
     mapping(uint256 tokenId => Broker broker) private brokers;
