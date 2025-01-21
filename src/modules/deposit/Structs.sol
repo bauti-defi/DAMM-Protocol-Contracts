@@ -48,13 +48,6 @@ struct SignedWithdrawIntent {
     bytes signature;
 }
 
-enum Role {
-    NONE,
-    /// default
-    USER,
-    SUPER_USER
-}
-
 enum AccountState {
     NULL,
     ACTIVE,
@@ -67,12 +60,10 @@ struct AssetPolicy {
     uint256 minimumWithdrawal;
     bool canDeposit;
     bool canWithdraw;
-    bool permissioned;
     bool enabled;
 }
 
 struct BrokerAccountInfo {
-    Role role;
     bool transferable;
     AccountState state;
     address feeRecipient;
@@ -90,6 +81,11 @@ struct BrokerAccountInfo {
     uint256 nonce;
 }
 
+struct Broker {
+    BrokerAccountInfo account;
+    mapping(bytes32 pointer => bool allowed) assetPolicy;
+}
+
 struct CreateAccountParams {
     uint256 ttl;
     uint256 shareMintLimit;
@@ -102,5 +98,4 @@ struct CreateAccountParams {
     address feeRecipient;
     address user;
     bool transferable;
-    Role role;
 }

@@ -27,36 +27,112 @@ contract TestDepositPermissions is TestBaseDeposit {
         mockToken1.mint(alice, 100_000_000 * mock1Unit);
     }
 
-    modifier whitelistUser(address user_, uint256 ttl_, Role role_, bool transferable_) {
-        _whitelistUser(user_, ttl_, role_, transferable_);
+    function test_only_fund_can_enable_broker_asset_policy(address attacker)
+        public
+        openAccount(alice, 10000, false)
+    {
+        vm.assume(attacker != address(fund));
 
-        _;
+        vm.prank(attacker);
+        vm.expectRevert(Errors.OnlyFund.selector);
+        periphery.enableBrokerAssetPolicy(1, address(mockToken1), true);
+
+        vm.prank(attacker);
+        vm.expectRevert(Errors.OnlyFund.selector);
+        periphery.enableBrokerAssetPolicy(1, address(mockToken1), false);
+
+        assertFalse(periphery.isBrokerAssetPolicyEnabled(1, address(mockToken1), true));
+        assertFalse(periphery.isBrokerAssetPolicyEnabled(1, address(mockToken1), false));
+
+        vm.startPrank(address(fund));
+        periphery.enableBrokerAssetPolicy(1, address(mockToken1), true);
+        periphery.enableBrokerAssetPolicy(1, address(mockToken1), false);
+        vm.stopPrank();
+
+        assertTrue(periphery.isBrokerAssetPolicyEnabled(1, address(mockToken1), true));
+        assertTrue(periphery.isBrokerAssetPolicyEnabled(1, address(mockToken1), false));
     }
 
-    function _whitelistUser(address user_, uint256 ttl_, Role role_, bool transferable_) internal {
-        vm.startPrank(address(fund));
-        periphery.openAccount(
-            CreateAccountParams({
-                transferable: transferable_,
-                user: user_,
-                role: role_,
-                ttl: ttl_,
-                shareMintLimit: type(uint256).max,
-                brokerPerformanceFeeInBps: 0,
-                protocolPerformanceFeeInBps: 0,
-                brokerEntranceFeeInBps: 0,
-                protocolEntranceFeeInBps: 0,
-                brokerExitFeeInBps: 0,
-                protocolExitFeeInBps: 0,
-                feeRecipient: address(0)
-            })
+    function test_broker_can_only_deposit_withdraw_intent_enabled_assets()
+        public
+        openAccount(alice, 10000, false)
+        approveAllPeriphery(alice)
+    {
+        SignedDepositIntent memory dOrder = depositIntent(
+            1,
+            alice,
+            alicePK,
+            address(mockToken1),
+            type(uint256).max,
+            0,
+            0,
+            periphery.getAccountNonce(1)
         );
-        vm.stopPrank();
+
+        vm.prank(relayer);
+        vm.expectRevert(Errors.Deposit_AssetUnavailable.selector);
+        periphery.intentDeposit(dOrder);
+
+        _enableBrokerAssetPolicy(address(fund), 1, address(mockToken1), true);
+
+        vm.prank(relayer);
+        periphery.intentDeposit(dOrder);
+
+        SignedWithdrawIntent memory wOrder = signedWithdrawIntent(
+            1,
+            alice,
+            alicePK,
+            address(mockToken1),
+            type(uint256).max,
+            0,
+            0,
+            periphery.getAccountNonce(1)
+        );
+
+        vm.prank(relayer);
+        vm.expectRevert(Errors.Deposit_AssetUnavailable.selector);
+        periphery.intentWithdraw(wOrder);
+
+        _enableBrokerAssetPolicy(address(fund), 1, address(mockToken1), false);
+
+        vm.prank(relayer);
+        periphery.intentWithdraw(wOrder);
+    }
+
+    function test_broker_can_only_deposit_withdraw_enabled_assets()
+        public
+        openAccount(alice, 10000, false)
+        approveAllPeriphery(alice)
+    {
+        DepositOrder memory dOrder = depositOrder(1, alice, address(mockToken1), type(uint256).max);
+
+        vm.prank(alice);
+        vm.expectRevert(Errors.Deposit_AssetUnavailable.selector);
+        periphery.deposit(dOrder);
+
+        _enableBrokerAssetPolicy(address(fund), 1, address(mockToken1), true);
+
+        vm.prank(alice);
+        periphery.deposit(dOrder);
+
+        WithdrawOrder memory wOrder =
+            withdrawOrder(1, alice, address(mockToken1), type(uint256).max);
+
+        vm.prank(alice);
+        vm.expectRevert(Errors.Deposit_AssetUnavailable.selector);
+        periphery.withdraw(wOrder);
+
+        _enableBrokerAssetPolicy(address(fund), 1, address(mockToken1), false);
+
+        vm.prank(alice);
+        periphery.withdraw(wOrder);
     }
 
     function test_only_account_signature_is_valid()
         public
-        whitelistUser(alice, 10000, Role.USER, false)
+        openAccount(alice, 10000, false)
+        enableBrokerAssetPolicy(address(fund), 1, address(mockToken1), true)
+        enableBrokerAssetPolicy(address(fund), 1, address(mockToken1), false)
     {
         SignedDepositIntent memory dOrder = signdepositIntent(
             unsignedDepositIntent(1, alice, address(mockToken1), mock1Unit, 0, 0, 0), uint256(123)
@@ -93,7 +169,9 @@ contract TestDepositPermissions is TestBaseDeposit {
 
     function test_net_deposit_limit_cannot_be_exceeded(uint256 limit_)
         public
-        whitelistUser(alice, 10000, Role.USER, false)
+        openAccount(alice, 10000, false)
+        enableBrokerAssetPolicy(address(fund), 1, address(mockToken1), true)
+        enableBrokerAssetPolicy(address(fund), 1, address(mockToken1), false)
         approveAllPeriphery(alice)
     {
         vm.assume(limit_ > 0);
@@ -131,10 +209,15 @@ contract TestDepositPermissions is TestBaseDeposit {
 
     function test_only_active_account_can_deposit_withdraw()
         public
-        whitelistUser(alice, 100000, Role.USER, false)
+        openAccount(alice, 100000, false)
     {
-        vm.prank(address(fund));
-        periphery.pauseAccount(1);
+        {
+            _enableBrokerAssetPolicy(address(fund), 1, address(mockToken1), true);
+            _enableBrokerAssetPolicy(address(fund), 1, address(mockToken1), false);
+
+            vm.prank(address(fund));
+            periphery.pauseAccount(1);
+        }
 
         SignedDepositIntent memory dOrder =
             depositIntent(1, alice, alicePK, address(mockToken1), mock1Unit, 0, 0, 0);
@@ -153,9 +236,12 @@ contract TestDepositPermissions is TestBaseDeposit {
 
     function test_order_must_have_valid_nonce(uint256 nonce_)
         public
-        whitelistUser(alice, 1000000, Role.USER, false)
+        openAccount(alice, 1000000, false)
     {
         vm.assume(nonce_ > 1);
+
+        _enableBrokerAssetPolicy(address(fund), 1, address(mockToken1), true);
+        _enableBrokerAssetPolicy(address(fund), 1, address(mockToken1), false);
 
         SignedDepositIntent memory dOrder =
             depositIntent(1, alice, alicePK, address(mockToken1), mock1Unit, 0, 0, nonce_);
@@ -174,7 +260,9 @@ contract TestDepositPermissions is TestBaseDeposit {
 
     function test_order_must_be_within_deadline(uint256 timestamp_)
         public
-        whitelistUser(alice, 100000000 * 2, Role.USER, false)
+        openAccount(alice, 100000000 * 2, false)
+        enableBrokerAssetPolicy(address(fund), 1, address(mockToken1), true)
+        enableBrokerAssetPolicy(address(fund), 1, address(mockToken1), false)
     {
         vm.assume(timestamp_ > 10000);
         vm.assume(timestamp_ < 100000000 * 2);
@@ -205,7 +293,9 @@ contract TestDepositPermissions is TestBaseDeposit {
 
     function test_order_chain_id_must_match(uint256 chainId_)
         public
-        whitelistUser(alice, 1000000, Role.USER, false)
+        openAccount(alice, 1000000, false)
+        enableBrokerAssetPolicy(address(fund), 1, address(mockToken1), true)
+        enableBrokerAssetPolicy(address(fund), 1, address(mockToken1), false)
     {
         vm.assume(chainId_ != block.chainid);
 
@@ -232,71 +322,18 @@ contract TestDepositPermissions is TestBaseDeposit {
         periphery.intentWithdraw(wOrder);
     }
 
-    function test_only_super_user_can_deposit_or_withdraw_permissioned_asset()
-        public
-        whitelistUser(alice, 1000000 * 2, Role.USER, false)
-        whitelistUser(bob, 1000000 * 2, Role.SUPER_USER, false)
-    {
-        /// override asset policy to make it permissioned
-        vm.prank(address(fund));
-        periphery.enableAsset(
-            address(mockToken2),
-            AssetPolicy({
-                minimumDeposit: 1000,
-                minimumWithdrawal: 1000,
-                canDeposit: true,
-                canWithdraw: true,
-                permissioned: true,
-                enabled: true
-            })
-        );
-
-        mockToken2.mint(bob, 100_000_000 * mock2Unit);
-        mockToken2.mint(alice, 100_000_000 * mock2Unit);
-
-        vm.startPrank(alice);
-        mockToken2.approve(address(periphery), type(uint256).max);
-        periphery.internalVault().approve(address(periphery), type(uint256).max);
-        vm.stopPrank();
-
-        vm.startPrank(bob);
-        mockToken2.approve(address(periphery), type(uint256).max);
-        periphery.internalVault().approve(address(periphery), type(uint256).max);
-        vm.stopPrank();
-
-        SignedDepositIntent memory dOrder =
-            depositIntent(1, alice, alicePK, address(mockToken2), 1 * mock2Unit, 0, 0, 0);
-
-        vm.prank(relayer);
-        vm.expectRevert(Errors.Deposit_OnlySuperUser.selector);
-        periphery.intentDeposit(dOrder);
-
-        dOrder = depositIntent(2, bob, bobPK, address(mockToken2), 10 * mock2Unit, 0, 0, 0);
-
-        vm.prank(relayer);
-        periphery.intentDeposit(dOrder);
-
-        SignedWithdrawIntent memory wOrder =
-            signedWithdrawIntent(2, bob, bobPK, address(mockToken2), type(uint256).max, 0, 0, 1);
-
-        vm.prank(relayer);
-        periphery.intentWithdraw(wOrder);
-
-        wOrder =
-            signedWithdrawIntent(1, alice, alicePK, address(mockToken2), type(uint256).max, 0, 0, 0);
-
-        vm.prank(relayer);
-        vm.expectRevert(Errors.Deposit_OnlySuperUser.selector);
-        periphery.intentWithdraw(wOrder);
-    }
-
     function test_only_non_expired_account_can_deposit(uint256 timestamp)
         public
-        whitelistUser(alice, 1, Role.USER, false)
+        openAccount(alice, 1, false)
+        enableBrokerAssetPolicy(address(fund), 1, address(mockToken1), true)
+        enableBrokerAssetPolicy(address(fund), 1, address(mockToken1), false)
         approveAllPeriphery(alice)
     {
         vm.assume(timestamp > 1);
         vm.assume(timestamp < 100000000 * 2);
+
+        vm.prank(address(fund));
+        periphery.enableBrokerAssetPolicy(1, address(mockToken1), true);
 
         vm.warp(timestamp);
 
@@ -310,7 +347,9 @@ contract TestDepositPermissions is TestBaseDeposit {
 
     function test_expired_account_can_withdraw()
         public
-        whitelistUser(alice, 1000, Role.USER, false)
+        openAccount(alice, 1000, false)
+        enableBrokerAssetPolicy(address(fund), 1, address(mockToken1), true)
+        enableBrokerAssetPolicy(address(fund), 1, address(mockToken1), false)
         approveAllPeriphery(alice)
     {
         SignedDepositIntent memory dOrder =
@@ -337,7 +376,7 @@ contract TestDepositPermissions is TestBaseDeposit {
 
     function test_only_allowed_assets_can_be_deposited_or_withdrawn(address asset)
         public
-        whitelistUser(alice, 1000000, Role.USER, false)
+        openAccount(alice, 1000000, false)
     {
         vm.assume(asset != address(mockToken1));
         vm.assume(asset != address(mockToken2));
@@ -359,7 +398,7 @@ contract TestDepositPermissions is TestBaseDeposit {
 
     function test_only_admin_can_pause_unpause_account(address attacker)
         public
-        whitelistUser(alice, 1000000, Role.USER, false)
+        openAccount(alice, 1000000, false)
     {
         vm.assume(attacker != address(fund));
 
@@ -384,7 +423,7 @@ contract TestDepositPermissions is TestBaseDeposit {
 
     function test_only_admin_can_close_account(address attacker)
         public
-        whitelistUser(alice, 1000000, Role.USER, false)
+        openAccount(alice, 1000000, false)
     {
         vm.assume(attacker != address(fund));
 
@@ -442,7 +481,7 @@ contract TestDepositPermissions is TestBaseDeposit {
 
     function test_cannot_transfer_souldbound_broker_account(address attacker)
         public
-        whitelistUser(alice, 1000000, Role.USER, false)
+        openAccount(alice, 1000000, false)
     {
         vm.prank(attacker);
         vm.expectRevert(Errors.Deposit_AccountNotTransferable.selector);
@@ -463,7 +502,7 @@ contract TestDepositPermissions is TestBaseDeposit {
 
     function test_can_transfer_non_soulbound_broker_account()
         public
-        whitelistUser(alice, 2 days, Role.USER, true)
+        openAccount(alice, 2 days, true)
     {
         address receiver = makeAddr("receiver");
 
@@ -539,7 +578,7 @@ contract TestDepositPermissions is TestBaseDeposit {
         vm.assume(attacker != broker);
         vm.assume(newRecipient != address(0));
 
-        _whitelistUser(broker, 2 days, Role.USER, false);
+        _openAccount(broker, 2 days, false);
 
         vm.prank(attacker);
         vm.expectRevert(Errors.Deposit_AccountDoesNotExist.selector);
