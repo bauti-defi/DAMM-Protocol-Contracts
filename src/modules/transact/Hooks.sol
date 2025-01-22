@@ -7,13 +7,23 @@ import {IBeforeTransaction, IAfterTransaction} from "@src/interfaces/ITransactio
 import "@src/libs/Errors.sol";
 import "./Structs.sol";
 
+/// @title Hook Library
+/// @notice Helper functions for validating and managing transaction hooks
+/// @dev Used by HookRegistry to validate hook configurations and generate unique identifiers
 library HookLib {
     using ERC165Checker for address;
 
+    /// @notice Generates a unique identifier for a hook configuration
+    /// @param config The hook configuration to generate a pointer for
+    /// @return The unique identifier as bytes32
     function pointer(HookConfig memory config) internal pure returns (bytes32) {
         return hookPointer(config.operator, config.target, config.operation, config.targetSelector);
     }
 
+    /// @notice Validates a hook configuration
+    /// @dev Checks operator, target, hooks, and operation validity
+    /// @param config The hook configuration to validate
+    /// @param fund The fund contract address
     function checkConfigIsValid(HookConfig memory config, address fund) internal view {
         /// basic operator sanity checks
         if (
@@ -50,6 +60,13 @@ library HookLib {
         }
     }
 
+    /// @notice Generates a unique identifier for hook route parameters
+    /// @dev Encodes parameters into a bytes32 identifier using keccak256
+    /// @param operator The address allowed to execute this route
+    /// @param target The target contract address
+    /// @param operation The transaction type (0=call, 1=delegatecall)
+    /// @param selector The function selector for this route
+    /// @return The unique identifier as bytes32
     function hookPointer(address operator, address target, uint8 operation, bytes4 selector)
         internal
         pure

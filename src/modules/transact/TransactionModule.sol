@@ -14,18 +14,25 @@ import {SafeLib} from "@src/libs/SafeLib.sol";
 import {IFund} from "@src/interfaces/IFund.sol";
 import {Pausable} from "@src/core/Pausable.sol";
 
+/// @title Transaction Module
+/// @notice A Safe module that executes transactions with hook-based validation
+/// @dev Supports multicall execution with before/after hooks and gas refunds
 contract TransactionModule is ReentrancyGuard, Pausable, ITransactionModule {
     using SafeLib for ISafe;
 
+    /// @inheritdoc ITransactionModule
     address public immutable fund;
+    /// @inheritdoc ITransactionModule
     IHookRegistry public immutable hookRegistry;
 
+    /// @notice Ensures caller is the fund contract
     modifier onlyFund() {
         if (msg.sender != fund) revert Errors.OnlyFund();
         _;
     }
 
-    /// TODO: calculate the gas overhead of the refunding logic so we can refund the correct amount of gas
+    /// @notice Refunds gas costs to the transaction caller
+    /// @dev Refund will not be exact but approximates actual gas used
     modifier refundGasToCaller() {
         uint256 gasAtStart = gasleft();
 
@@ -41,23 +48,15 @@ contract TransactionModule is ReentrancyGuard, Pausable, ITransactionModule {
         }
     }
 
+    /// @notice Creates a new transaction module
+    /// @param owner The fund contract address
+    /// @param _hookRegistry The hook registry contract address
     constructor(address owner, address _hookRegistry) Pausable(owner) {
         fund = owner;
         hookRegistry = IHookRegistry(_hookRegistry);
     }
 
-    /**
-     * @dev Sends multiple transactions and reverts all if one fails.
-     * @param transactions Encoded transactions. Each transaction is encoded as a packed bytes of
-     *                     operation as a uint8 with 0 for a call or 1 for a delegatecall (=> 1 byte),
-     *                     to as a address (=> 20 bytes),
-     *                     value as a uint256 (=> 32 bytes),
-     *                     data length as a uint256 (=> 32 bytes),
-     *                     data as bytes.
-     *                     see abi.encodePacked for more information on packed encoding
-     * @notice This method is payable as delegatecalls keep the msg.value from the previous call
-     *         If the calling method (e.g. execTransaction) received ETH this would revert otherwise
-     */
+    /// @inheritdoc ITransactionModule
     function execute(Transaction[] calldata transactions)
         external
         nonReentrant
