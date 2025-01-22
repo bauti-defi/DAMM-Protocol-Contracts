@@ -3,38 +3,47 @@
 pragma solidity ^0.8.0;
 
 import "./DepositModule.sol";
+import {IWhitelistDepositModule} from "@src/interfaces/IWhitelistDepositModule.sol";
 
-event UserAddedToWhitelist(address user_);
-
-event UserRemovedFromWhitelist(address user_);
-
-/// @dev A module that when added to a gnosis safe, allows for any whitelisted user to deposit into the fund
-/// the gnosis safe must have a valid broker account (nft) with the periphery to be able to deposit
-/// on behalf of the caller.
-contract WhitelistDepositModule is DepositModule {
+/// @title Whitelist Deposit Module Interface
+/// @notice A Gnosis Safe module that restricts deposits/withdrawals to whitelisted users
+/// @dev Extends DepositModule to add whitelist functionality
+///      Only whitelisted users can deposit/withdraw through this module
+///      The safe must have a valid broker account (nft) from the periphery
+contract WhitelistDepositModule is DepositModule, IWhitelistDepositModule {
+    /// @inheritdoc IWhitelistDepositModule
     mapping(address user => bool allowed) public userWhitelist;
 
+    /// @notice Creates a new whitelist deposit module
+    /// @param fund_ The fund contract address
+    /// @param safe_ The Gnosis Safe address
+    /// @param periphery_ The periphery contract address
     constructor(address fund_, address safe_, address periphery_)
         DepositModule(fund_, safe_, periphery_)
     {}
 
+    /// @notice Ensures caller is whitelisted
+    /// @param user_ The user address to check
     modifier onlyWhitelisted(address user_) {
         if (!userWhitelist[user_]) revert Errors.OnlyWhitelisted();
         _;
     }
 
+    /// @inheritdoc IWhitelistDepositModule
     function addUserToWhitelist(address user_) external onlyAdmin {
         userWhitelist[user_] = true;
 
         emit UserAddedToWhitelist(user_);
     }
 
+    /// @inheritdoc IWhitelistDepositModule
     function removeUserFromWhitelist(address user_) external onlyAdmin {
         userWhitelist[user_] = false;
 
         emit UserRemovedFromWhitelist(user_);
     }
 
+    /// @inheritdoc IDepositModule
     function deposit(DepositOrder calldata order)
         external
         onlyWhitelisted(msg.sender)
@@ -43,6 +52,7 @@ contract WhitelistDepositModule is DepositModule {
         sharesOut = _deposit(order);
     }
 
+    /// @inheritdoc IDepositModule
     function intentDeposit(SignedDepositIntent calldata order)
         external
         onlyWhitelisted(order.intent.deposit.recipient)
@@ -51,6 +61,7 @@ contract WhitelistDepositModule is DepositModule {
         sharesOut = _intentDeposit(order);
     }
 
+    /// @inheritdoc IDepositModule
     function withdraw(WithdrawOrder calldata order)
         external
         onlyWhitelisted(msg.sender)
@@ -59,6 +70,7 @@ contract WhitelistDepositModule is DepositModule {
         assetAmountOut = _withdraw(order);
     }
 
+    /// @inheritdoc IDepositModule
     function intentWithdraw(SignedWithdrawIntent calldata order)
         external
         onlyWhitelisted(order.intent.withdraw.to)

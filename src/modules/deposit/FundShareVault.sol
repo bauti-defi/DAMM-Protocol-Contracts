@@ -4,9 +4,17 @@ pragma solidity ^0.8.0;
 import "@openzeppelin-contracts/token/ERC20/extensions/ERC4626.sol";
 import "@src/libs/Errors.sol";
 
+/// @title Fund Share Vault
+/// @notice An ERC4626 vault that tokenizes shares in the fund
+/// @dev All operations are restricted to the periphery contract to ensure proper accounting
 contract FundShareVault is ERC4626 {
+    /// @notice The periphery contract address that has exclusive operation rights
     address internal immutable periphery;
 
+    /// @notice Creates a new Fund Share Vault
+    /// @param _unitOfAccount The underlying unit of account token
+    /// @param _name The name of the vault shares token
+    /// @param _symbol The symbol of the vault shares token
     constructor(address _unitOfAccount, string memory _name, string memory _symbol)
         ERC4626(IERC20(_unitOfAccount))
         ERC20(_name, _symbol)
@@ -14,11 +22,18 @@ contract FundShareVault is ERC4626 {
         periphery = msg.sender;
     }
 
+    /// @notice Ensures only the periphery contract can call the modified function
+    /// @dev Used to restrict all vault operations
     modifier onlyPeriphery() {
         if (msg.sender != address(periphery)) revert Errors.Deposit_OnlyPeriphery();
         _;
     }
 
+    /// @notice Deposits assets into the vault
+    /// @dev Can only be called by the periphery contract
+    /// @param assets Amount of assets to deposit
+    /// @param receiver Address to receive the minted shares
+    /// @return shares Amount of shares minted
     function deposit(uint256 assets, address receiver)
         public
         override
@@ -28,6 +43,11 @@ contract FundShareVault is ERC4626 {
         shares = super.deposit(assets, receiver);
     }
 
+    /// @notice Mints shares from the vault
+    /// @dev Can only be called by the periphery contract
+    /// @param shares Amount of shares to mint
+    /// @param receiver Address to receive the minted shares
+    /// @return assets Amount of assets deposited
     function mint(uint256 shares, address receiver)
         public
         override
@@ -37,6 +57,12 @@ contract FundShareVault is ERC4626 {
         assets = super.mint(shares, receiver);
     }
 
+    /// @notice Redeems shares from the vault
+    /// @dev Can only be called by the periphery contract
+    /// @param shares Amount of shares to redeem
+    /// @param receiver Address to receive the assets
+    /// @param owner Address that owns the shares
+    /// @return assets Amount of assets withdrawn
     function redeem(uint256 shares, address receiver, address owner)
         public
         override
@@ -46,6 +72,12 @@ contract FundShareVault is ERC4626 {
         assets = super.redeem(shares, receiver, owner);
     }
 
+    /// @notice Withdraws assets from the vault
+    /// @dev Can only be called by the periphery contract
+    /// @param assets Amount of assets to withdraw
+    /// @param receiver Address to receive the assets
+    /// @param owner Address that owns the shares
+    /// @return shares Amount of shares burned
     function withdraw(uint256 assets, address receiver, address owner)
         public
         override
@@ -55,10 +87,17 @@ contract FundShareVault is ERC4626 {
         shares = super.withdraw(assets, receiver, owner);
     }
 
+    /// @notice Mints shares without requiring a deposit of underlying assets
+    /// @dev Used for fee distributions and other share dilution events
+    /// @param shares Amount of shares to mint
+    /// @param receiver Address to receive the shares
     function mintUnbacked(uint256 shares, address receiver) public onlyPeriphery {
         _mint(receiver, shares);
     }
 
+    /// @notice Returns the decimal offset used to mitigate share inflation attacks
+    /// @dev Overrides the ERC4626 _decimalsOffset function
+    /// @return offset The decimal offset (1)
     function _decimalsOffset() internal pure override returns (uint8) {
         return 1;
     }
