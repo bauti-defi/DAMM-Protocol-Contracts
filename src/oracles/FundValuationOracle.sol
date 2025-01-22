@@ -10,18 +10,31 @@ import {NATIVE_ASSET} from "@src/libs/constants.sol";
 import "@src/libs/Errors.sol";
 import {IMotherFund} from "@src/interfaces/IMotherFund.sol";
 
+/// @title Fund Valuation Oracle
+/// @notice Oracle for calculating the total value of a fund's assets
+/// @dev Aggregates values from child funds and direct asset holdings
 contract FundValuationOracle is BaseAdapter {
+    /// @inheritdoc BaseAdapter
     string public constant override name = "FundValuationOracle";
 
-    /// @dev should be a Euler Oracle Router
+    /// @notice The Euler Oracle Router used for price lookups
+    /// @dev Should be a Euler Oracle Router
     IPriceOracle public immutable oracleRouter;
 
+    /// @notice Creates a new fund valuation oracle
+    /// @param _oracleRouter Address of the Euler Oracle Router
     constructor(address _oracleRouter) {
         oracleRouter = IPriceOracle(_oracleRouter);
     }
 
+    /// @notice Calculates the total value of a fund in terms of the quote asset
     /// @notice amount is ignored for valuation of fund
-    function _getQuote(uint256, address base, address quote)
+    /// @dev Aggregates values from child funds and direct asset holdings
+    /// @param amount Ignored for fund valuation
+    /// @param base Address of the fund to valuate
+    /// @param quote Address of the quote asset
+    /// @return total The total value in terms of the quote asset
+    function _getQuote(uint256 amount, address base, address quote)
         internal
         view
         virtual
