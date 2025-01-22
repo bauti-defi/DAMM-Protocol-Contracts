@@ -14,7 +14,7 @@ import {IMotherFund} from "@src/interfaces/IMotherFund.sol";
 /// @notice Oracle for calculating the total value of a fund's assets
 /// @dev Aggregates values from child funds and direct asset holdings
 contract FundValuationOracle is BaseAdapter {
-    /// @inheritdoc BaseAdapter
+    
     string public constant override name = "FundValuationOracle";
 
     /// @notice The Euler Oracle Router used for price lookups
