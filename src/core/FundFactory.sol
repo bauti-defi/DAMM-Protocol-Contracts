@@ -44,7 +44,7 @@ contract FundFactory is IFundFactory {
     }
 
     /// @inheritdoc IFundFactory
-    function convertSafeToFund() external lock isDelegateCall {
+    function convertSafeToFund() external isDelegateCall {
         /// instantiate fresh callback handler for each fund
         FundCallbackHandler handler = new FundCallbackHandler(address(this));
         /// set the fallback handler on the fund
