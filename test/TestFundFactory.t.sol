@@ -13,6 +13,23 @@ interface ISafeProxyFactory {
         returns (address);
 }
 
+contract TestFallbackHandler {
+    bool public called;
+
+    function targetFunction() external returns (bool) {
+        called = true;
+        return true;
+    }
+
+    function reset() external {
+        called = false;
+    }
+}
+
+// keccak256("fallback_manager.handler.address")
+bytes32 constant FALLBACK_HANDLER_STORAGE_SLOT =
+    0x6c9a6c4a39284e37ed1cf53d337577d14212a4870fb976a4366c693b939918d5;
+
 contract TestFundFactory is TestBaseGnosis {
     FundFactory internal fundFactory;
 
@@ -41,6 +58,8 @@ contract TestFundFactory is TestBaseGnosis {
     }
 
     function test_convert_safe_to_fund() public {
+        address mockFallbackHandler = makeAddr("MockFallbackHandler");
+
         address[] memory admins = new address[](1);
         admins[0] = address(this);
 
@@ -51,7 +70,7 @@ contract TestFundFactory is TestBaseGnosis {
             1,
             address(0),
             "",
-            address(0),
+            mockFallbackHandler,
             address(0),
             0,
             payable(address(0))
@@ -67,6 +86,13 @@ contract TestFundFactory is TestBaseGnosis {
         assertTrue(safe.isOwner(address(this)), "This should be owner");
         assertEq(safe.getThreshold(), 1, "Threshold should be 1");
         assertEq(safe.nonce(), 0, "Nonce should be 0");
+
+        bytes32 slot = vm.load(address(safe), FALLBACK_HANDLER_STORAGE_SLOT);
+        assertEq(
+            slot,
+            bytes32(uint256(uint160(address(mockFallbackHandler)))),
+            "Fallback handler should be safe"
+        );
 
         address module = makeAddr("Module");
 
@@ -87,6 +113,13 @@ contract TestFundFactory is TestBaseGnosis {
         assertTrue(fund.isOwner(address(this)), "This should be owner");
         assertEq(fund.getThreshold(), 1, "Threshold should be 1");
         assertEq(fund.nonce(), 0, "Nonce should be 0");
+
+        slot = vm.load(address(safe), FALLBACK_HANDLER_STORAGE_SLOT);
+        assertNotEq(
+            slot,
+            bytes32(uint256(uint160(address(mockFallbackHandler)))),
+            "Fallback handler should not be safe"
+        );
 
         assertEq(fund.getChildFunds().length, 0, "Child funds should be 0");
         assertEq(
