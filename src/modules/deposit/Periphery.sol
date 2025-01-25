@@ -720,9 +720,6 @@ contract Periphery is ERC721, ReentrancyGuard, Pausable, IPeriphery {
         notPaused
         onlyFund
     {
-        if (!fund.isAssetToValuate(asset_)) {
-            revert Errors.Deposit_AssetNotSupported();
-        }
         if (!policy_.enabled) {
             revert Errors.Deposit_InvalidAssetPolicy();
         }
@@ -914,10 +911,5 @@ contract Periphery is ERC721, ReentrancyGuard, Pausable, IPeriphery {
     /// @inheritdoc IPeriphery
     function peekNextTokenId() public view returns (uint256) {
         return tokenId + 1;
-    }
-
-    /// @inheritdoc IPeriphery
-    function fundIsOpen() external view returns (bool) {
-        return !fund.hasOpenPositions();
     }
 }

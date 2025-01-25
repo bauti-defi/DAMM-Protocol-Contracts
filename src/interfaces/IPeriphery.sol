@@ -182,7 +182,4 @@ interface IPeriphery is IPausable {
 
     /// @notice The current nonce for a brokerage account
     function getAccountNonce(uint256 accountId) external returns (uint256);
-
-    /// @notice Whether the fund has any open positions
-    function fundIsOpen() external returns (bool);
 }
