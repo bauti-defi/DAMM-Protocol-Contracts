@@ -44,10 +44,6 @@ contract FundCallbackHandler is
     /// @dev Uses bytes32 for flexible position identification across different protocols
     EnumerableSet.Bytes32Set private openPositions;
 
-    /// @notice Set of assets that require valuation tracking
-    /// @dev Native asset is represented as 0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF
-    EnumerableSet.AddressSet private assetsToValuate;
-
     /// @notice Set of child fund addresses managed by this fund
     EnumerableSet.AddressSet private childFunds;
 
@@ -207,32 +203,5 @@ contract FundCallbackHandler is
     /// @inheritdoc IPortfolio
     function getFundLiquidationTimeSeries() external view override returns (uint256[] memory) {
         return fundLiquidationTimeSeries;
-    }
-
-    /// @inheritdoc IPortfolio
-    function setAssetToValuate(address _asset) external override onlyFund returns (bool result) {
-        result = assetsToValuate.add(_asset);
-        if (result) emit AssetOfInterestSet(_asset);
-    }
-
-    /// @inheritdoc IPortfolio
-    function removeAssetToValuate(address _asset)
-        external
-        override
-        onlyFund
-        returns (bool result)
-    {
-        result = assetsToValuate.remove(_asset);
-        if (result) emit AssetToValuateRemoved(_asset);
-    }
-
-    /// @inheritdoc IPortfolio
-    function isAssetToValuate(address asset) external view override returns (bool) {
-        return assetsToValuate.contains(asset);
-    }
-
-    /// @inheritdoc IPortfolio
-    function getAssetsToValuate() external view override returns (address[] memory) {
-        return assetsToValuate.values();
     }
 }

@@ -114,7 +114,7 @@ abstract contract TestBaseDeposit is TestBaseFund, TestBaseProtocol {
 
         // lets enable assets on the fund
         vm.startPrank(address(fund));
-        fund.setAssetToValuate(address(mockToken1));
+        // fund.setAssetToValuate(address(mockToken1));
         periphery.enableGlobalAssetPolicy(
             address(mockToken1),
             AssetPolicy({
@@ -126,7 +126,7 @@ abstract contract TestBaseDeposit is TestBaseFund, TestBaseProtocol {
             })
         );
 
-        fund.setAssetToValuate(address(mockToken2));
+        // fund.setAssetToValuate(address(mockToken2));
         periphery.enableGlobalAssetPolicy(
             address(mockToken2),
             AssetPolicy({
@@ -139,7 +139,7 @@ abstract contract TestBaseDeposit is TestBaseFund, TestBaseProtocol {
         );
 
         // native eth
-        fund.setAssetToValuate(NATIVE_ASSET);
+        // fund.setAssetToValuate(NATIVE_ASSET);
         periphery.enableGlobalAssetPolicy(
             NATIVE_ASSET,
             AssetPolicy({
@@ -154,7 +154,12 @@ abstract contract TestBaseDeposit is TestBaseFund, TestBaseProtocol {
 
         address unitOfAccount = address(periphery.unitOfAccount());
 
-        FundValuationOracle valuationOracle = new FundValuationOracle(address(oracleRouter));
+        address[] memory assetsToValuate = new address[](3);
+        assetsToValuate[0] = address(mockToken1);
+        assetsToValuate[1] = address(mockToken2);
+        assetsToValuate[2] = NATIVE_ASSET;  
+
+        FundValuationOracle valuationOracle = new FundValuationOracle(address(oracleRouter), assetsToValuate);
         vm.label(address(valuationOracle), "FundValuationOracle");
         vm.prank(address(fund));
         oracleRouter.govSetConfig(address(fund), unitOfAccount, address(valuationOracle));

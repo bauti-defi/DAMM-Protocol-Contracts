@@ -20,10 +20,20 @@ contract FundValuationOracle is BaseAdapter {
     /// @dev Should be a Euler Oracle Router
     IPriceOracle public immutable oracleRouter;
 
+    address[] private assetsToValuate;
+
+    struct Balance {
+        address asset;
+        address holder;
+    }
+
+    Balance[] private balancesToValuate;
+
     /// @notice Creates a new fund valuation oracle
     /// @param _oracleRouter Address of the Euler Oracle Router
-    constructor(address _oracleRouter) {
+    constructor(address _oracleRouter, address[] memory _assetsToValuate) {
         oracleRouter = IPriceOracle(_oracleRouter);
+        assetsToValuate = _assetsToValuate;
     }
 
     /// @notice Calculates the total value of a fund in terms of the quote asset
@@ -56,7 +66,10 @@ contract FundValuationOracle is BaseAdapter {
             }
         }
 
-        address[] memory assets = fund.getAssetsToValuate();
+        /// so here down should it be it's own oracle?
+        /// that would allow for us to be more flexible
+        /// maybe the liquidation should only matter for this type of oracle?
+        address[] memory assets = assetsToValuate;
         uint256 assetLength = assets.length;
 
         for (uint256 i = 0; i < assetLength;) {
@@ -78,3 +91,5 @@ contract FundValuationOracle is BaseAdapter {
         }
     }
 }
+/// an oracle that just has a list of children so we can call all their individual oracles
+

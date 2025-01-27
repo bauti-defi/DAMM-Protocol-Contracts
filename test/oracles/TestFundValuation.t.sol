@@ -126,19 +126,26 @@ contract TestFundValuation is TestBaseProtocol, TestBaseGnosis, TokenMinter {
         );
 
         // lets enable assets on the fund
-        vm.startPrank(address(fund));
-        IFund(address(fund)).setAssetToValuate(ARB_USDC);
-        IFund(address(fund)).setAssetToValuate(ARB_USDT);
-        IFund(address(fund)).setAssetToValuate(ARB_DAI);
-        IFund(address(fund)).setAssetToValuate(ARB_USDCe);
+        // vm.startPrank(address(fund));
+        // IFund(address(fund)).setAssetToValuate(ARB_USDC);
+        // IFund(address(fund)).setAssetToValuate(ARB_USDT);
+        // IFund(address(fund)).setAssetToValuate(ARB_DAI);
+        // IFund(address(fund)).setAssetToValuate(ARB_USDCe);
 
         // native eth
-        IFund(address(fund)).setAssetToValuate(NATIVE_ASSET);
-        vm.stopPrank();
+        // IFund(address(fund)).setAssetToValuate(NATIVE_ASSET);
+        // vm.stopPrank();
 
         unitOfAccount = address(periphery.unitOfAccount());
 
-        fundValuationOracle = new FundValuationOracle(address(oracleRouter));
+        address[] memory assetsToValuate = new address[](5);
+        assetsToValuate[0] = ARB_USDC;
+        assetsToValuate[1] = ARB_USDT;
+        assetsToValuate[2] = ARB_DAI;
+        assetsToValuate[3] = ARB_USDCe;
+        assetsToValuate[4] = NATIVE_ASSET;
+        
+        fundValuationOracle = new FundValuationOracle(address(oracleRouter), assetsToValuate);
         vm.label(address(fundValuationOracle), "FundValuationOracle");
         vm.prank(address(fund));
         oracleRouter.govSetConfig(address(fund), unitOfAccount, address(fundValuationOracle));

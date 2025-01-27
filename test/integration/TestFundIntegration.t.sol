@@ -277,25 +277,25 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
 
         /// @notice ALL THE INFRA IS DEPLOYED, NOW WE MUST CONFIGURE IT
 
-        vm.startPrank(address(fundAChild1));
-        fundAChild1.setAssetToValuate(ARB_USDC);
-        fundAChild1.setAssetToValuate(ARB_USDT);
-        vm.stopPrank();
+        // vm.startPrank(address(fundAChild1));
+        // fundAChild1.setAssetToValuate(ARB_USDC);
+        // fundAChild1.setAssetToValuate(ARB_USDT);
+        // vm.stopPrank();
 
-        vm.startPrank(address(fundAChild2));
-        fundAChild2.setAssetToValuate(ARB_USDC);
-        fundAChild2.setAssetToValuate(ARB_USDT);
-        vm.stopPrank();
+        // vm.startPrank(address(fundAChild2));
+        // fundAChild2.setAssetToValuate(ARB_USDC);
+        // fundAChild2.setAssetToValuate(ARB_USDT);
+        // vm.stopPrank();
 
-        vm.startPrank(address(fundBChild1));
-        fundBChild1.setAssetToValuate(ARB_USDC);
-        fundBChild1.setAssetToValuate(ARB_USDT);
-        vm.stopPrank();
+        // vm.startPrank(address(fundBChild1));
+        // fundBChild1.setAssetToValuate(ARB_USDC);
+        // fundBChild1.setAssetToValuate(ARB_USDT);
+        // vm.stopPrank();
 
-        vm.startPrank(address(fundBChild2));
-        fundBChild2.setAssetToValuate(ARB_USDC);
-        fundBChild2.setAssetToValuate(ARB_USDT);
-        vm.stopPrank();
+        // vm.startPrank(address(fundBChild2));
+        // fundBChild2.setAssetToValuate(ARB_USDC);
+        // fundBChild2.setAssetToValuate(ARB_USDT);
+        // vm.stopPrank();
 
         // configure the vault connector for Fund A
         // deposit from Fund A to Fund B
@@ -327,11 +327,11 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
         fundA.addChildFund(address(fundAChild1));
         fundA.addChildFund(address(fundAChild2));
 
-        // configure mock tokens as assets of interest for Fund A
-        fundA.setAssetToValuate(ARB_USDT);
-        // we must include the Fund B LP token as an asset of interest
-        fundA.setAssetToValuate(address(peripheryB.internalVault()));
-        fundA.setAssetToValuate(ARB_USDC);
+        // // configure mock tokens as assets of interest for Fund A
+        // fundA.setAssetToValuate(ARB_USDT);
+        // // we must include the Fund B LP token as an asset of interest
+        // fundA.setAssetToValuate(address(peripheryB.internalVault()));
+        // fundA.setAssetToValuate(ARB_USDC);
 
         // also enable assets on the periphery for Fund A
         peripheryA.enableGlobalAssetPolicy(
@@ -517,9 +517,10 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
         fundB.addChildFund(address(fundBChild1));
         fundB.addChildFund(address(fundBChild2));
 
-        // configure mock tokens as assets of interest for Fund B
-        fundB.setAssetToValuate(ARB_USDC);
-        fundB.setAssetToValuate(ARB_USDT);
+        // // configure mock tokens as assets of interest for Fund B
+        // fundB.setAssetToValuate(ARB_USDC);
+        // fundB.setAssetToValuate(ARB_USDT);
+
         // also enable assets on the periphery for Fund B
         peripheryB.enableGlobalAssetPolicy(
             ARB_USDC,
@@ -663,8 +664,13 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
         oracleRouter.govSetConfig(ARB_USDT, unitOfAccountB, address(chainlinkOracle));
         vm.stopPrank();
 
+        address[] memory assetsToValuate = new address[](3);
+        assetsToValuate[0] = ARB_USDC;
+        assetsToValuate[1] = ARB_USDT;
+        assetsToValuate[2] = address(peripheryB.internalVault());
+
         // setup FundValuationOracle for all child funds
-        FundValuationOracle fundOracle = new FundValuationOracle(address(oracleRouter));
+        FundValuationOracle fundOracle = new FundValuationOracle(address(oracleRouter), assetsToValuate);
         vm.label(address(fundOracle), "FundValuationOracle");
         vm.startPrank(protocolAdmin);
         oracleRouter.govSetConfig(address(fundBChild1), unitOfAccountB, address(fundOracle));

@@ -127,39 +127,46 @@ contract TestMotherFundValuation is TestBaseProtocol, TestBaseGnosis, TokenMinte
         );
 
         // lets enable assets on the fundA
-        vm.startPrank(address(fundA));
-        fundA.setAssetToValuate(ARB_USDC);
-        fundA.setAssetToValuate(ARB_USDT);
-        fundA.setAssetToValuate(ARB_DAI);
-        fundA.setAssetToValuate(ARB_USDCe);
+        // vm.startPrank(address(fundA));
+        // fundA.setAssetToValuate(ARB_USDC);
+        // fundA.setAssetToValuate(ARB_USDT);
+        // fundA.setAssetToValuate(ARB_DAI);
+        // fundA.setAssetToValuate(ARB_USDCe);
 
-        // native eth
-        fundA.setAssetToValuate(NATIVE_ASSET);
-        vm.stopPrank();
+        // // native eth
+        // fundA.setAssetToValuate(NATIVE_ASSET);
+        // vm.stopPrank();
 
-        // now lets set fundB as child of fundA
-        vm.prank(address(fundA));
-        fundA.addChildFund(address(fundB));
+        // // now lets set fundB as child of fundA
+        // vm.prank(address(fundA));
+        // fundA.addChildFund(address(fundB));
 
-        // now lets enable assets on the fundB
-        vm.startPrank(address(fundB));
-        fundB.setAssetToValuate(ARB_USDC);
-        fundB.setAssetToValuate(ARB_USDT);
-        fundB.setAssetToValuate(ARB_DAI);
-        fundB.setAssetToValuate(ARB_USDCe);
+        // // now lets enable assets on the fundB
+        // vm.startPrank(address(fundB));
+        // fundB.setAssetToValuate(ARB_USDC);
+        // fundB.setAssetToValuate(ARB_USDT);
+        // fundB.setAssetToValuate(ARB_DAI);
+        // fundB.setAssetToValuate(ARB_USDCe);
 
-        // native eth
-        fundB.setAssetToValuate(NATIVE_ASSET);
-        vm.stopPrank();
+        // // native eth
+        // fundB.setAssetToValuate(NATIVE_ASSET);
+        // vm.stopPrank();
 
         unitOfAccount = address(periphery.unitOfAccount());
 
-        fundAValuationOracle = new FundValuationOracle(address(oracleRouter));
+        address[] memory assetsToValuate = new address[](5);
+        assetsToValuate[0] = ARB_USDC;
+        assetsToValuate[1] = ARB_USDT;
+        assetsToValuate[2] = ARB_DAI;
+        assetsToValuate[3] = ARB_USDCe;
+        assetsToValuate[4] = NATIVE_ASSET;
+
+        fundAValuationOracle = new FundValuationOracle(address(oracleRouter), assetsToValuate);
         vm.label(address(fundAValuationOracle), "FundValuationOracle-FundA");
         vm.prank(protocolAdmin);
         oracleRouter.govSetConfig(address(fundA), unitOfAccount, address(fundAValuationOracle));
 
-        fundBValuationOracle = new FundValuationOracle(address(oracleRouter));
+        fundBValuationOracle = new FundValuationOracle(address(oracleRouter), assetsToValuate);
         vm.label(address(fundBValuationOracle), "FundValuationOracle-FundB");
         vm.prank(protocolAdmin);
         oracleRouter.govSetConfig(address(fundB), unitOfAccount, address(fundBValuationOracle));
