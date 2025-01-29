@@ -21,6 +21,10 @@ import {FundShareVault} from "./FundShareVault.sol";
 import {DepositLibs} from "./DepositLibs.sol";
 import {SafeLib} from "@src/libs/SafeLib.sol";
 
+bytes32 constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
+bytes32 constant FUND_ROLE = keccak256("FUND_ROLE");
+bytes32 constant MINTER_ROLE = keccak256("MINTER_ROLE");
+
 /// @title Periphery
 /// @notice Manages deposits, withdrawals, and brokerage accounts for a Fund
 /// @dev Each Periphery is paired with exactly one Fund and manages ERC721 tokens representing brokerage accounts.
@@ -38,10 +42,6 @@ contract Periphery is ERC721, AccessControl, Pausable, ReentrancyGuard, IPeriphe
     using SafeCast for uint256;
     using SignedMath for int256;
     using FixedPointMathLib for uint256;
-
-    bytes32 constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
-    bytes32 constant FUND_ROLE = keccak256("FUND_ROLE");
-    bytes32 constant MINTER_ROLE = keccak256("MINTER_ROLE");
 
     /// @dev The DAMM fund the periphery is associated with
     address public immutable fund;
@@ -115,6 +115,7 @@ contract Periphery is ERC721, AccessControl, Pausable, ReentrancyGuard, IPeriphe
         _grantRole(FUND_ROLE, fund_);
         _grantRole(PAUSER_ROLE, fund_);
         _grantRole(MINTER_ROLE, minter_);
+        _grantRole(MINTER_ROLE, fund_);
 
         /// @notice infinite approval for the internalVault to manage periphery's balance
         unitOfAccount.approve(address(internalVault), type(uint256).max);
@@ -681,23 +682,6 @@ contract Periphery is ERC721, AccessControl, Pausable, ReentrancyGuard, IPeriphe
 
         emit NetDepositLimitUpdated(previous, limit_);
     }
-
-    // function _setAdmin(address admin_) private {
-    //     if (admin_ == address(0)) {
-    //         revert Errors.Deposit_InvalidAdmin();
-    //     }
-
-    //     address previous = admin;
-
-    //     /// update the admin
-    //     admin = admin_;
-
-    //     emit AdminUpdated(admin_, previous);
-    // }
-
-    // function setAdmin(address admin_) external onlyRole(FUND_ROLE) {
-    //     _setAdmin(admin_);
-    // }
 
     /// @inheritdoc IPeriphery
     function getUnitOfAccountToken() external view returns (address) {
