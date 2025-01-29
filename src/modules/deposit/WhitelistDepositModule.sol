@@ -5,15 +5,15 @@ pragma solidity ^0.8.0;
 import "./DepositModule.sol";
 import "@openzeppelin-contracts/access/AccessControl.sol";
 
+bytes32 constant WHITELIST_ROLE = keccak256("WHITELIST_ROLE");
+bytes32 constant USER_ROLE = keccak256("USER_ROLE");
+
 /// @title Whitelist Deposit Module Interface
 /// @notice A Gnosis Safe module that restricts deposits/withdrawals to whitelisted users
 /// @dev Extends DepositModule to add whitelist functionality
 ///      Only whitelisted users can deposit/withdraw through this module
 ///      The safe must have a valid broker account (nft) from the periphery
 contract WhitelistDepositModule is DepositModule, AccessControl {
-    bytes32 constant FUND_ROLE = keccak256("FUND_ROLE");
-    bytes32 constant USER_ROLE = keccak256("USER_ROLE");
-
     /// @notice Creates a new whitelist deposit module
     /// @param fund_ The fund contract address
     /// @param safe_ The Gnosis Safe address
@@ -22,7 +22,6 @@ contract WhitelistDepositModule is DepositModule, AccessControl {
         DepositModule(fund_, safe_, periphery_)
     {
         _grantRole(DEFAULT_ADMIN_ROLE, fund_);
-        _grantRole(FUND_ROLE, fund_);
     }
 
     modifier onlyWhitelisted(address user_) {
