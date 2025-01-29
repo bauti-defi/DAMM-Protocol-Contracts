@@ -3,16 +3,16 @@
 pragma solidity ^0.8.0;
 
 import "./DepositModule.sol";
-import {IWhitelistDepositModule} from "@src/interfaces/IWhitelistDepositModule.sol";
+import "@openzeppelin-contracts/access/AccessControl.sol";
 
 /// @title Whitelist Deposit Module Interface
 /// @notice A Gnosis Safe module that restricts deposits/withdrawals to whitelisted users
 /// @dev Extends DepositModule to add whitelist functionality
 ///      Only whitelisted users can deposit/withdraw through this module
 ///      The safe must have a valid broker account (nft) from the periphery
-contract WhitelistDepositModule is DepositModule, IWhitelistDepositModule {
-    /// @inheritdoc IWhitelistDepositModule
-    mapping(address user => bool allowed) public userWhitelist;
+contract WhitelistDepositModule is DepositModule, AccessControl {
+    bytes32 constant FUND_ROLE = keccak256("FUND_ROLE");
+    bytes32 constant USER_ROLE = keccak256("USER_ROLE");
 
     /// @notice Creates a new whitelist deposit module
     /// @param fund_ The fund contract address
@@ -20,27 +20,14 @@ contract WhitelistDepositModule is DepositModule, IWhitelistDepositModule {
     /// @param periphery_ The periphery contract address
     constructor(address fund_, address safe_, address periphery_)
         DepositModule(fund_, safe_, periphery_)
-    {}
+    {
+        _grantRole(DEFAULT_ADMIN_ROLE, fund_);
+        _grantRole(FUND_ROLE, fund_);
+    }
 
-    /// @notice Ensures caller is whitelisted
-    /// @param user_ The user address to check
     modifier onlyWhitelisted(address user_) {
-        if (!userWhitelist[user_]) revert Errors.OnlyWhitelisted();
+        _checkRole(USER_ROLE, user_);
         _;
-    }
-
-    /// @inheritdoc IWhitelistDepositModule
-    function addUserToWhitelist(address user_) external onlyAdmin {
-        userWhitelist[user_] = true;
-
-        emit UserAddedToWhitelist(user_);
-    }
-
-    /// @inheritdoc IWhitelistDepositModule
-    function removeUserFromWhitelist(address user_) external onlyAdmin {
-        userWhitelist[user_] = false;
-
-        emit UserRemovedFromWhitelist(user_);
     }
 
     /// @inheritdoc IDepositModule

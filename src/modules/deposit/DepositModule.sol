@@ -18,15 +18,15 @@ import "@solmate/tokens/ERC20.sol";
 import {Enum} from "@safe-contracts/common/Enum.sol";
 import {DepositLibs} from "./DepositLibs.sol";
 import {SafeLib} from "@src/libs/SafeLib.sol";
-import {Pausable} from "@src/core/Pausable.sol";
 import {IDepositModule} from "@src/interfaces/IDepositModule.sol";
+import "@openzeppelin-contracts/utils/Pausable.sol";
 
 /// @title Deposit Module Base Implementation
 /// @notice A Gnosis Safe module that provides deposit and withdrawal functionality
 /// @dev A gnosis safe module that provides deposit and withdraw functionality
 ///      Has a 1-1 relationship with a safe and periphery
 ///      the safe must have a valid broker account (nft) from the periphery
-abstract contract DepositModule is Pausable, IDepositModule {
+abstract contract DepositModule is IDepositModule {
     using DepositLibs for BrokerAccountInfo;
     using SafeLib for ISafe;
     using SafeTransferLib for ERC20;
@@ -44,7 +44,7 @@ abstract contract DepositModule is Pausable, IDepositModule {
     /// @param fund_ The fund contract address
     /// @param safe_ The Gnosis Safe address
     /// @param periphery_ The periphery contract address
-    constructor(address fund_, address safe_, address periphery_) Pausable(fund_) {
+    constructor(address fund_, address safe_, address periphery_) {
         safe = safe_;
         periphery = periphery_;
     }
@@ -59,7 +59,7 @@ abstract contract DepositModule is Pausable, IDepositModule {
     /// @dev Transfers assets from sender and executes deposit through safe
     /// @param order The deposit order parameters
     /// @return sharesOut Amount of shares minted
-    function _deposit(DepositOrder calldata order) internal notPaused returns (uint256 sharesOut) {
+    function _deposit(DepositOrder calldata order) internal returns (uint256 sharesOut) {
         ERC20 asset = ERC20(order.asset);
         uint256 amount = _getAmount(asset, order.amount, msg.sender);
         asset.safeTransferFrom(msg.sender, safe, amount);
@@ -80,7 +80,6 @@ abstract contract DepositModule is Pausable, IDepositModule {
     /// @return sharesOut Amount of shares minted
     function _intentDeposit(SignedDepositIntent calldata order)
         internal
-        notPaused
         returns (uint256 sharesOut)
     {
         DepositLibs.validateIntent(
@@ -130,11 +129,7 @@ abstract contract DepositModule is Pausable, IDepositModule {
     /// @dev Transfers shares from sender and executes withdrawal through safe
     /// @param order The withdrawal order parameters
     /// @return assetAmountOut Amount of assets withdrawn
-    function _withdraw(WithdrawOrder calldata order)
-        internal
-        notPaused
-        returns (uint256 assetAmountOut)
-    {
+    function _withdraw(WithdrawOrder calldata order) internal returns (uint256 assetAmountOut) {
         ERC20 asset = ERC20(IPeriphery(periphery).getVault());
         uint256 amount = _getAmount(asset, order.shares, msg.sender);
         asset.safeTransferFrom(msg.sender, safe, amount);
@@ -155,7 +150,6 @@ abstract contract DepositModule is Pausable, IDepositModule {
     /// @return assetAmountOut Amount of assets withdrawn
     function _intentWithdraw(SignedWithdrawIntent calldata order)
         internal
-        notPaused
         returns (uint256 assetAmountOut)
     {
         DepositLibs.validateIntent(

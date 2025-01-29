@@ -5,14 +5,12 @@ pragma solidity ^0.8.0;
 /// @title IPeriphery
 /// @notice Interface for the Periphery contract which manages deposits, withdrawals, and brokerage accounts for a Fund
 /// @dev Each Periphery is paired with exactly one Fund and manages its own ERC721 tokens representing brokerage accounts
-import "@src/interfaces/IFund.sol";
 import "@euler-price-oracle/interfaces/IPriceOracle.sol";
 import "@src/modules/deposit/Structs.sol";
 import {UnitOfAccount} from "@src/modules/deposit/UnitOfAccount.sol";
 import {FundShareVault} from "@src/modules/deposit/FundShareVault.sol";
-import {IPausable} from "@src/interfaces/IPausable.sol";
 
-interface IPeriphery is IPausable {
+interface IPeriphery {
     event AccountOpened(
         uint256 indexed accountId,
         uint256 expirationTimestamp,
@@ -64,13 +62,10 @@ interface IPeriphery is IPausable {
     event NetDepositLimitUpdated(uint256 oldLimit, uint256 newLimit);
 
     /// @notice The Fund contract this Periphery is associated with
-    function fund() external returns (IFund);
+    function fund() external returns (address);
 
     /// @notice The oracle used for price quotes
     function oracleRouter() external returns (IPriceOracle);
-
-    /// @notice The admin address with minting privileges
-    function admin() external returns (address);
 
     /// @notice The internal ERC4626 LP vault
     function internalVault() external returns (FundShareVault);

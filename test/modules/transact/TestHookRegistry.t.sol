@@ -32,7 +32,7 @@ contract TestHookRegistry is Test, TestBaseGnosis, TestBaseProtocol {
         address[] memory admins = new address[](1);
         admins[0] = fundAdmin;
 
-        fund = deploySafe(admins, 1);
+        fund = deploySafe(admins, 1, 1);
         assertTrue(address(fund) != address(0), "Failed to deploy fund");
         assertTrue(fund.isOwner(fundAdmin), "Fund admin not owner");
 

@@ -8,9 +8,8 @@ import {
     SignedDepositIntent,
     WithdrawOrder
 } from "@src/modules/deposit/Structs.sol";
-import {IPausable} from "@src/interfaces/IPausable.sol";
 
-interface IDepositModule is IPausable {
+interface IDepositModule {
     function periphery() external view returns (address);
     function nonces(address user) external view returns (uint256);
     function safe() external view returns (address);
