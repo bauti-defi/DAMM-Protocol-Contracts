@@ -11,12 +11,8 @@ library Errors {
     error OnlyAdmin();
     /// @notice Thrown when an asset transfer fails
     error AssetTransferFailed();
-    /// @notice Thrown when trying to execute a function while the contract is paused
-    error Paused();
     /// @notice Thrown when a function must be called via delegatecall
     error OnlyDelegateCall();
-    /// @notice Thrown when a function can only be called by a whitelisted user
-    error OnlyWhitelisted();
 
     /// Transaction module errors
     /// @notice Thrown when a transaction hook is not defined for a given operation
@@ -27,8 +23,6 @@ library Errors {
     error Transaction_GasLimitExceeded();
     /// @notice Thrown when gas refund to the caller fails
     error Transaction_GasRefundFailed();
-    /// @notice Thrown when trying to execute a transaction while the module is paused
-    error Transaction_ModulePaused();
 
     /// Hook errors
     /// @notice Thrown when an operator is not authorized to execute a hook
@@ -106,11 +100,6 @@ library Errors {
     /// @notice Thrown when an account cannot be closed
     error Deposit_AccountCannotBeClosed();
 
-    /// Access control errors
-    /// @notice Thrown when a function can only be called by the user
-    error Deposit_OnlyUser();
-    /// @notice Thrown when a function can only be called by a super user
-    error Deposit_OnlySuperUser();
     /// @notice Thrown when a function can only be called by the periphery contract
     error Deposit_OnlyPeriphery();
     /// @notice Thrown when a function can only be called by the account owner
@@ -137,8 +126,6 @@ library Errors {
     error Deposit_InvalidNetDepositLimit();
 
     /// Admin errors
-    /// @notice Thrown when an admin address is invalid
-    error Deposit_InvalidAdmin();
     /// @notice Thrown when a user address is invalid
     error Deposit_InvalidUser();
 
@@ -151,22 +138,4 @@ library Errors {
     error ModuleLib_InsufficientBalance();
     /// @notice Thrown when attempting to deploy a module with empty bytecode
     error ModuleLib_EmptyBytecode();
-
-    /// FundCallbackHandler errors
-    /// @notice Thrown when a caller is not a registered module
-    error Fund_NotModule();
-    /// @notice Thrown when a caller is not authorized to perform an action
-    error Fund_NotAuthorized();
-    /// @notice Thrown when the fund liquidation time series is empty
-    error Fund_EmptyFundLiquidationTimeSeries();
-
-    /// FundFactory errors
-    /// @notice Thrown when the deployment lock is violated
-    error FundFactory_DeploymentLockViolated();
-    /// @notice Thrown when a function must be called via delegatecall
-    error FundFactory_OnlyDelegateCall();
-
-    /// FundValuationOracle
-    /// @notice Thrown when attempting to value a fund that is not fully divested
-    error FundValuationOracle_FundNotFullyDivested();
 }
