@@ -467,13 +467,6 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
             })
         );
 
-        // fundB.addChildFund(address(fundBChild1));
-        // fundB.addChildFund(address(fundBChild2));
-
-        // // configure mock tokens as assets of interest for Fund B
-        // fundB.setAssetToValuate(ARB_USDC);
-        // fundB.setAssetToValuate(ARB_USDT);
-
         // also enable assets on the periphery for Fund B
         peripheryB.enableGlobalAssetPolicy(
             ARB_USDC,
@@ -786,66 +779,66 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
             oracleRouter.getQuote(0, address(fundA), address(peripheryA.unitOfAccount())), fundATvl
         );
 
-            // transfer from FundAChild1 to FundA
-            transactions = new Transaction[](2);
+        // transfer from FundAChild1 to FundA
+        transactions = new Transaction[](2);
 
-            transactions[0] = Transaction({
-                target: ARB_USDC,
-                value: 0,
-                targetSelector: IERC20.transferFrom.selector,
-                data: abi.encode(address(fundAChild1), address(fundA), 500_000),
-                operation: uint8(Enum.Operation.Call)
-            });
+        transactions[0] = Transaction({
+            target: ARB_USDC,
+            value: 0,
+            targetSelector: IERC20.transferFrom.selector,
+            data: abi.encode(address(fundAChild1), address(fundA), 500_000),
+            operation: uint8(Enum.Operation.Call)
+        });
 
-            transactions[1] = Transaction({
-                target: ARB_USDC,
-                value: 0,
-                targetSelector: IERC20.transferFrom.selector,
-                data: abi.encode(address(fundAChild2), address(fundA), 500_000),
-                operation: uint8(Enum.Operation.Call)
-            });
+        transactions[1] = Transaction({
+            target: ARB_USDC,
+            value: 0,
+            targetSelector: IERC20.transferFrom.selector,
+            data: abi.encode(address(fundAChild2), address(fundA), 500_000),
+            operation: uint8(Enum.Operation.Call)
+        });
 
-            vm.prank(operator);
-            transactionModuleA.execute(transactions);
+        vm.prank(operator);
+        transactionModuleA.execute(transactions);
 
-            assertEq(USDC.balanceOf(address(fundAChild1)), 0);
-            assertEq(USDC.balanceOf(address(fundAChild2)), 0);
-            assertEq(USDC.balanceOf(address(fundA)), 1_500_000);
-            assertEq(USDC.balanceOf(address(fundB)), 500_000);
-            assertEq(
-                oracleRouter.getQuote(0, address(fundA), address(peripheryA.unitOfAccount())), fundATvl
-            );
+        assertEq(USDC.balanceOf(address(fundAChild1)), 0);
+        assertEq(USDC.balanceOf(address(fundAChild2)), 0);
+        assertEq(USDC.balanceOf(address(fundA)), 1_500_000);
+        assertEq(USDC.balanceOf(address(fundB)), 500_000);
+        assertEq(
+            oracleRouter.getQuote(0, address(fundA), address(peripheryA.unitOfAccount())), fundATvl
+        );
 
-            // now we withdraw from FundB to FundA
-            transactions = new Transaction[](1);
+        // now we withdraw from FundB to FundA
+        transactions = new Transaction[](1);
 
-            transactions[0] = Transaction({
-                target: address(peripheryB),
-                value: 0,
-                targetSelector: IPeriphery.withdraw.selector,
-                data: abi.encode(
-                    WithdrawOrder({
-                        accountId: fundABrokerId,
-                        to: address(fundA),
-                        asset: ARB_USDC,
-                        shares: type(uint256).max,
-                        deadline: block.timestamp + 100000,
-                        minAmountOut: 0,
-                        referralCode: 0
-                    })
-                ),
-                operation: uint8(Enum.Operation.Call)
-            });
+        transactions[0] = Transaction({
+            target: address(peripheryB),
+            value: 0,
+            targetSelector: IPeriphery.withdraw.selector,
+            data: abi.encode(
+                WithdrawOrder({
+                    accountId: fundABrokerId,
+                    to: address(fundA),
+                    asset: ARB_USDC,
+                    shares: type(uint256).max,
+                    deadline: block.timestamp + 100000,
+                    minAmountOut: 0,
+                    referralCode: 0
+                })
+            ),
+            operation: uint8(Enum.Operation.Call)
+        });
 
-            vm.prank(operator);
-            transactionModuleA.execute(transactions);
+        vm.prank(operator);
+        transactionModuleA.execute(transactions);
 
-            assertEq(USDC.balanceOf(address(fundAChild1)), 0);
-            assertEq(USDC.balanceOf(address(fundAChild2)), 0);
-            assertEq(USDC.balanceOf(address(fundA)), 2_000_000);
-            assertEq(USDC.balanceOf(address(fundB)), 0);
-            assertEq(
-                oracleRouter.getQuote(0, address(fundA), address(peripheryA.unitOfAccount())), fundATvl
-            );
+        assertEq(USDC.balanceOf(address(fundAChild1)), 0);
+        assertEq(USDC.balanceOf(address(fundAChild2)), 0);
+        assertEq(USDC.balanceOf(address(fundA)), 2_000_000);
+        assertEq(USDC.balanceOf(address(fundB)), 0);
+        assertEq(
+            oracleRouter.getQuote(0, address(fundA), address(peripheryA.unitOfAccount())), fundATvl
+        );
     }
 }

@@ -12,8 +12,11 @@ import {Ownable} from "@openzeppelin-contracts/access/Ownable.sol";
 /// @param validUntil The timestamp until the rate is valid.
 event RateUpdated(uint256 rate, uint256 validUntil);
 
-/// @title TrustedFundOracle
-contract TrustedFundOracle is BaseAdapter, Ownable {
+/// @title TrustedRateOracle
+/// @notice This oracle implementation is inspired by the FixedRateOracle from Euler v2.
+/// @notice This oracle should be used to price any asset in a completely discretionary manner.
+/// @dev sadly decentralization doesn't always pay the bills, so this oracle is born.
+contract TrustedRateOracle is BaseAdapter, Ownable {
     /// @inheritdoc IPriceOracle
     string public constant name = "FixedRateOracle";
     /// @notice The address of the base asset.
@@ -51,6 +54,7 @@ contract TrustedFundOracle is BaseAdapter, Ownable {
     /// @param _validUntil The timestamp until the rate is valid.
     function updateRate(uint256 _rate, uint256 _validUntil) external onlyOwner {
         if (_rate == 0) revert Errors.PriceOracle_InvalidConfiguration();
+        if (_validUntil <= block.timestamp) revert Errors.PriceOracle_InvalidConfiguration();
         rate = _rate;
         lastUpdate = block.timestamp;
         priceValidUntil = _validUntil;
