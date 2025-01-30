@@ -28,6 +28,7 @@ import {TokenMinter} from "@test/forked/TokenMinter.sol";
 import {MockERC20} from "@test/mocks/MockERC20.sol";
 import "@src/modules/transact/Structs.sol";
 import {BalanceOfOracle} from "@src/oracles/BalanceOfOracle.sol";
+import {TrustedRateOracle} from "@src/oracles/TrustedRateOracle.sol";
 import {ISafe} from "@src/interfaces/ISafe.sol";
 
 /// This contract will test a full deployment of 2 funds with child funds included.
@@ -74,8 +75,12 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
 
     EulerRouter internal oracleRouter;
 
-    BalanceOfOracle internal fundAOracle;
-    BalanceOfOracle internal fundBOracle;
+    BalanceOfOracle internal fundABalanceOfOracle;
+    BalanceOfOracle internal fundBBalanceOfOracle;
+
+    TrustedRateOracle internal fundATrustedRateOracle;
+    TrustedRateOracle internal fundBTrustedRateOracle;
+
     uint256 internal brokerAId;
     uint256 internal brokerBId;
     uint256 internal fundABrokerId;
@@ -83,14 +88,21 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
     uint256 internal nonce;
 
     function setUp() public virtual override(TestBaseGnosis, TestBaseProtocol, TokenMinter) {
-        arbitrumFork = vm.createFork(vm.envString("ARBI_RPC_URL"));
+        _setupFork();
+        _setupBase();
+        _deployFunds();
+        _deployInfrastructure();
+        _configureHooksAndPolicies();
+    }
 
+    function _setupFork() internal {
+        arbitrumFork = vm.createFork(vm.envString("ARBI_RPC_URL"));
         vm.selectFork(arbitrumFork);
         assertEq(vm.activeFork(), arbitrumFork);
-
-        /// @notice we fork at this block because we know the chainlink feed prices at this block
         vm.rollFork(218796378);
+    }
 
+    function _setupBase() internal {
         TestBaseGnosis.setUp();
         TestBaseProtocol.setUp();
         TokenMinter.setUp();
@@ -99,10 +111,13 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
         operator = makeAddr("Operator");
         broker = makeAddr("Broker");
         (protocolAdmin, protocolAdminPK) = makeAddrAndKey("ProtocolAdmin");
+    }
 
+    function _deployFunds() internal {
         address[] memory admins = new address[](1);
         admins[0] = protocolAdmin;
 
+        // Deploy Fund A and its children
         fundA = ISafe(address(deploySafe(admins, 1, ++nonce)));
         vm.label(address(fundA), "FundA");
 
@@ -112,6 +127,7 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
         fundAChild2 = ISafe(address(deploySafe(admins, 1, ++nonce)));
         vm.label(address(fundAChild2), "FundAChild2");
 
+        // Deploy Fund B and its children
         fundB = ISafe(address(deploySafe(admins, 1, ++nonce)));
         vm.label(address(fundB), "FundB");
 
@@ -120,12 +136,22 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
 
         fundBChild2 = ISafe(address(deploySafe(admins, 1, ++nonce)));
         vm.label(address(fundBChild2), "FundBChild2");
+    }
 
+    function _deployInfrastructure() internal {
+        _deployOracleRouter();
+        _deployPeriphery();
+        _deployHooksAndTransactionModules();
+    }
+
+    function _deployOracleRouter() internal {
         vm.prank(protocolAdmin);
         oracleRouter = new EulerRouter(address(1), address(protocolAdmin));
         vm.label(address(oracleRouter), "OracleRouter");
+    }
 
-        // deploy periphery using module factory
+    function _deployPeriphery() internal {
+        // Deploy periphery A
         peripheryA = Periphery(
             deployModule(
                 payable(address(fundA)),
@@ -138,22 +164,51 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
                     abi.encode(
                         "PeripheryA",
                         "PA",
-                        VALUATION_DECIMALS, // must be same as underlying oracles response denomination
+                        VALUATION_DECIMALS,
                         payable(address(fundA)),
                         address(oracleRouter),
                         address(fundA),
-                        /// fund is admin
                         feeRecipient
                     )
                 )
             )
         );
-
         vm.label(address(peripheryA), "PeripheryA");
-
         assertTrue(fundA.isModuleEnabled(address(peripheryA)), "PeripheryA is not module");
 
-        // deploy hook registry and transaction module for Fund A
+        // Deploy periphery B
+        peripheryB = Periphery(
+            deployModule(
+                payable(address(fundB)),
+                protocolAdmin,
+                protocolAdminPK,
+                bytes32("peripheryB"),
+                0,
+                abi.encodePacked(
+                    type(Periphery).creationCode,
+                    abi.encode(
+                        "PeripheryB",
+                        "PB",
+                        VALUATION_DECIMALS,
+                        payable(address(fundB)),
+                        address(oracleRouter),
+                        address(fundB),
+                        feeRecipient
+                    )
+                )
+            )
+        );
+        vm.label(address(peripheryB), "PeripheryB");
+        assertTrue(fundB.isModuleEnabled(address(peripheryB)), "PeripheryB is not module");
+    }
+
+    function _deployHooksAndTransactionModules() internal {
+        _deployFundAHooksAndModules();
+        _deployFundBHooksAndModules();
+    }
+
+    function _deployFundAHooksAndModules() internal {
+        // Deploy hook registry
         hookRegistryA = HookRegistry(
             deployContract(
                 payable(address(fundA)),
@@ -165,10 +220,9 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
                 abi.encodePacked(type(HookRegistry).creationCode, abi.encode(address(fundA)))
             )
         );
-
         vm.label(address(hookRegistryA), "HookRegistryA");
 
-        // deploy transaction module for Fund A
+        // Deploy transaction module
         transactionModuleA = TransactionModule(
             deployModule(
                 payable(address(fundA)),
@@ -183,45 +237,18 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
             )
         );
         vm.label(address(transactionModuleA), "TransactionModuleA");
-
         assertEq(transactionModuleA.fund(), address(fundA), "TransactionModuleA fund not set");
 
-        // now we deploy the vault connector for Fund A
+        // Deploy hooks
         vaultConnectorA = new VaultConnectorHook(address(fundA));
         vm.label(address(vaultConnectorA), "VaultConnectorA");
 
-        // now we deploy the transfer hook for Fund A
         transferHookA = new TokenTransferCallValidator(address(fundA));
         vm.label(address(transferHookA), "TransferHookA");
+    }
 
-        peripheryB = Periphery(
-            deployModule(
-                payable(address(fundB)),
-                protocolAdmin,
-                protocolAdminPK,
-                bytes32("peripheryB"),
-                0,
-                abi.encodePacked(
-                    type(Periphery).creationCode,
-                    abi.encode(
-                        "PeripheryB",
-                        "PB",
-                        VALUATION_DECIMALS, // must be same as underlying oracles response denomination
-                        payable(address(fundB)),
-                        address(oracleRouter),
-                        address(fundB),
-                        /// fund is admin
-                        feeRecipient
-                    )
-                )
-            )
-        );
-
-        vm.label(address(peripheryB), "PeripheryB");
-
-        assertTrue(fundB.isModuleEnabled(address(peripheryB)), "PeripheryB is not module");
-
-        // deploy hook registry and transaction module for Fund B
+    function _deployFundBHooksAndModules() internal {
+        // Deploy hook registry
         hookRegistryB = HookRegistry(
             deployContract(
                 payable(address(fundB)),
@@ -233,10 +260,9 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
                 abi.encodePacked(type(HookRegistry).creationCode, abi.encode(address(fundB)))
             )
         );
-
         vm.label(address(hookRegistryB), "HookRegistryB");
 
-        // deploy transaction module for Fund B
+        // Deploy transaction module
         transactionModuleB = TransactionModule(
             deployModule(
                 payable(address(fundB)),
@@ -251,15 +277,14 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
             )
         );
         vm.label(address(transactionModuleB), "TransactionModuleB");
-
         assertEq(transactionModuleB.fund(), address(fundB), "TransactionModuleB fund not set");
 
-        // now we deploy the transfer hook for Fund B
+        // Deploy hooks
         transferHookB = new TokenTransferCallValidator(address(fundB));
         vm.label(address(transferHookB), "TransferHookB");
+    }
 
-        /// @notice ALL THE INFRA IS DEPLOYED, NOW WE MUST CONFIGURE IT
-
+    function _configureHooksAndPolicies() internal {
         // configure the vault connector for Fund A
         // deposit from Fund A to Fund B
         vm.startPrank(address(fundA));
@@ -575,6 +600,39 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
             "Unit of account decimals mismatch"
         );
 
+        vm.startPrank(broker);
+        USDC.approve(address(peripheryA), type(uint256).max);
+        USDT.approve(address(peripheryA), type(uint256).max);
+        USDC.approve(address(peripheryB), type(uint256).max);
+        USDT.approve(address(peripheryB), type(uint256).max);
+        vm.stopPrank();
+
+        assertTrue(
+            peripheryA.isBrokerAssetPolicyEnabled(brokerAId, ARB_USDC, true),
+            "USDC deposit policy not enabled for brokerAId on peripheryA"
+        );
+        assertTrue(
+            peripheryA.isBrokerAssetPolicyEnabled(brokerAId, ARB_USDC, false),
+            "USDC withdraw policy not enabled for brokerAId on peripheryA"
+        );
+        assertTrue(
+            peripheryA.isBrokerAssetPolicyEnabled(brokerAId, ARB_USDT, true),
+            "USDT deposit policy not enabled for brokerAId on peripheryA"
+        );
+
+        assertTrue(
+            peripheryB.isBrokerAssetPolicyEnabled(fundABrokerId, ARB_USDC, true),
+            "USDC deposit policy not enabled for fundABrokerId on peripheryB"
+        );
+        assertTrue(
+            peripheryB.isBrokerAssetPolicyEnabled(fundABrokerId, ARB_USDC, false),
+            "USDC withdraw policy not enabled for fundABrokerId on peripheryB"
+        );
+        assertTrue(
+            peripheryB.isBrokerAssetPolicyEnabled(fundABrokerId, ARB_USDT, true),
+            "USDT deposit policy not enabled for fundABrokerId on peripheryB"
+        );
+
         // now configure the oracles
         address unitOfAccountA = address(peripheryA.unitOfAccount());
         vm.label(unitOfAccountA, "UnitOfAccount-A");
@@ -610,34 +668,6 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
         oracleRouter.govSetConfig(ARB_USDT, unitOfAccountB, address(chainlinkOracle));
         vm.stopPrank();
 
-        fundAOracle = new BalanceOfOracle(protocolAdmin, address(oracleRouter));
-        vm.label(address(fundAOracle), "BalanceOfOracle-FundA");
-        vm.startPrank(protocolAdmin);
-        fundAOracle.addBalanceToValuate(ARB_USDC, address(fundA));
-        fundAOracle.addBalanceToValuate(ARB_USDC, address(fundAChild1));
-        fundAOracle.addBalanceToValuate(ARB_USDC, address(fundAChild2));
-        fundAOracle.addBalanceToValuate(ARB_USDT, address(fundA));
-        fundAOracle.addBalanceToValuate(ARB_USDT, address(fundAChild1));
-        fundAOracle.addBalanceToValuate(ARB_USDT, address(fundAChild2));
-        fundAOracle.addBalanceToValuate(address(peripheryB.internalVault()), address(fundA));
-
-        oracleRouter.govSetConfig(address(fundA), unitOfAccountA, address(fundAOracle));
-        vm.stopPrank();
-
-        // setup BalanceOf for all child funds
-        fundBOracle = new BalanceOfOracle(protocolAdmin, address(oracleRouter));
-        vm.label(address(fundBOracle), "BalanceOfOracle-FundB");
-        vm.startPrank(protocolAdmin);
-        fundBOracle.addBalanceToValuate(ARB_USDC, address(fundB));
-        fundBOracle.addBalanceToValuate(ARB_USDC, address(fundBChild1));
-        fundBOracle.addBalanceToValuate(ARB_USDC, address(fundBChild2));
-        fundBOracle.addBalanceToValuate(ARB_USDT, address(fundB));
-        fundBOracle.addBalanceToValuate(ARB_USDT, address(fundBChild1));
-        fundBOracle.addBalanceToValuate(ARB_USDT, address(fundBChild2));
-
-        oracleRouter.govSetConfig(address(fundB), unitOfAccountB, address(fundBOracle));
-        vm.stopPrank();
-
         FixedRateOracle fixedRateOracle =
             new FixedRateOracle(unitOfAccountA, unitOfAccountB, 1 * 10 ** VALUATION_DECIMALS);
         vm.label(address(fixedRateOracle), "FixedRateOracle-A/B");
@@ -650,42 +680,264 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
         oracleRouter.govSetResolvedVault(address(peripheryB.internalVault()), true);
         oracleRouter.govSetResolvedVault(address(peripheryA.internalVault()), true);
         vm.stopPrank();
+    }
 
-        vm.startPrank(broker);
-        USDC.approve(address(peripheryA), type(uint256).max);
-        USDT.approve(address(peripheryA), type(uint256).max);
-        USDC.approve(address(peripheryB), type(uint256).max);
-        USDT.approve(address(peripheryB), type(uint256).max);
+    function _setUpBalanceOfOracles() internal {
+        // now configure the oracles
+        address unitOfAccountA = address(peripheryA.unitOfAccount());
+        vm.label(unitOfAccountA, "UnitOfAccount-A");
+        address unitOfAccountB = address(peripheryB.unitOfAccount());
+        vm.label(unitOfAccountB, "UnitOfAccount-B");
+
+        fundABalanceOfOracle = new BalanceOfOracle(protocolAdmin, address(oracleRouter));
+        vm.label(address(fundABalanceOfOracle), "BalanceOfOracle-FundA");
+        vm.startPrank(protocolAdmin);
+        fundABalanceOfOracle.addBalanceToValuate(ARB_USDC, address(fundA));
+        fundABalanceOfOracle.addBalanceToValuate(ARB_USDC, address(fundAChild1));
+        fundABalanceOfOracle.addBalanceToValuate(ARB_USDC, address(fundAChild2));
+        fundABalanceOfOracle.addBalanceToValuate(ARB_USDT, address(fundA));
+        fundABalanceOfOracle.addBalanceToValuate(ARB_USDT, address(fundAChild1));
+        fundABalanceOfOracle.addBalanceToValuate(ARB_USDT, address(fundAChild2));
+        fundABalanceOfOracle.addBalanceToValuate(
+            address(peripheryB.internalVault()), address(fundA)
+        );
+
+        oracleRouter.govSetConfig(address(fundA), unitOfAccountA, address(fundABalanceOfOracle));
         vm.stopPrank();
 
-        assertTrue(
-            peripheryA.isBrokerAssetPolicyEnabled(brokerAId, ARB_USDC, true),
-            "USDC deposit policy not enabled for brokerAId on peripheryA"
+        // setup BalanceOf for all child funds
+        fundBBalanceOfOracle = new BalanceOfOracle(protocolAdmin, address(oracleRouter));
+        vm.label(address(fundBBalanceOfOracle), "BalanceOfOracle-FundB");
+        vm.startPrank(protocolAdmin);
+        fundBBalanceOfOracle.addBalanceToValuate(ARB_USDC, address(fundB));
+        fundBBalanceOfOracle.addBalanceToValuate(ARB_USDC, address(fundBChild1));
+        fundBBalanceOfOracle.addBalanceToValuate(ARB_USDC, address(fundBChild2));
+        fundBBalanceOfOracle.addBalanceToValuate(ARB_USDT, address(fundB));
+        fundBBalanceOfOracle.addBalanceToValuate(ARB_USDT, address(fundBChild1));
+        fundBBalanceOfOracle.addBalanceToValuate(ARB_USDT, address(fundBChild2));
+
+        oracleRouter.govSetConfig(address(fundB), unitOfAccountB, address(fundBBalanceOfOracle));
+        vm.stopPrank();
+    }
+
+    function _setUpTrustedRateOracle() internal {
+        // now configure the oracles
+        address unitOfAccountA = address(peripheryA.unitOfAccount());
+        vm.label(unitOfAccountA, "UnitOfAccount-A");
+        address unitOfAccountB = address(peripheryB.unitOfAccount());
+        vm.label(unitOfAccountB, "UnitOfAccount-B");
+
+        // setup TrustedRateOracle for FundA
+        fundATrustedRateOracle =
+            new TrustedRateOracle(protocolAdmin, address(fundA), unitOfAccountA);
+        vm.label(address(fundATrustedRateOracle), "TrustedRateOracle-A");
+        vm.startPrank(protocolAdmin);
+        oracleRouter.govSetConfig(address(fundA), unitOfAccountA, address(fundATrustedRateOracle));
+        vm.stopPrank();
+
+        // setup TrustedRateOracle for FundB
+        fundBTrustedRateOracle =
+            new TrustedRateOracle(protocolAdmin, address(fundB), unitOfAccountB);
+        vm.label(address(fundBTrustedRateOracle), "TrustedRateOracle-B");
+        vm.startPrank(protocolAdmin);
+        oracleRouter.govSetConfig(address(fundB), unitOfAccountB, address(fundBTrustedRateOracle));
+        vm.stopPrank();
+    }
+
+    function test_valuation_with_trusted_rate_oracle() public {
+        _setUpTrustedRateOracle();
+
+        vm.startPrank(protocolAdmin);
+        fundATrustedRateOracle.updateRate(
+            1 * 10 ** (VALUATION_DECIMALS - 1), block.timestamp + 100000
         );
-        assertTrue(
-            peripheryA.isBrokerAssetPolicyEnabled(brokerAId, ARB_USDC, false),
-            "USDC withdraw policy not enabled for brokerAId on peripheryA"
+        fundBTrustedRateOracle.updateRate(
+            1 * 10 ** (VALUATION_DECIMALS - 1), block.timestamp + 100000
         );
-        assertTrue(
-            peripheryA.isBrokerAssetPolicyEnabled(brokerAId, ARB_USDT, true),
-            "USDT deposit policy not enabled for brokerAId on peripheryA"
+        vm.stopPrank();
+
+        mintUSDC(broker, 10_000_000);
+        mintUSDT(broker, 10_000_000);
+
+        vm.startPrank(broker);
+        peripheryA.deposit(
+            DepositOrder({
+                accountId: brokerAId,
+                recipient: broker,
+                asset: ARB_USDC,
+                amount: 2_000_000,
+                deadline: block.timestamp + 1000,
+                minSharesOut: 0,
+                referralCode: 0
+            })
+        );
+        vm.stopPrank();
+
+        assertEq(USDC.balanceOf(broker), 8_000_000);
+        assertEq(USDC.balanceOf(address(fundA)), 2_000_000);
+        assertGt(peripheryA.internalVault().balanceOf(broker), 0);
+
+        // we check the fund A tvl using the oracle router
+        uint256 fundATvl = oracleRouter.getQuote(
+            peripheryA.internalVault().totalSupply(),
+            address(fundA),
+            address(peripheryA.unitOfAccount())
+        );
+        uint256 totalAssets = peripheryA.internalVault().totalAssets();
+        uint256 totalSupply = peripheryA.internalVault().totalSupply();
+
+        assertEq(fundATvl, totalAssets);
+        assertEq(peripheryA.internalVault().balanceOf(broker), totalSupply);
+
+        // now we transfer half of the USDC from Fund A to its children
+        // operator will do this through transaction module
+        Transaction[] memory transactions = new Transaction[](2);
+
+        transactions[0] = Transaction({
+            target: ARB_USDC,
+            value: 0,
+            targetSelector: IERC20.transfer.selector,
+            data: abi.encode(address(fundAChild1), 500_000),
+            operation: uint8(Enum.Operation.Call)
+        });
+
+        transactions[1] = Transaction({
+            target: ARB_USDC,
+            value: 0,
+            targetSelector: IERC20.transfer.selector,
+            data: abi.encode(address(fundAChild2), 500_000),
+            operation: uint8(Enum.Operation.Call)
+        });
+
+        vm.prank(operator);
+        transactionModuleA.execute(transactions);
+
+        assertEq(USDC.balanceOf(address(fundAChild1)), 500_000);
+        assertEq(USDC.balanceOf(address(fundAChild2)), 500_000);
+        assertEq(USDC.balanceOf(address(fundA)), 1_000_000);
+        assertEq(
+            oracleRouter.getQuote(
+                peripheryA.internalVault().totalSupply(),
+                address(fundA),
+                address(peripheryA.unitOfAccount())
+            ),
+            fundATvl
         );
 
-        assertTrue(
-            peripheryB.isBrokerAssetPolicyEnabled(fundABrokerId, ARB_USDC, true),
-            "USDC deposit policy not enabled for fundABrokerId on peripheryB"
+        // now we deposit from Fund A to Fund B
+        // we will use the transaction module to do this
+        transactions = new Transaction[](1);
+
+        transactions[0] = Transaction({
+            target: address(peripheryB),
+            value: 0,
+            targetSelector: IPeriphery.deposit.selector,
+            data: abi.encode(
+                DepositOrder({
+                    accountId: fundABrokerId,
+                    recipient: address(fundA),
+                    asset: ARB_USDC,
+                    amount: 500_000,
+                    deadline: block.timestamp + 100000,
+                    minSharesOut: 0,
+                    referralCode: 0
+                })
+            ),
+            operation: uint8(Enum.Operation.Call)
+        });
+
+        vm.prank(operator);
+        transactionModuleA.execute(transactions);
+
+        assertEq(USDC.balanceOf(address(fundAChild1)), 500_000);
+        assertEq(USDC.balanceOf(address(fundAChild2)), 500_000);
+        assertEq(USDC.balanceOf(address(fundA)), 500_000);
+        assertEq(USDC.balanceOf(address(fundB)), 500_000);
+        assertEq(
+            oracleRouter.getQuote(
+                peripheryA.internalVault().totalSupply(),
+                address(fundA),
+                address(peripheryA.unitOfAccount())
+            ),
+            fundATvl
         );
-        assertTrue(
-            peripheryB.isBrokerAssetPolicyEnabled(fundABrokerId, ARB_USDC, false),
-            "USDC withdraw policy not enabled for fundABrokerId on peripheryB"
+
+        // transfer from FundAChild1 to FundA
+        transactions = new Transaction[](2);
+
+        transactions[0] = Transaction({
+            target: ARB_USDC,
+            value: 0,
+            targetSelector: IERC20.transferFrom.selector,
+            data: abi.encode(address(fundAChild1), address(fundA), 500_000),
+            operation: uint8(Enum.Operation.Call)
+        });
+
+        transactions[1] = Transaction({
+            target: ARB_USDC,
+            value: 0,
+            targetSelector: IERC20.transferFrom.selector,
+            data: abi.encode(address(fundAChild2), address(fundA), 500_000),
+            operation: uint8(Enum.Operation.Call)
+        });
+
+        vm.prank(operator);
+        transactionModuleA.execute(transactions);
+
+        assertEq(USDC.balanceOf(address(fundAChild1)), 0);
+        assertEq(USDC.balanceOf(address(fundAChild2)), 0);
+        assertEq(USDC.balanceOf(address(fundA)), 1_500_000);
+        assertEq(USDC.balanceOf(address(fundB)), 500_000);
+        assertEq(
+            oracleRouter.getQuote(
+                peripheryA.internalVault().totalSupply(),
+                address(fundA),
+                address(peripheryA.unitOfAccount())
+            ),
+            fundATvl
         );
-        assertTrue(
-            peripheryB.isBrokerAssetPolicyEnabled(fundABrokerId, ARB_USDT, true),
-            "USDT deposit policy not enabled for fundABrokerId on peripheryB"
+
+        // now we withdraw from FundB to FundA
+        transactions = new Transaction[](1);
+
+        transactions[0] = Transaction({
+            target: address(peripheryB),
+            value: 0,
+            targetSelector: IPeriphery.withdraw.selector,
+            data: abi.encode(
+                WithdrawOrder({
+                    accountId: fundABrokerId,
+                    to: address(fundA),
+                    asset: ARB_USDC,
+                    shares: type(uint256).max,
+                    deadline: block.timestamp + 100000,
+                    minAmountOut: 0,
+                    referralCode: 0
+                })
+            ),
+            operation: uint8(Enum.Operation.Call)
+        });
+
+        vm.prank(operator);
+        transactionModuleA.execute(transactions);
+
+        assertEq(USDC.balanceOf(address(fundAChild1)), 0);
+        assertEq(USDC.balanceOf(address(fundAChild2)), 0);
+        assertEq(USDC.balanceOf(address(fundA)), 2_000_000);
+        assertEq(USDC.balanceOf(address(fundB)), 0);
+        assertEq(
+            oracleRouter.getQuote(
+                peripheryA.internalVault().totalSupply(),
+                address(fundA),
+                address(peripheryA.unitOfAccount())
+            ),
+            fundATvl
         );
     }
 
-    function test_valuation() public {
+    function test_valuation_with_balance_of_oracle() public {
+        _setUpBalanceOfOracles();
+
         mintUSDC(broker, 10_000_000);
         mintUSDT(broker, 10_000_000);
 

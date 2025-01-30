@@ -602,7 +602,8 @@ contract Periphery is ERC721, AccessControl, Pausable, ReentrancyGuard, IPeriphe
     }
 
     function _updateVaultBalance() private {
-        uint256 assetsInFund = oracleRouter.getQuote(0, fund, address(unitOfAccount));
+        uint256 assetsInFund =
+            oracleRouter.getQuote(internalVault.totalSupply(), fund, address(unitOfAccount));
         uint256 assetsInVault = internalVault.totalAssets();
 
         /// @notice assetsInFund is part of [0, uint256.max]
