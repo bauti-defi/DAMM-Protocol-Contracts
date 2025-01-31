@@ -3,9 +3,8 @@ pragma solidity ^0.8.0;
 
 import "@src/modules/transact/Structs.sol";
 import "@src/interfaces/IHookRegistry.sol";
-import {IPausable} from "@src/interfaces/IPausable.sol";
 
-interface ITransactionModule is IPausable {
+interface ITransactionModule {
     /// @notice The fund contract address
     function fund() external returns (address);
 

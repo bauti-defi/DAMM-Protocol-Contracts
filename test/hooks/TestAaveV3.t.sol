@@ -1,15 +1,14 @@
 // SPDX-License-Identifier: CC-BY-NC-4.0
-
 pragma solidity ^0.8.0;
 
-import {TestBaseFund, IFund} from "@test/base/TestBaseFund.sol";
 import {TestBaseProtocol} from "@test/base/TestBaseProtocol.sol";
+import {TestBaseGnosis} from "@test/base/TestBaseGnosis.sol";
+import {ISafe} from "@src/interfaces/ISafe.sol";
 import {SafeL2} from "@safe-contracts/SafeL2.sol";
 import {Safe} from "@safe-contracts/Safe.sol";
 import {HookRegistry} from "@src/modules/transact/HookRegistry.sol";
 import {TransactionModule} from "@src/modules/transact/TransactionModule.sol";
 import "@src/hooks/aaveV3/AaveV3CallValidator.sol";
-import "@src/hooks/aaveV3/AaveV3PositionManager.sol";
 import {HookConfig} from "@src/modules/transact/Hooks.sol";
 import {BaseAaveV3} from "@test/forked/BaseAaveV3.sol";
 import {TokenMinter} from "@test/forked/TokenMinter.sol";
@@ -20,22 +19,22 @@ import "@src/modules/transact/Structs.sol";
 import {UserConfiguration} from
     "@aave-v3-core/protocol/libraries/configuration/UserConfiguration.sol";
 
-contract TestAaveV3 is TestBaseFund, TestBaseProtocol, BaseAaveV3, TokenMinter {
+contract TestAaveV3 is TestBaseGnosis, TestBaseProtocol, BaseAaveV3, TokenMinter {
     uint256 constant BIG_NUMBER = 10 ** 12;
 
     IERC20 internal constant aUSDC = IERC20(0x724dc807b04555b71ed48a6896b6F41593b8C637);
 
     address internal fundAdmin;
     uint256 internal fundAdminPK;
+    ISafe internal fund;
     HookRegistry internal hookRegistry;
     TransactionModule internal transactionModule;
     AaveV3CallValidator internal aaveV3CallValidator;
-    AaveV3PositionManager internal aaveV3PositionManager;
     address internal operator;
 
     uint256 internal arbitrumFork;
 
-    function setUp() public override(BaseAaveV3, TokenMinter, TestBaseFund, TestBaseProtocol) {
+    function setUp() public override(BaseAaveV3, TokenMinter, TestBaseProtocol, TestBaseGnosis) {
         arbitrumFork = vm.createFork(vm.envString("ARBI_RPC_URL"));
 
         vm.selectFork(arbitrumFork);
@@ -45,7 +44,7 @@ contract TestAaveV3 is TestBaseFund, TestBaseProtocol, BaseAaveV3, TokenMinter {
         vm.rollFork(218796378);
 
         BaseAaveV3.setUp();
-        TestBaseFund.setUp();
+        TestBaseGnosis.setUp();
         TestBaseProtocol.setUp();
         TokenMinter.setUp();
 
@@ -57,8 +56,7 @@ contract TestAaveV3 is TestBaseFund, TestBaseProtocol, BaseAaveV3, TokenMinter {
         address[] memory admins = new address[](1);
         admins[0] = fundAdmin;
 
-        fund =
-            fundFactory.deployFund(address(safeProxyFactory), address(safeSingleton), admins, 1, 1);
+        fund = ISafe(address(deploySafe(admins, 1, 1)));
         assertTrue(address(fund) != address(0), "Failed to deploy fund");
         assertTrue(fund.isOwner(fundAdmin), "Fund admin not owner");
 
@@ -111,30 +109,13 @@ contract TestAaveV3 is TestBaseFund, TestBaseProtocol, BaseAaveV3, TokenMinter {
 
         vm.label(address(aaveV3CallValidator), "AaveV3CallValidator");
 
-        aaveV3PositionManager = AaveV3PositionManager(
-            deployModuleWithRoles(
-                payable(address(fund)),
-                fundAdmin,
-                fundAdminPK,
-                bytes32("aaveV3PositionManager"),
-                0,
-                abi.encodePacked(
-                    type(AaveV3PositionManager).creationCode,
-                    abi.encode(address(fund), address(aaveV3Pool))
-                ),
-                POSITION_OPENER_ROLE | POSITION_CLOSER_ROLE
-            )
-        );
-
-        vm.label(address(aaveV3PositionManager), "AaveV3PositionManager");
-
         vm.startPrank(address(fund));
         hookRegistry.setHooks(
             HookConfig({
                 operator: operator,
                 target: address(aaveV3Pool),
                 beforeTrxHook: address(aaveV3CallValidator),
-                afterTrxHook: address(aaveV3PositionManager),
+                afterTrxHook: address(0),
                 operation: 0,
                 targetSelector: aaveV3Pool.supply.selector
             })
@@ -144,7 +125,7 @@ contract TestAaveV3 is TestBaseFund, TestBaseProtocol, BaseAaveV3, TokenMinter {
                 operator: operator,
                 target: address(aaveV3Pool),
                 beforeTrxHook: address(aaveV3CallValidator),
-                afterTrxHook: address(aaveV3PositionManager),
+                afterTrxHook: address(0),
                 operation: 0,
                 targetSelector: aaveV3Pool.withdraw.selector
             })
@@ -154,7 +135,7 @@ contract TestAaveV3 is TestBaseFund, TestBaseProtocol, BaseAaveV3, TokenMinter {
                 operator: operator,
                 target: address(aaveV3Pool),
                 beforeTrxHook: address(aaveV3CallValidator),
-                afterTrxHook: address(aaveV3PositionManager),
+                afterTrxHook: address(0),
                 operation: 0,
                 targetSelector: aaveV3Pool.borrow.selector
             })
@@ -164,7 +145,7 @@ contract TestAaveV3 is TestBaseFund, TestBaseProtocol, BaseAaveV3, TokenMinter {
                 operator: operator,
                 target: address(aaveV3Pool),
                 beforeTrxHook: address(aaveV3CallValidator),
-                afterTrxHook: address(aaveV3PositionManager),
+                afterTrxHook: address(0),
                 operation: 0,
                 targetSelector: aaveV3Pool.repay.selector
             })
@@ -174,7 +155,7 @@ contract TestAaveV3 is TestBaseFund, TestBaseProtocol, BaseAaveV3, TokenMinter {
                 operator: operator,
                 target: address(aaveV3Pool),
                 beforeTrxHook: address(aaveV3CallValidator),
-                afterTrxHook: address(aaveV3PositionManager),
+                afterTrxHook: address(0),
                 operation: 0,
                 targetSelector: aaveV3Pool.repayWithATokens.selector
             })
@@ -200,7 +181,6 @@ contract TestAaveV3 is TestBaseFund, TestBaseProtocol, BaseAaveV3, TokenMinter {
 
     function test_supply() public withAllowance(USDC) enableAsset(address(ARB_USDC)) {
         assertEq(aUSDC.balanceOf(address(fund)), 0, "aUSDC balance not 0");
-        assertFalse(fund.hasOpenPositions(), "fund has open positions");
 
         Transaction[] memory calls = new Transaction[](1);
 
@@ -217,7 +197,6 @@ contract TestAaveV3 is TestBaseFund, TestBaseProtocol, BaseAaveV3, TokenMinter {
 
         assertApproxEqAbs(aUSDC.balanceOf(address(fund)), 1000, 0.1e18, "aUSDC balance not ~1000");
         assertEq(USDC.balanceOf(address(fund)), BIG_NUMBER - 1000, "USDC balance not 999000");
-        assertTrue(fund.hasOpenPositions(), "fund does not have open positions");
     }
 
     function test_cannot_supply_to_recipient_that_is_not_fund()
@@ -262,7 +241,6 @@ contract TestAaveV3 is TestBaseFund, TestBaseProtocol, BaseAaveV3, TokenMinter {
 
     function test_withdraw() public withAllowance(USDC) enableAsset(address(ARB_USDC)) {
         assertEq(aUSDC.balanceOf(address(fund)), 0, "aUSDC balance not 0");
-        assertFalse(fund.hasOpenPositions(), "fund has open positions");
 
         Transaction[] memory calls = new Transaction[](1);
         calls[0] = Transaction({
@@ -276,7 +254,6 @@ contract TestAaveV3 is TestBaseFund, TestBaseProtocol, BaseAaveV3, TokenMinter {
         vm.prank(operator, operator);
         transactionModule.execute(calls);
 
-        assertTrue(fund.hasOpenPositions());
         assertApproxEqAbs(aUSDC.balanceOf(address(fund)), 1000, 0.1e18, "aUSDC balance not 1000");
         assertEq(USDC.balanceOf(address(fund)), BIG_NUMBER - 1000, "USDC balance not 999000");
 
@@ -291,14 +268,12 @@ contract TestAaveV3 is TestBaseFund, TestBaseProtocol, BaseAaveV3, TokenMinter {
         vm.prank(operator, operator);
         transactionModule.execute(calls);
 
-        assertFalse(fund.hasOpenPositions(), "fund has open positions");
         assertEq(aUSDC.balanceOf(address(fund)), 0, "aUSDC balance not 0");
         assertEq(USDC.balanceOf(address(fund)), BIG_NUMBER, "USDC balance not 1000000");
     }
 
     function test_supply_borrow_repay() public withAllowance(USDC) enableAsset(address(ARB_USDC)) {
         assertEq(aUSDC.balanceOf(address(fund)), 0, "aUSDC balance not 0");
-        assertFalse(fund.hasOpenPositions(), "fund has open positions");
 
         Transaction[] memory calls = new Transaction[](3);
 
@@ -327,25 +302,6 @@ contract TestAaveV3 is TestBaseFund, TestBaseProtocol, BaseAaveV3, TokenMinter {
         vm.prank(operator, operator);
         transactionModule.execute(calls);
 
-        assertTrue(fund.hasOpenPositions(), "fund does not have open positions");
-        /// check positions exist by pointer
-        assertTrue(
-            fund.holdsPosition(
-                keccak256(
-                    abi.encode(ARB_USDC, bytes4(keccak256("LEVERAGE")), type(IPool).interfaceId)
-                )
-            ),
-            "fund does not have leverage position 1"
-        );
-        assertTrue(
-            fund.holdsPosition(
-                keccak256(
-                    abi.encode(ARB_USDC, bytes4(keccak256("DEPOSIT")), type(IPool).interfaceId)
-                )
-            ),
-            "fund does not have deposit position 1"
-        );
-
         /// partial repay
         calls = new Transaction[](1);
         calls[0] = Transaction({
@@ -359,27 +315,9 @@ contract TestAaveV3 is TestBaseFund, TestBaseProtocol, BaseAaveV3, TokenMinter {
         vm.prank(operator, operator);
         transactionModule.execute(calls);
 
-        assertTrue(fund.hasOpenPositions(), "fund does not have open positions");
         assertTrue(
             UserConfiguration.isBorrowingAny(aaveV3Pool.getUserConfiguration(address(fund))),
             "fund is not borrowing"
-        );
-        /// check positions exist by pointer
-        assertTrue(
-            fund.holdsPosition(
-                keccak256(
-                    abi.encode(ARB_USDC, bytes4(keccak256("LEVERAGE")), type(IPool).interfaceId)
-                )
-            ),
-            "fund does not have leverage position 2"
-        );
-        assertTrue(
-            fund.holdsPosition(
-                keccak256(
-                    abi.encode(ARB_USDC, bytes4(keccak256("DEPOSIT")), type(IPool).interfaceId)
-                )
-            ),
-            "fund does not have deposit position 2"
         );
 
         /// full repay
@@ -395,27 +333,9 @@ contract TestAaveV3 is TestBaseFund, TestBaseProtocol, BaseAaveV3, TokenMinter {
         vm.prank(operator, operator);
         transactionModule.execute(calls);
 
-        assertTrue(fund.hasOpenPositions(), "fund does not have open positions");
         assertFalse(
             UserConfiguration.isBorrowingAny(aaveV3Pool.getUserConfiguration(address(fund))),
             "fund is borrowing"
-        );
-        /// check positions exist by pointer
-        assertFalse(
-            fund.holdsPosition(
-                keccak256(
-                    abi.encode(ARB_USDC, bytes4(keccak256("LEVERAGE")), type(IPool).interfaceId)
-                )
-            ),
-            "fund does not have leverage position 3"
-        );
-        assertTrue(
-            fund.holdsPosition(
-                keccak256(
-                    abi.encode(ARB_USDC, bytes4(keccak256("DEPOSIT")), type(IPool).interfaceId)
-                )
-            ),
-            "fund does not have deposit position 3"
         );
     }
 
@@ -425,7 +345,6 @@ contract TestAaveV3 is TestBaseFund, TestBaseProtocol, BaseAaveV3, TokenMinter {
         enableAsset(address(ARB_USDC))
     {
         assertEq(aUSDC.balanceOf(address(fund)), 0);
-        assertFalse(fund.hasOpenPositions());
 
         Transaction[] memory calls = new Transaction[](2);
 
@@ -447,23 +366,6 @@ contract TestAaveV3 is TestBaseFund, TestBaseProtocol, BaseAaveV3, TokenMinter {
         vm.prank(operator, operator);
         transactionModule.execute(calls);
 
-        assertTrue(fund.hasOpenPositions());
-        /// check positions exist by pointer
-        assertTrue(
-            fund.holdsPosition(
-                keccak256(
-                    abi.encode(ARB_USDC, bytes4(keccak256("LEVERAGE")), type(IPool).interfaceId)
-                )
-            )
-        );
-        assertTrue(
-            fund.holdsPosition(
-                keccak256(
-                    abi.encode(ARB_USDC, bytes4(keccak256("DEPOSIT")), type(IPool).interfaceId)
-                )
-            )
-        );
-
         /// full repay with atoken
         calls = new Transaction[](1);
         calls[0] = Transaction({
@@ -476,26 +378,6 @@ contract TestAaveV3 is TestBaseFund, TestBaseProtocol, BaseAaveV3, TokenMinter {
 
         vm.prank(operator, operator);
         transactionModule.execute(calls);
-
-        assertTrue(fund.hasOpenPositions());
-        assertFalse(
-            UserConfiguration.isBorrowingAny(aaveV3Pool.getUserConfiguration(address(fund)))
-        );
-        /// check positions exist by pointer
-        assertTrue(
-            fund.holdsPosition(
-                keccak256(
-                    abi.encode(ARB_USDC, bytes4(keccak256("DEPOSIT")), type(IPool).interfaceId)
-                )
-            )
-        );
-        assertFalse(
-            fund.holdsPosition(
-                keccak256(
-                    abi.encode(ARB_USDC, bytes4(keccak256("LEVERAGE")), type(IPool).interfaceId)
-                )
-            )
-        );
     }
 
     function test_cannot_withdraw_unauthorized_asset() public withAllowance(USDC) {

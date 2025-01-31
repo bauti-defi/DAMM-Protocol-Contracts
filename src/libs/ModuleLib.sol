@@ -3,9 +3,8 @@
 pragma solidity ^0.8.0;
 
 import {IModuleLib} from "@src/interfaces/IModuleLib.sol";
-import {IFund} from "@src/interfaces/IFund.sol";
+import {ISafe} from "@src/interfaces/ISafe.sol";
 import "@src/libs/Errors.sol";
-import {NULL_ROLE} from "@src/libs/Constants.sol";
 
 /// @title ModuleLib
 /// @notice Implementation of module deployment and management for funds
@@ -43,8 +42,8 @@ contract ModuleLib is IModuleLib {
         }
         if (module == address(0)) revert Errors.ModuleLib_DeploymentFailed();
 
-        IFund(address(this)).enableModule(module);
-        if (!IFund(address(this)).isModuleEnabled(module)) {
+        ISafe(address(this)).enableModule(module);
+        if (!ISafe(address(this)).isModuleEnabled(module)) {
             revert Errors.ModuleLib_ModuleSetupFailed();
         }
     }
@@ -56,29 +55,11 @@ contract ModuleLib is IModuleLib {
         returns (address module)
     {
         module = _deployModule(salt, value, creationCode);
-        emit ModuleDeployed(address(this), module, value, NULL_ROLE);
-    }
-
-    /// @inheritdoc IModuleLib
-    function deployModuleWithRoles(
-        bytes32 salt,
-        uint256 value,
-        bytes memory creationCode,
-        uint256 roles
-    ) external isDelegateCall returns (address module) {
-        module = _deployModule(salt, value, creationCode);
-        IFund(address(this)).grantRoles(module, roles);
-        emit ModuleDeployed(address(this), module, value, roles);
+        emit ModuleDeployed(address(this), module, value);
     }
 
     /// @inheritdoc IModuleLib
     function addModule(address module) external isDelegateCall {
-        IFund(address(this)).enableModule(module);
-    }
-
-    /// @inheritdoc IModuleLib
-    function addModuleWithRoles(address module, uint256 roles) external isDelegateCall {
-        IFund(address(this)).enableModule(module);
-        IFund(address(this)).grantRoles(module, roles);
+        ISafe(address(this)).enableModule(module);
     }
 }

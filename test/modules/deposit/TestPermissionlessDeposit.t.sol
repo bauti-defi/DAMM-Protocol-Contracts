@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: CC-BY-NC-4.0
-
 pragma solidity ^0.8.0;
 
 import {TestBaseDeposit, MINIMUM_DEPOSIT} from "./TestBaseDeposit.sol";
@@ -21,7 +20,7 @@ contract TestPermissionlessDeposit is TestBaseDeposit {
 
         address[] memory admins = new address[](1);
         admins[0] = fundAdmin;
-        safe = deploySafe(admins, 1);
+        safe = deploySafe(admins, 1, 2);
         vm.label(address(safe), "Holding Safe");
 
         permissionlessDepositModule = PermissionlessDepositModule(
@@ -61,6 +60,11 @@ contract TestPermissionlessDeposit is TestBaseDeposit {
         periphery.enableBrokerAssetPolicy(accountId, address(mockToken1), false);
         periphery.enableBrokerAssetPolicy(accountId, address(mockToken2), true);
         periphery.enableBrokerAssetPolicy(accountId, address(mockToken2), false);
+        vm.stopPrank();
+
+        vm.startPrank(address(fund));
+        balanceOfOracle.addBalanceToValuate(address(mockToken1), address(fund));
+        balanceOfOracle.addBalanceToValuate(address(mockToken2), address(fund));
         vm.stopPrank();
     }
 
@@ -377,27 +381,28 @@ contract TestPermissionlessDeposit is TestBaseDeposit {
         );
     }
 
+    error EnforcedPause();
+
     function test_can_only_deposit_and_withdraw_if_not_paused(bool intent)
         public
         approveAllPeriphery(address(safe))
         approveAllModule(alice)
     {
-        vm.startPrank(address(fund));
-        fund.pauseGlobal();
-        vm.stopPrank();
+        vm.prank(address(fund));
+        periphery.pause();
 
         vm.startPrank(alice);
         uint256 sharesOut;
         if (intent) {
             uint256 nonce = permissionlessDepositModule.nonces(alice);
-            vm.expectRevert(Errors.Paused.selector);
+            vm.expectRevert(EnforcedPause.selector);
             sharesOut = permissionlessDepositModule.intentDeposit(
                 depositIntent(
                     accountId, alice, alicePK, address(mockToken1), type(uint256).max, 0, 0, nonce
                 )
             );
         } else {
-            vm.expectRevert(Errors.Paused.selector);
+            vm.expectRevert(EnforcedPause.selector);
             sharesOut = permissionlessDepositModule.deposit(
                 depositOrder(accountId, alice, address(mockToken1), type(uint256).max)
             );
@@ -407,14 +412,14 @@ contract TestPermissionlessDeposit is TestBaseDeposit {
         vm.startPrank(alice);
         if (intent) {
             uint256 nonce = permissionlessDepositModule.nonces(alice);
-            vm.expectRevert(Errors.Paused.selector);
+            vm.expectRevert(EnforcedPause.selector);
             permissionlessDepositModule.intentWithdraw(
                 signedWithdrawIntent(
                     accountId, alice, alicePK, address(mockToken1), type(uint256).max, 0, 0, nonce
                 )
             );
         } else {
-            vm.expectRevert(Errors.Paused.selector);
+            vm.expectRevert(EnforcedPause.selector);
             permissionlessDepositModule.withdraw(
                 withdrawOrder(accountId, alice, address(mockToken1), type(uint256).max)
             );

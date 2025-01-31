@@ -3,14 +3,13 @@
 pragma solidity ^0.8.0;
 
 import "@openzeppelin-contracts/utils/introspection/ERC165.sol";
-import {IPortfolio} from "@src/interfaces/IPortfolio.sol";
 import "@src/libs/Errors.sol";
 
 abstract contract BaseHook is ERC165 {
-    IPortfolio public immutable fund;
+    address public immutable fund;
 
     constructor(address _fund) {
-        fund = IPortfolio(_fund);
+        fund = _fund;
     }
 
     modifier onlyFund() {

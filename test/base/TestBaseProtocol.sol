@@ -6,7 +6,6 @@ import {ModuleLib} from "@src/libs/ModuleLib.sol";
 import {Safe} from "@safe-contracts/Safe.sol";
 import {Enum} from "@src/interfaces/ISafe.sol";
 import {SafeUtils} from "@test/utils/SafeUtils.sol";
-import {IOwnable} from "@src/interfaces/IOwnable.sol";
 import "@openzeppelin-contracts/utils/Create2.sol";
 
 interface ICreateCall {
@@ -124,114 +123,5 @@ abstract contract TestBaseProtocol is Test {
         deployedModule = Create2.computeAddress(creationSalt, keccak256(moduleCreationCode), fund);
 
         assertTrue(safe.isModuleEnabled(deployedModule), "Module not enabled");
-    }
-
-    function deployModuleWithRoles(
-        address payable fund,
-        address admin,
-        uint256 adminPK,
-        bytes32 creationSalt,
-        uint256 valueToForward,
-        bytes memory moduleCreationCode,
-        uint256 roles
-    ) internal returns (address deployedModule) {
-        bytes memory transaction = abi.encodeWithSelector(
-            ModuleLib.deployModuleWithRoles.selector,
-            creationSalt,
-            valueToForward,
-            moduleCreationCode,
-            roles
-        );
-
-        Safe safe = Safe(fund);
-
-        {
-            bytes memory transactionData = safe.encodeTransactionData(
-                address(moduleLib),
-                valueToForward,
-                transaction,
-                Enum.Operation.DelegateCall,
-                0,
-                0,
-                0,
-                address(0),
-                payable(address(0)),
-                safe.nonce()
-            );
-
-            bytes memory transactionSignature =
-                SafeUtils.buildSafeSignatures(abi.encode(adminPK), keccak256(transactionData), 1);
-
-            vm.startPrank(admin, admin);
-            bool success = safe.execTransaction(
-                address(moduleLib),
-                valueToForward,
-                transaction,
-                Enum.Operation.DelegateCall,
-                0,
-                0,
-                0,
-                address(0),
-                payable(address(0)),
-                transactionSignature
-            );
-            vm.stopPrank();
-
-            assertTrue(success, "Failed to deploy module with roles");
-        }
-
-        deployedModule = Create2.computeAddress(creationSalt, keccak256(moduleCreationCode), fund);
-
-        assertTrue(safe.isModuleEnabled(deployedModule), "Module not enabled");
-        assertTrue(IOwnable(address(fund)).hasAllRoles(deployedModule, roles), "Roles not set");
-    }
-
-    function addModuleWithRoles(
-        address payable fund,
-        address admin,
-        uint256 adminPK,
-        address module,
-        uint256 roles
-    ) internal {
-        bytes memory transaction =
-            abi.encodeWithSelector(ModuleLib.addModuleWithRoles.selector, module, roles);
-
-        Safe safe = Safe(fund);
-
-        bytes memory transactionData = safe.encodeTransactionData(
-            address(moduleLib),
-            0,
-            transaction,
-            Enum.Operation.DelegateCall,
-            0,
-            0,
-            0,
-            address(0),
-            payable(address(0)),
-            safe.nonce()
-        );
-
-        bytes memory transactionSignature =
-            SafeUtils.buildSafeSignatures(abi.encode(adminPK), keccak256(transactionData), 1);
-
-        vm.startPrank(admin, admin);
-        bool success = safe.execTransaction(
-            address(moduleLib),
-            0,
-            transaction,
-            Enum.Operation.DelegateCall,
-            0,
-            0,
-            0,
-            address(0),
-            payable(address(0)),
-            transactionSignature
-        );
-        vm.stopPrank();
-
-        assertTrue(success, "Failed to add module with roles");
-
-        assertTrue(safe.isModuleEnabled(module), "Module not enabled");
-        assertTrue(IOwnable(address(fund)).hasAllRoles(module, roles), "Roles not set");
     }
 }

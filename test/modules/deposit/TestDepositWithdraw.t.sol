@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: CC-BY-NC-4.0
-
 pragma solidity ^0.8.0;
 
 import "@src/modules/deposit/Structs.sol";
@@ -18,6 +17,9 @@ contract TestDepositWithdraw is TestBaseDeposit {
 
     function setUp() public override(TestBaseDeposit) {
         TestBaseDeposit.setUp();
+
+        vm.prank(address(fund));
+        balanceOfOracle.addBalanceToValuate(address(mockToken1), address(fund));
     }
 
     struct TestEntranceFeeParams {

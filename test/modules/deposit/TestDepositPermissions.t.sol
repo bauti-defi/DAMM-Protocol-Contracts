@@ -1,14 +1,16 @@
 // SPDX-License-Identifier: CC-BY-NC-4.0
-
 pragma solidity ^0.8.0;
 
-import {TestBaseFund} from "@test/base/TestBaseFund.sol";
-import {TestBaseProtocol} from "@test/base/TestBaseProtocol.sol";
 import {EulerRouter} from "@euler-price-oracle/EulerRouter.sol";
-import {Periphery} from "@src/modules/deposit/Periphery.sol";
-import {FundValuationOracle} from "@src/oracles/FundValuationOracle.sol";
+import {
+    Periphery,
+    FUND_ROLE,
+    MINTER_ROLE,
+    PAUSER_ROLE,
+    IAccessControl,
+    IERC721Errors
+} from "@src/modules/deposit/Periphery.sol";
 import "@src/modules/deposit/Structs.sol";
-import {NATIVE_ASSET, PAUSER_ROLE} from "@src/libs/Constants.sol";
 import {MockERC20} from "@test/mocks/MockERC20.sol";
 import {MockPriceOracle} from "@test/mocks/MockPriceOracle.sol";
 import "@openzeppelin-contracts/utils/cryptography/MessageHashUtils.sol";
@@ -25,6 +27,9 @@ contract TestDepositPermissions is TestBaseDeposit {
         TestBaseDeposit.setUp();
 
         mockToken1.mint(alice, 100_000_000 * mock1Unit);
+
+        vm.prank(address(fund));
+        balanceOfOracle.addBalanceToValuate(address(mockToken1), address(fund));
     }
 
     function test_only_fund_can_enable_broker_asset_policy(address attacker)
@@ -34,11 +39,19 @@ contract TestDepositPermissions is TestBaseDeposit {
         vm.assume(attacker != address(fund));
 
         vm.prank(attacker);
-        vm.expectRevert(Errors.OnlyFund.selector);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, attacker, FUND_ROLE
+            )
+        );
         periphery.enableBrokerAssetPolicy(1, address(mockToken1), true);
 
         vm.prank(attacker);
-        vm.expectRevert(Errors.OnlyFund.selector);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, attacker, FUND_ROLE
+            )
+        );
         periphery.enableBrokerAssetPolicy(1, address(mockToken1), false);
 
         assertFalse(periphery.isBrokerAssetPolicyEnabled(1, address(mockToken1), true));
@@ -156,7 +169,11 @@ contract TestDepositPermissions is TestBaseDeposit {
         vm.assume(attacker != address(fund));
 
         vm.prank(attacker);
-        vm.expectRevert(Errors.OnlyFund.selector);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, attacker, FUND_ROLE
+            )
+        );
         periphery.setNetDepositLimit(limit_);
 
         vm.prank(address(fund));
@@ -396,18 +413,26 @@ contract TestDepositPermissions is TestBaseDeposit {
         periphery.intentWithdraw(wOrder);
     }
 
-    function test_only_admin_can_pause_unpause_account(address attacker)
+    function test_only_minter_role_can_pause_unpause_account(address attacker)
         public
         openAccount(alice, 1000000, false)
     {
         vm.assume(attacker != address(fund));
 
         vm.prank(attacker);
-        vm.expectRevert(Errors.OnlyAdmin.selector);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, attacker, MINTER_ROLE
+            )
+        );
         periphery.pauseAccount(1);
 
         vm.prank(attacker);
-        vm.expectRevert(Errors.OnlyAdmin.selector);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, attacker, MINTER_ROLE
+            )
+        );
         periphery.unpauseAccount(1);
 
         vm.prank(address(fund));
@@ -421,25 +446,29 @@ contract TestDepositPermissions is TestBaseDeposit {
         assertTrue(periphery.getAccountInfo(1).state == AccountState.ACTIVE);
     }
 
-    function test_only_admin_can_close_account(address attacker)
+    function test_only_minter_role_can_close_account(address attacker)
         public
         openAccount(alice, 1000000, false)
     {
         vm.assume(attacker != address(fund));
 
         vm.prank(attacker);
-        vm.expectRevert(Errors.OnlyAdmin.selector);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, attacker, MINTER_ROLE
+            )
+        );
         periphery.closeAccount(1);
 
         vm.prank(address(fund));
         periphery.closeAccount(1);
 
         assertTrue(periphery.getAccountInfo(1).state == AccountState.CLOSED);
-        vm.expectRevert();
+        vm.expectRevert(abi.encodeWithSelector(IERC721Errors.ERC721NonexistentToken.selector, 1));
         periphery.ownerOf(1);
     }
 
-    function test_only_fund_or_pauser_can_pause_unpause_module(address attacker, address pauser)
+    function test_only_pauser_role_can_pause_unpause_module(address attacker, address pauser)
         public
     {
         vm.assume(attacker != address(fund));
@@ -448,35 +477,43 @@ contract TestDepositPermissions is TestBaseDeposit {
         vm.assume(pauser != attacker);
 
         vm.prank(address(fund));
-        fund.grantRoles(pauser, PAUSER_ROLE);
+        periphery.grantRole(PAUSER_ROLE, pauser);
 
         vm.prank(attacker);
-        vm.expectRevert(Errors.Fund_NotAuthorized.selector);
-        fund.pause(address(periphery));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, attacker, PAUSER_ROLE
+            )
+        );
+        periphery.pause();
 
         vm.prank(address(fund));
-        fund.pause(address(periphery));
+        periphery.pause();
 
-        assertTrue(fund.paused(address(periphery)));
+        assertTrue(periphery.paused());
 
         vm.prank(attacker);
-        vm.expectRevert(Errors.Fund_NotAuthorized.selector);
-        fund.unpause(address(periphery));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, attacker, PAUSER_ROLE
+            )
+        );
+        periphery.unpause();
 
         vm.prank(address(fund));
-        fund.unpause(address(periphery));
+        periphery.unpause();
 
-        assertTrue(!fund.paused(address(periphery)));
-
-        vm.prank(pauser);
-        fund.pause(address(periphery));
-
-        assertTrue(fund.paused(address(periphery)));
+        assertFalse(periphery.paused());
 
         vm.prank(pauser);
-        fund.unpause(address(periphery));
+        periphery.pause();
 
-        assertTrue(!fund.paused(address(periphery)));
+        assertTrue(periphery.paused());
+
+        vm.prank(pauser);
+        periphery.unpause();
+
+        assertFalse(periphery.paused());
     }
 
     function test_cannot_transfer_souldbound_broker_account(address attacker)
@@ -523,24 +560,15 @@ contract TestDepositPermissions is TestBaseDeposit {
         assertEq(periphery.ownerOf(1), alice);
     }
 
-    function test_only_fund_can_change_admin(address attacker) public {
-        vm.assume(attacker != address(fund) && attacker != address(0));
-
-        vm.prank(attacker);
-        vm.expectRevert(Errors.OnlyFund.selector);
-        periphery.setAdmin(attacker);
-
-        vm.prank(address(fund));
-        periphery.setAdmin(attacker);
-
-        assertTrue(periphery.admin() == attacker);
-    }
-
     function test_only_fund_can_change_protocol_fee_recipient(address attacker) public {
         vm.assume(attacker != address(fund) && attacker != address(0));
 
         vm.prank(attacker);
-        vm.expectRevert(Errors.OnlyFund.selector);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, attacker, FUND_ROLE
+            )
+        );
         periphery.setProtocolFeeRecipient(attacker);
 
         vm.prank(address(fund));
@@ -553,7 +581,11 @@ contract TestDepositPermissions is TestBaseDeposit {
         vm.assume(attacker != address(fund));
 
         vm.prank(attacker);
-        vm.expectRevert(Errors.OnlyFund.selector);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, attacker, FUND_ROLE
+            )
+        );
         periphery.setManagementFeeRateInBps(100);
 
         vm.prank(address(fund));

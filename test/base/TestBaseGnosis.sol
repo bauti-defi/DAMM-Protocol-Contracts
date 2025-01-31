@@ -35,10 +35,12 @@ abstract contract TestBaseGnosis is Test {
         vm.label(address(createCall), "CreateCall");
     }
 
-    function deploySafe(address[] memory admins, uint256 threshold, address fallbackHandler)
-        internal
-        returns (SafeL2)
-    {
+    function deploySafe(
+        address[] memory admins,
+        uint256 threshold,
+        address fallbackHandler,
+        uint256 nonce
+    ) internal returns (SafeL2) {
         // create gnosis safe initializer payload
         bytes memory initializerPayload = abi.encodeCall(
             Safe.setup,
@@ -56,14 +58,19 @@ abstract contract TestBaseGnosis is Test {
 
         address payable safe = payable(
             address(
-                safeProxyFactory.createProxyWithNonce(address(safeSingleton), initializerPayload, 1)
+                safeProxyFactory.createProxyWithNonce(
+                    address(safeSingleton), initializerPayload, nonce
+                )
             )
         );
 
         return SafeL2(safe);
     }
 
-    function deploySafe(address[] memory admins, uint256 threshold) internal returns (SafeL2) {
-        return deploySafe(admins, threshold, address(tokenCallbackHandler));
+    function deploySafe(address[] memory admins, uint256 threshold, uint256 nonce)
+        internal
+        returns (SafeL2)
+    {
+        return deploySafe(admins, threshold, address(tokenCallbackHandler), nonce);
     }
 }

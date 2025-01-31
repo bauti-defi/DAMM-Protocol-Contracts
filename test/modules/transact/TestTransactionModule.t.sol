@@ -2,7 +2,8 @@
 pragma solidity ^0.8.0;
 
 import {console2} from "@forge-std/Test.sol";
-import {TestBaseFund} from "@test/base/TestBaseFund.sol";
+import {TestBaseGnosis} from "@test/base/TestBaseGnosis.sol";
+import {ISafe} from "@src/interfaces/ISafe.sol";
 import {TestBaseProtocol} from "@test/base/TestBaseProtocol.sol";
 import {SafeL2} from "@safe-contracts/SafeL2.sol";
 import {TransactionModule} from "@src/modules/transact/TransactionModule.sol";
@@ -115,11 +116,12 @@ contract RevertAfterHook is BaseHook, IAfterTransaction {
     }
 }
 
-contract TestTransactionModule is TestBaseFund, TestBaseProtocol {
+contract TestTransactionModule is TestBaseGnosis, TestBaseProtocol {
     using SafeUtils for SafeL2;
 
     address internal fundAdmin;
     uint256 internal fundAdminPK;
+    ISafe internal fund;
     HookRegistry internal hookRegistry;
     TransactionModule internal transactionModule;
     MockTarget internal target;
@@ -128,8 +130,8 @@ contract TestTransactionModule is TestBaseFund, TestBaseProtocol {
 
     address internal operator;
 
-    function setUp() public override(TestBaseFund, TestBaseProtocol) {
-        TestBaseFund.setUp();
+    function setUp() public override(TestBaseGnosis, TestBaseProtocol) {
+        TestBaseGnosis.setUp();
         TestBaseProtocol.setUp();
 
         operator = makeAddr("Operator");
@@ -140,8 +142,7 @@ contract TestTransactionModule is TestBaseFund, TestBaseProtocol {
         address[] memory admins = new address[](1);
         admins[0] = fundAdmin;
 
-        fund =
-            fundFactory.deployFund(address(safeProxyFactory), address(safeSingleton), admins, 1, 1);
+        fund = ISafe(address(deploySafe(admins, 1, 1)));
         vm.label(address(fund), "Fund");
         assertTrue(address(fund) != address(0), "Failed to deploy fund");
         assertTrue(fund.isOwner(fundAdmin), "Fund admin not owner");

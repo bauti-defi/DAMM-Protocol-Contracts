@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: CC-BY-NC-4.0
-
 pragma solidity ^0.8.0;
 
-import {TestBaseFund} from "@test/base/TestBaseFund.sol";
+import {TestBaseGnosis} from "@test/base/TestBaseGnosis.sol";
 import {TestBaseProtocol} from "@test/base/TestBaseProtocol.sol";
 import {EulerRouter} from "@euler-price-oracle/EulerRouter.sol";
+import {ISafe} from "@src/interfaces/ISafe.sol";
 import {Periphery} from "@src/modules/deposit/Periphery.sol";
-import {FundValuationOracle} from "@src/oracles/FundValuationOracle.sol";
+import {BalanceOfOracle} from "@src/oracles/BalanceOfOracle.sol";
 import {MockERC20} from "@test/mocks/MockERC20.sol";
 import {MockPriceOracle} from "@test/mocks/MockPriceOracle.sol";
 import {MessageHashUtils} from "@openzeppelin-contracts/utils/cryptography/MessageHashUtils.sol";
@@ -20,16 +20,19 @@ uint256 constant VAULT_DECIMAL_OFFSET = 1;
 uint256 constant MINIMUM_DEPOSIT = 1000;
 uint256 constant MINIMUM_WITHDRAWAL = 1000;
 
-abstract contract TestBaseDeposit is TestBaseFund, TestBaseProtocol {
+abstract contract TestBaseDeposit is TestBaseGnosis, TestBaseProtocol {
     using MessageHashUtils for bytes;
     using SignedMath for int256;
 
     address internal fundAdmin;
     uint256 internal fundAdminPK;
+    ISafe internal fund;
     EulerRouter internal oracleRouter;
     Periphery internal periphery;
     MockERC20 internal mockToken1;
     MockERC20 internal mockToken2;
+
+    BalanceOfOracle internal balanceOfOracle;
 
     address alice;
     uint256 internal alicePK;
@@ -43,8 +46,8 @@ abstract contract TestBaseDeposit is TestBaseFund, TestBaseProtocol {
     uint256 mock2Unit;
     uint256 oneUnitOfAccount;
 
-    function setUp() public virtual override(TestBaseFund, TestBaseProtocol) {
-        TestBaseFund.setUp();
+    function setUp() public virtual override(TestBaseGnosis, TestBaseProtocol) {
+        TestBaseGnosis.setUp();
         TestBaseProtocol.setUp();
 
         (feeRecipient, feeRecipientPK) = makeAddrAndKey("FeeRecipient");
@@ -61,8 +64,7 @@ abstract contract TestBaseDeposit is TestBaseFund, TestBaseProtocol {
         address[] memory admins = new address[](1);
         admins[0] = fundAdmin;
 
-        fund =
-            fundFactory.deployFund(address(safeProxyFactory), address(safeSingleton), admins, 1, 1);
+        fund = ISafe(address(deploySafe(admins, 1, 1)));
         vm.label(address(fund), "Fund");
 
         require(address(fund).balance == 0, "Fund should not have balance");
@@ -114,7 +116,7 @@ abstract contract TestBaseDeposit is TestBaseFund, TestBaseProtocol {
 
         // lets enable assets on the fund
         vm.startPrank(address(fund));
-        fund.setAssetToValuate(address(mockToken1));
+        // fund.setAssetToValuate(address(mockToken1));
         periphery.enableGlobalAssetPolicy(
             address(mockToken1),
             AssetPolicy({
@@ -126,7 +128,7 @@ abstract contract TestBaseDeposit is TestBaseFund, TestBaseProtocol {
             })
         );
 
-        fund.setAssetToValuate(address(mockToken2));
+        // fund.setAssetToValuate(address(mockToken2));
         periphery.enableGlobalAssetPolicy(
             address(mockToken2),
             AssetPolicy({
@@ -139,7 +141,7 @@ abstract contract TestBaseDeposit is TestBaseFund, TestBaseProtocol {
         );
 
         // native eth
-        fund.setAssetToValuate(NATIVE_ASSET);
+        // fund.setAssetToValuate(NATIVE_ASSET);
         periphery.enableGlobalAssetPolicy(
             NATIVE_ASSET,
             AssetPolicy({
@@ -154,10 +156,10 @@ abstract contract TestBaseDeposit is TestBaseFund, TestBaseProtocol {
 
         address unitOfAccount = address(periphery.unitOfAccount());
 
-        FundValuationOracle valuationOracle = new FundValuationOracle(address(oracleRouter));
-        vm.label(address(valuationOracle), "FundValuationOracle");
+        balanceOfOracle = new BalanceOfOracle(address(fund), address(oracleRouter));
+        vm.label(address(balanceOfOracle), "BalanceOfOracle");
         vm.prank(address(fund));
-        oracleRouter.govSetConfig(address(fund), unitOfAccount, address(valuationOracle));
+        oracleRouter.govSetConfig(address(fund), unitOfAccount, address(balanceOfOracle));
 
         MockPriceOracle mockPriceOracle = new MockPriceOracle(
             address(mockToken1), unitOfAccount, 1 * 10 ** VALUATION_DECIMALS, VALUATION_DECIMALS

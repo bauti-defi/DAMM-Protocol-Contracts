@@ -1,9 +1,13 @@
 // SPDX-License-Identifier: CC-BY-NC-4.0
-
 pragma solidity ^0.8.0;
 
 import {TestBaseDeposit, MINIMUM_DEPOSIT} from "./TestBaseDeposit.sol";
-import {WhitelistDepositModule} from "@src/modules/deposit/WhitelistDepositModule.sol";
+import {
+    WhitelistDepositModule,
+    WHITELIST_ROLE,
+    USER_ROLE,
+    IAccessControl
+} from "@src/modules/deposit/WhitelistDepositModule.sol";
 import {CreateAccountParams} from "@src/modules/deposit/Structs.sol";
 import {SafeL2} from "@safe-contracts/SafeL2.sol";
 import {Errors} from "@src/libs/Errors.sol";
@@ -21,7 +25,7 @@ contract TestWhitelistDeposit is TestBaseDeposit {
 
         address[] memory admins = new address[](1);
         admins[0] = fundAdmin;
-        safe = deploySafe(admins, 1);
+        safe = deploySafe(admins, 1, 2);
         vm.label(address(safe), "Holding Safe");
 
         whitelistDepositModule = WhitelistDepositModule(
@@ -60,6 +64,11 @@ contract TestWhitelistDeposit is TestBaseDeposit {
 
         _enableBrokerAssetPolicy(address(fund), 1, address(mockToken1), true);
         _enableBrokerAssetPolicy(address(fund), 1, address(mockToken1), false);
+
+        vm.startPrank(address(fund));
+        balanceOfOracle.addBalanceToValuate(address(mockToken1), address(fund));
+        balanceOfOracle.addBalanceToValuate(address(mockToken2), address(fund));
+        vm.stopPrank();
     }
 
     modifier approveAllModule(address user) {
@@ -80,8 +89,8 @@ contract TestWhitelistDeposit is TestBaseDeposit {
         vm.assume(_amount > MINIMUM_DEPOSIT);
 
         if (whitelisted) {
-            vm.prank(address(safe));
-            whitelistDepositModule.addUserToWhitelist(alice);
+            vm.prank(address(fund));
+            whitelistDepositModule.grantRole(USER_ROLE, alice);
         }
 
         uint256 amount = uint256(_amount);
@@ -93,34 +102,28 @@ contract TestWhitelistDeposit is TestBaseDeposit {
             uint256 nonce = whitelistDepositModule.nonces(alice);
 
             vm.prank(relayer);
-            if (!whitelisted) vm.expectRevert(Errors.OnlyWhitelisted.selector);
+            if (!whitelisted) {
+                vm.expectRevert(
+                    abi.encodeWithSelector(
+                        IAccessControl.AccessControlUnauthorizedAccount.selector, alice, USER_ROLE
+                    )
+                );
+            }
             sharesOut = whitelistDepositModule.intentDeposit(
                 depositIntent(accountId, alice, alicePK, address(mockToken1), amount, 0, 0, nonce)
             );
         } else {
             vm.prank(alice);
-            if (!whitelisted) vm.expectRevert(Errors.OnlyWhitelisted.selector);
+            if (!whitelisted) {
+                vm.expectRevert(
+                    abi.encodeWithSelector(
+                        IAccessControl.AccessControlUnauthorizedAccount.selector, alice, USER_ROLE
+                    )
+                );
+            }
             sharesOut = whitelistDepositModule.deposit(
                 depositOrder(accountId, alice, address(mockToken1), amount)
             );
         }
-    }
-
-    function test_only_admin_can_add_remove_whitelisted_users(address attacker) public {
-        vm.assume(attacker != address(safe));
-
-        vm.expectRevert(Errors.OnlyAdmin.selector);
-        vm.prank(attacker);
-        whitelistDepositModule.addUserToWhitelist(alice);
-
-        vm.expectRevert(Errors.OnlyAdmin.selector);
-        vm.prank(attacker);
-        whitelistDepositModule.removeUserFromWhitelist(alice);
-
-        vm.prank(address(safe));
-        whitelistDepositModule.addUserToWhitelist(alice);
-
-        vm.prank(address(safe));
-        whitelistDepositModule.removeUserFromWhitelist(alice);
     }
 }

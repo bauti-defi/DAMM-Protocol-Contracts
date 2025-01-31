@@ -11,25 +11,22 @@ import "@src/interfaces/ITransactionModule.sol";
 import "./Structs.sol";
 import {BP_DIVISOR} from "@src/libs/Constants.sol";
 import {SafeLib} from "@src/libs/SafeLib.sol";
-import {IFund} from "@src/interfaces/IFund.sol";
-import {Pausable} from "@src/core/Pausable.sol";
+import "@openzeppelin-contracts/access/AccessControl.sol";
+import "@openzeppelin-contracts/utils/Pausable.sol";
 
 /// @title Transaction Module
 /// @notice A Safe module that executes transactions with hook-based validation
 /// @dev Supports multicall execution with before/after hooks and gas refunds
-contract TransactionModule is ReentrancyGuard, Pausable, ITransactionModule {
+contract TransactionModule is AccessControl, Pausable, ReentrancyGuard, ITransactionModule {
     using SafeLib for ISafe;
+
+    bytes32 constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
+    bytes32 constant FUND_ROLE = keccak256("FUND_ROLE");
 
     /// @inheritdoc ITransactionModule
     address public immutable fund;
     /// @inheritdoc ITransactionModule
     IHookRegistry public immutable hookRegistry;
-
-    /// @notice Ensures caller is the fund contract
-    modifier onlyFund() {
-        if (msg.sender != fund) revert Errors.OnlyFund();
-        _;
-    }
 
     /// @notice Refunds gas costs to the transaction caller
     /// @dev Refund will not be exact but approximates actual gas used
@@ -49,19 +46,23 @@ contract TransactionModule is ReentrancyGuard, Pausable, ITransactionModule {
     }
 
     /// @notice Creates a new transaction module
-    /// @param owner The fund contract address
+    /// @param _fund The fund contract address
     /// @param _hookRegistry The hook registry contract address
-    constructor(address owner, address _hookRegistry) Pausable(owner) {
-        fund = owner;
+    constructor(address _fund, address _hookRegistry) Pausable() {
+        fund = _fund;
         hookRegistry = IHookRegistry(_hookRegistry);
+
+        _grantRole(DEFAULT_ADMIN_ROLE, _fund);
+        _grantRole(FUND_ROLE, _fund);
+        _grantRole(PAUSER_ROLE, _fund);
     }
 
     /// @inheritdoc ITransactionModule
     function execute(Transaction[] calldata transactions)
         external
         nonReentrant
+        whenNotPaused
         refundGasToCaller
-        notPaused
     {
         uint256 transactionCount = transactions.length;
 
@@ -132,5 +133,21 @@ contract TransactionModule is ReentrancyGuard, Pausable, ITransactionModule {
                 ++i;
             }
         }
+    }
+
+    function pause() external onlyRole(PAUSER_ROLE) {
+        _pause();
+    }
+
+    function unpause() external onlyRole(PAUSER_ROLE) {
+        _unpause();
+    }
+
+    function setPauser(address _pauser) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _grantRole(PAUSER_ROLE, _pauser);
+    }
+
+    function revokePauser(address _pauser) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _revokeRole(PAUSER_ROLE, _pauser);
     }
 }
