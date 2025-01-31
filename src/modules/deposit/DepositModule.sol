@@ -37,6 +37,9 @@ abstract contract DepositModule is IDepositModule {
     /// @notice The Gnosis Safe this module is attached to
     address public immutable safe;
 
+    /// @notice The fund contract address
+    address public immutable fund;
+
     /// @notice Mapping of user nonces for replay protection
     mapping(address user => uint256 nonce) public nonces;
 
@@ -45,6 +48,7 @@ abstract contract DepositModule is IDepositModule {
     /// @param safe_ The Gnosis Safe address
     /// @param periphery_ The periphery contract address
     constructor(address fund_, address safe_, address periphery_) {
+        fund = fund_;
         safe = safe_;
         periphery = periphery_;
     }
@@ -56,6 +60,10 @@ abstract contract DepositModule is IDepositModule {
     function _deposit(DepositOrder calldata order) internal returns (uint256 sharesOut) {
         ERC20 asset = ERC20(order.asset);
         uint256 amount = _getAmount(asset, order.amount, msg.sender);
+
+        /// @notice send the assets to the safe
+        /// since safe is the holder of the brokerage nft
+        /// it will call periphery to deposit on behalf of the sender
         asset.safeTransferFrom(msg.sender, safe, amount);
 
         bytes memory returnData = ISafe(safe).executeAndReturnDataOrRevert(
@@ -98,7 +106,7 @@ abstract contract DepositModule is IDepositModule {
         if (order.intent.bribe > 0) {
             asset.safeTransferFrom(
                 order.intent.deposit.recipient,
-                address(IPeriphery(periphery).fund()),
+                fund,
                 order.intent.bribe
             );
         }
@@ -107,6 +115,7 @@ abstract contract DepositModule is IDepositModule {
             _getAmount(asset, order.intent.deposit.amount, order.intent.deposit.recipient);
 
         /// transfer the remaining amount to the safe to be deposited
+        /// @dev transfer assets after paying the bribe and relayer tip incase amount = max uint256
         asset.safeTransferFrom(order.intent.deposit.recipient, safe, amount);
 
         bytes memory returnData = ISafe(safe).executeAndReturnDataOrRevert(
@@ -177,9 +186,7 @@ abstract contract DepositModule is IDepositModule {
 
         /// if there is a bribe, we need to transfer it to the fund
         if (order.intent.bribe > 0) {
-            asset.safeTransferFrom(
-                order.intent.withdraw.to, address(IPeriphery(periphery).fund()), order.intent.bribe
-            );
+            asset.safeTransferFrom(order.intent.withdraw.to, fund, order.intent.bribe);
         }
     }
 
