@@ -41,7 +41,9 @@ import {ISafe} from "@src/interfaces/ISafe.sol";
 /// And the transfer hook for transfering assets to and from child funds.
 contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
     uint8 constant VALUATION_DECIMALS = 18;
+    uint8 constant TRUSTED_ORACLE_PRECISION = VALUATION_DECIMALS - 1;
     uint256 constant VAULT_DECIMAL_OFFSET = 1;
+    uint256 constant SCALAR = 10 ** 6;
 
     uint256 internal arbitrumFork;
 
@@ -749,15 +751,15 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
 
         vm.startPrank(protocolAdmin);
         fundATrustedRateOracle.updateRate(
-            1 * 10 ** (VALUATION_DECIMALS - 1), block.timestamp + 100000
+            1 * 10 ** (TRUSTED_ORACLE_PRECISION), block.timestamp + 100000
         );
         fundBTrustedRateOracle.updateRate(
-            1 * 10 ** (VALUATION_DECIMALS - 1), block.timestamp + 100000
+            1 * 10 ** (TRUSTED_ORACLE_PRECISION), block.timestamp + 100000
         );
         vm.stopPrank();
 
-        mintUSDC(broker, 10_000_000);
-        mintUSDT(broker, 10_000_000);
+        mintUSDC(broker, 100 * SCALAR);
+        mintUSDT(broker, 100 * SCALAR);
 
         vm.startPrank(broker);
         peripheryA.deposit(
@@ -765,7 +767,7 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
                 accountId: brokerAId,
                 recipient: broker,
                 asset: ARB_USDC,
-                amount: 2_000_000,
+                amount: 20 * SCALAR,
                 deadline: block.timestamp + 1000,
                 minSharesOut: 0,
                 referralCode: 0
@@ -773,8 +775,8 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
         );
         vm.stopPrank();
 
-        assertEq(USDC.balanceOf(broker), 8_000_000);
-        assertEq(USDC.balanceOf(address(fundA)), 2_000_000);
+        assertEq(USDC.balanceOf(broker), 80 * SCALAR);
+        assertEq(USDC.balanceOf(address(fundA)), 20 * SCALAR);
         assertGt(peripheryA.internalVault().balanceOf(broker), 0);
 
         // we check the fund A tvl using the oracle router
@@ -797,7 +799,7 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
             target: ARB_USDC,
             value: 0,
             targetSelector: IERC20.transfer.selector,
-            data: abi.encode(address(fundAChild1), 500_000),
+            data: abi.encode(address(fundAChild1), 5 * SCALAR),
             operation: uint8(Enum.Operation.Call)
         });
 
@@ -805,16 +807,16 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
             target: ARB_USDC,
             value: 0,
             targetSelector: IERC20.transfer.selector,
-            data: abi.encode(address(fundAChild2), 500_000),
+            data: abi.encode(address(fundAChild2), 5 * SCALAR),
             operation: uint8(Enum.Operation.Call)
         });
 
         vm.prank(operator);
         transactionModuleA.execute(transactions);
 
-        assertEq(USDC.balanceOf(address(fundAChild1)), 500_000);
-        assertEq(USDC.balanceOf(address(fundAChild2)), 500_000);
-        assertEq(USDC.balanceOf(address(fundA)), 1_000_000);
+        assertEq(USDC.balanceOf(address(fundAChild1)), 5 * SCALAR);
+        assertEq(USDC.balanceOf(address(fundAChild2)), 5 * SCALAR);
+        assertEq(USDC.balanceOf(address(fundA)), 10 * SCALAR);
         assertEq(
             oracleRouter.getQuote(
                 peripheryA.internalVault().totalSupply(),
@@ -837,7 +839,7 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
                     accountId: fundABrokerId,
                     recipient: address(fundA),
                     asset: ARB_USDC,
-                    amount: 500_000,
+                    amount: 5 * SCALAR,
                     deadline: block.timestamp + 100000,
                     minSharesOut: 0,
                     referralCode: 0
@@ -849,10 +851,10 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
         vm.prank(operator);
         transactionModuleA.execute(transactions);
 
-        assertEq(USDC.balanceOf(address(fundAChild1)), 500_000);
-        assertEq(USDC.balanceOf(address(fundAChild2)), 500_000);
-        assertEq(USDC.balanceOf(address(fundA)), 500_000);
-        assertEq(USDC.balanceOf(address(fundB)), 500_000);
+        assertEq(USDC.balanceOf(address(fundAChild1)), 5 * SCALAR);
+        assertEq(USDC.balanceOf(address(fundAChild2)), 5 * SCALAR);
+        assertEq(USDC.balanceOf(address(fundA)), 5 * SCALAR);
+        assertEq(USDC.balanceOf(address(fundB)), 5 * SCALAR);
         assertEq(
             oracleRouter.getQuote(
                 peripheryA.internalVault().totalSupply(),
@@ -869,7 +871,7 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
             target: ARB_USDC,
             value: 0,
             targetSelector: IERC20.transferFrom.selector,
-            data: abi.encode(address(fundAChild1), address(fundA), 500_000),
+            data: abi.encode(address(fundAChild1), address(fundA), 5 * SCALAR),
             operation: uint8(Enum.Operation.Call)
         });
 
@@ -877,7 +879,7 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
             target: ARB_USDC,
             value: 0,
             targetSelector: IERC20.transferFrom.selector,
-            data: abi.encode(address(fundAChild2), address(fundA), 500_000),
+            data: abi.encode(address(fundAChild2), address(fundA), 5 * SCALAR),
             operation: uint8(Enum.Operation.Call)
         });
 
@@ -886,8 +888,8 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
 
         assertEq(USDC.balanceOf(address(fundAChild1)), 0);
         assertEq(USDC.balanceOf(address(fundAChild2)), 0);
-        assertEq(USDC.balanceOf(address(fundA)), 1_500_000);
-        assertEq(USDC.balanceOf(address(fundB)), 500_000);
+        assertEq(USDC.balanceOf(address(fundA)), 15 * SCALAR);
+        assertEq(USDC.balanceOf(address(fundB)), 5 * SCALAR);
         assertEq(
             oracleRouter.getQuote(
                 peripheryA.internalVault().totalSupply(),
@@ -923,7 +925,7 @@ contract TestFundIntegration is TestBaseGnosis, TestBaseProtocol, TokenMinter {
 
         assertEq(USDC.balanceOf(address(fundAChild1)), 0);
         assertEq(USDC.balanceOf(address(fundAChild2)), 0);
-        assertEq(USDC.balanceOf(address(fundA)), 2_000_000);
+        assertEq(USDC.balanceOf(address(fundA)), 20 * SCALAR);
         assertEq(USDC.balanceOf(address(fundB)), 0);
         assertEq(
             oracleRouter.getQuote(

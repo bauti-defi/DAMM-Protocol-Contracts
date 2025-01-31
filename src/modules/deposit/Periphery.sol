@@ -718,6 +718,10 @@ contract Periphery is ERC721, AccessControl, Pausable, ReentrancyGuard, IPeriphe
         return assetPolicy[asset_];
     }
 
+    function skimManagementFee() external {
+        _takeManagementFee();
+    }
+
     function enableBrokerAssetPolicy(uint256 accountId_, address asset_, bool isDeposit_)
         external
         whenNotPaused

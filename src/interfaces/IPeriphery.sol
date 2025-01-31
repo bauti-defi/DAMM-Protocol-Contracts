@@ -121,6 +121,9 @@ interface IPeriphery {
     /// @notice Updates the net deposit limit
     function setNetDepositLimit(uint256 limit) external;
 
+    /// @notice Skims the management fee
+    function skimManagementFee() external;
+
     /// @notice Enables an asset for deposits and withdrawals
     /// @param asset The asset to enable
     /// @param policy The deposit/withdrawal policy for the asset
