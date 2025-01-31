@@ -2,14 +2,15 @@
 pragma solidity ^0.8.0;
 
 import "@openzeppelin-contracts/token/ERC20/extensions/ERC4626.sol";
+import "@openzeppelin-contracts/access/Ownable.sol";
 import "@src/libs/Errors.sol";
 
 /// @title Fund Share Vault
 /// @notice An ERC4626 vault that tokenizes shares in the fund
 /// @dev All operations are restricted to the periphery contract to ensure proper accounting
-contract FundShareVault is ERC4626 {
+contract FundShareVault is ERC4626, Ownable {
     /// @notice The periphery contract address that has exclusive operation rights
-    address internal immutable periphery;
+    address public immutable periphery;
 
     /// @notice Creates a new Fund Share Vault
     /// @param _unitOfAccount The underlying unit of account token
@@ -18,15 +19,9 @@ contract FundShareVault is ERC4626 {
     constructor(address _unitOfAccount, string memory _name, string memory _symbol)
         ERC4626(IERC20(_unitOfAccount))
         ERC20(_name, _symbol)
+        Ownable(msg.sender)
     {
         periphery = msg.sender;
-    }
-
-    /// @notice Ensures only the periphery contract can call the modified function
-    /// @dev Used to restrict all vault operations
-    modifier onlyPeriphery() {
-        if (msg.sender != address(periphery)) revert Errors.Deposit_OnlyPeriphery();
-        _;
     }
 
     /// @notice Deposits assets into the vault
@@ -37,7 +32,7 @@ contract FundShareVault is ERC4626 {
     function deposit(uint256 assets, address receiver)
         public
         override
-        onlyPeriphery
+        onlyOwner
         returns (uint256 shares)
     {
         shares = super.deposit(assets, receiver);
@@ -51,7 +46,7 @@ contract FundShareVault is ERC4626 {
     function mint(uint256 shares, address receiver)
         public
         override
-        onlyPeriphery
+        onlyOwner
         returns (uint256 assets)
     {
         assets = super.mint(shares, receiver);
@@ -66,7 +61,7 @@ contract FundShareVault is ERC4626 {
     function redeem(uint256 shares, address receiver, address owner)
         public
         override
-        onlyPeriphery
+        onlyOwner
         returns (uint256 assets)
     {
         assets = super.redeem(shares, receiver, owner);
@@ -81,7 +76,7 @@ contract FundShareVault is ERC4626 {
     function withdraw(uint256 assets, address receiver, address owner)
         public
         override
-        onlyPeriphery
+        onlyOwner
         returns (uint256 shares)
     {
         shares = super.withdraw(assets, receiver, owner);
@@ -91,7 +86,7 @@ contract FundShareVault is ERC4626 {
     /// @dev Used for fee distributions and other share dilution events
     /// @param shares Amount of shares to mint
     /// @param receiver Address to receive the shares
-    function mintUnbacked(uint256 shares, address receiver) public onlyPeriphery {
+    function mintUnbacked(uint256 shares, address receiver) public onlyOwner {
         _mint(receiver, shares);
     }
 

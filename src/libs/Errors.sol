@@ -99,9 +99,6 @@ library Errors {
     error Deposit_AccountNotTransferable();
     /// @notice Thrown when an account cannot be closed
     error Deposit_AccountCannotBeClosed();
-
-    /// @notice Thrown when a function can only be called by the periphery contract
-    error Deposit_OnlyPeriphery();
     /// @notice Thrown when a function can only be called by the account owner
     error Deposit_OnlyAccountOwner();
 
