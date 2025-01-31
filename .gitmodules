@@ -25,3 +25,6 @@
 [submodule "lib/gmx-synthetics-fork"]
 	path = lib/gmx-synthetics-fork
 	url = https://github.com/bauti-defi/gmx-synthetics-fork
+[submodule "lib/permit2"]
+	path = lib/permit2
+	url = https://github.com/Uniswap/permit2
