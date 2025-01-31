@@ -49,12 +49,6 @@ abstract contract DepositModule is IDepositModule {
         periphery = periphery_;
     }
 
-    /// @notice Ensures only the Gnosis Safe can call the modified function
-    modifier onlyAdmin() {
-        if (msg.sender != safe) revert Errors.OnlyAdmin();
-        _;
-    }
-
     /// @notice Internal deposit implementation
     /// @dev Transfers assets from sender and executes deposit through safe
     /// @param order The deposit order parameters
