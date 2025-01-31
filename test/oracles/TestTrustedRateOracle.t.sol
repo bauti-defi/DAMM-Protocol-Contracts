@@ -23,7 +23,7 @@ contract TestTrustedRateOracle is Test {
     /// @dev we do differencial testing to ensure that the trusted oracle is working as expected.
     function test_oracle_valuation(uint256 _amount, uint256 _rate, uint256 _validUntil) public {
         vm.assume(_rate > 0);
-        vm.assume(_validUntil > block.timestamp);
+        vm.assume(_validUntil >= block.timestamp);
         uint256 rate = bound(_rate, 1, type(uint128).max);
         uint256 validUntil = _validUntil;
         uint256 amount = bound(_amount, 1, type(uint128).max);
@@ -69,8 +69,8 @@ contract TestTrustedRateOracle is Test {
         uint256 goodValidUntil
     ) public {
         vm.assume(blockTimestamp > 0);
-        vm.assume(badValidUntil <= blockTimestamp);
-        vm.assume(goodValidUntil > blockTimestamp);
+        vm.assume(badValidUntil < blockTimestamp);
+        vm.assume(goodValidUntil >= blockTimestamp);
 
         vm.warp(blockTimestamp);
         trustedRateOracle = new TrustedRateOracle(address(this), address(token0), address(token1));

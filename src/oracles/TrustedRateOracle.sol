@@ -54,7 +54,7 @@ contract TrustedRateOracle is BaseAdapter, Ownable {
     /// @param _validUntil The timestamp until the rate is valid.
     function updateRate(uint256 _rate, uint256 _validUntil) external onlyOwner {
         if (_rate == 0) revert Errors.PriceOracle_InvalidConfiguration();
-        if (_validUntil <= block.timestamp) revert Errors.PriceOracle_InvalidConfiguration();
+        if (_validUntil < block.timestamp) revert Errors.PriceOracle_InvalidConfiguration();
         rate = _rate;
         lastUpdate = block.timestamp;
         priceValidUntil = _validUntil;
