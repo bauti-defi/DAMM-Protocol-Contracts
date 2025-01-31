@@ -82,7 +82,7 @@ interface IPeriphery {
     /// @notice The address that receives protocol fees
     function protocolFeeRecipient() external returns (address);
 
-    /// @notice The management fee rate in basis points
+    /// @notice The annual management fee rate in basis points
     function managementFeeRateInBps() external returns (uint256);
 
     /// @notice Processes a signed deposit order
