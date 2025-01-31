@@ -159,6 +159,12 @@ interface IPeriphery {
         external
         returns (bool);
 
+    /// @notice Updates the broker fee recipient for a specific brokerage account
+    /// @param accountId The ID of the brokerage account
+    /// @param recipient The new broker fee recipient
+    function setBrokerFeeRecipient(uint256 accountId, address recipient) external;
+
+    /// @notice Increases the nonce for a brokerage account
     /// @notice Increases the nonce for a brokerage account
     /// @param accountId The ID of the account to increase the nonce for
     /// @param increment The amount to increase the nonce by (minimum of 1)
@@ -166,6 +172,10 @@ interface IPeriphery {
 
     /// @notice The information for a brokerage account
     function getAccountInfo(uint256 accountId) external returns (BrokerAccountInfo memory);
+
+    /// @notice Closes a brokerage account
+    /// @param accountId The ID of the brokerage account to close
+    function closeAccount(uint256 accountId) external;
 
     /// @notice Pauses a brokerage account
     function pauseAccount(uint256 accountId) external;
@@ -180,4 +190,20 @@ interface IPeriphery {
 
     /// @notice The current nonce for a brokerage account
     function getAccountNonce(uint256 accountId) external returns (uint256);
+
+    /// @notice Pauses the periphery
+    function pause() external;
+
+    /// @notice Unpauses the periphery
+    function unpause() external;
+
+    /// @notice Sets a new pauser
+    /// @dev only the owner can set a pauser
+    /// @param _pauser The address of the new pauser
+    function setPauser(address _pauser) external;
+
+    /// @notice Revokes a pauser
+    /// @dev only the owner can revoke a pauser
+    /// @param _pauser The address of the pauser to revoke
+    function revokePauser(address _pauser) external;
 }

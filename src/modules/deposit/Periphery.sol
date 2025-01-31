@@ -621,6 +621,7 @@ contract Periphery is ERC721, AccessControl, Pausable, ReentrancyGuard, IPeriphe
         }
     }
 
+    /// @inheritdoc IPeriphery
     function getAccountNonce(uint256 accountId_) external view returns (uint256) {
         return brokers[accountId_].account.nonce;
     }
@@ -639,6 +640,7 @@ contract Periphery is ERC721, AccessControl, Pausable, ReentrancyGuard, IPeriphe
         emit ProtocolFeeRecipientUpdated(recipient_, previous);
     }
 
+    /// @inheritdoc IPeriphery
     function setBrokerFeeRecipient(uint256 accountId_, address recipient_) external {
         address broker = _ownerOf(accountId_);
         if (broker == address(0)) {
@@ -694,6 +696,7 @@ contract Periphery is ERC721, AccessControl, Pausable, ReentrancyGuard, IPeriphe
         return address(internalVault);
     }
 
+    /// @inheritdoc IPeriphery
     function enableGlobalAssetPolicy(address asset_, AssetPolicy memory policy_)
         external
         whenNotPaused
@@ -708,20 +711,24 @@ contract Periphery is ERC721, AccessControl, Pausable, ReentrancyGuard, IPeriphe
         emit GlobalAssetPolicyEnabled(asset_, policy_);
     }
 
+    /// @inheritdoc IPeriphery
     function disableGlobalAssetPolicy(address asset_) external onlyRole(FUND_ROLE) {
         assetPolicy[asset_].enabled = false;
 
         emit GlobalAssetPolicyDisabled(asset_);
     }
 
+    /// @inheritdoc IPeriphery
     function getGlobalAssetPolicy(address asset_) external view returns (AssetPolicy memory) {
         return assetPolicy[asset_];
     }
 
+    /// @inheritdoc IPeriphery
     function skimManagementFee() external {
         _takeManagementFee();
     }
 
+    /// @inheritdoc IPeriphery
     function enableBrokerAssetPolicy(uint256 accountId_, address asset_, bool isDeposit_)
         external
         whenNotPaused
@@ -745,6 +752,7 @@ contract Periphery is ERC721, AccessControl, Pausable, ReentrancyGuard, IPeriphe
         emit BrokerAssetPolicyEnabled(accountId_, asset_, isDeposit_);
     }
 
+    /// @inheritdoc IPeriphery
     function disableBrokerAssetPolicy(uint256 accountId_, address asset_, bool isDeposit_)
         external
         onlyRole(FUND_ROLE)
@@ -763,6 +771,7 @@ contract Periphery is ERC721, AccessControl, Pausable, ReentrancyGuard, IPeriphe
         emit BrokerAssetPolicyDisabled(accountId_, asset_, isDeposit_);
     }
 
+    /// @inheritdoc IPeriphery
     function isBrokerAssetPolicyEnabled(uint256 accountId_, address asset_, bool isDeposit_)
         external
         view
@@ -842,6 +851,7 @@ contract Periphery is ERC721, AccessControl, Pausable, ReentrancyGuard, IPeriphe
         );
     }
 
+    /// @inheritdoc IPeriphery
     function closeAccount(uint256 accountId_) public onlyRole(MINTER_ROLE) {
         if (!brokers[accountId_].account.canBeClosed()) {
             revert Errors.Deposit_AccountCannotBeClosed();
@@ -896,18 +906,22 @@ contract Periphery is ERC721, AccessControl, Pausable, ReentrancyGuard, IPeriphe
         return tokenId + 1;
     }
 
+    /// @inheritdoc IPeriphery
     function pause() external onlyRole(PAUSER_ROLE) {
         _pause();
     }
 
+    /// @inheritdoc IPeriphery
     function unpause() external onlyRole(PAUSER_ROLE) {
         _unpause();
     }
 
+    /// @inheritdoc IPeriphery
     function setPauser(address _pauser) external onlyRole(FUND_ROLE) {
         _grantRole(PAUSER_ROLE, _pauser);
     }
 
+    /// @inheritdoc IPeriphery
     function revokePauser(address _pauser) external onlyRole(FUND_ROLE) {
         _revokeRole(PAUSER_ROLE, _pauser);
     }
