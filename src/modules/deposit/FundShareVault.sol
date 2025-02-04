@@ -2,13 +2,14 @@
 pragma solidity ^0.8.0;
 
 import "@openzeppelin-contracts/token/ERC20/extensions/ERC4626.sol";
+import {ERC20Permit} from "@openzeppelin-contracts/token/ERC20/extensions/ERC20Permit.sol";
 import "@openzeppelin-contracts/access/Ownable.sol";
 import "@src/libs/Errors.sol";
 
 /// @title Fund Share Vault
 /// @notice An ERC4626 vault that tokenizes shares in the fund
 /// @dev All operations are restricted to the periphery contract to ensure proper accounting
-contract FundShareVault is ERC4626, Ownable {
+contract FundShareVault is ERC4626, ERC20Permit, Ownable {
     /// @notice The periphery contract address that has exclusive operation rights
     address public immutable periphery;
 
@@ -19,6 +20,7 @@ contract FundShareVault is ERC4626, Ownable {
     constructor(address _unitOfAccount, string memory _name, string memory _symbol)
         ERC4626(IERC20(_unitOfAccount))
         ERC20(_name, _symbol)
+        ERC20Permit(_name)
         Ownable(msg.sender)
     {
         periphery = msg.sender;
@@ -88,6 +90,12 @@ contract FundShareVault is ERC4626, Ownable {
     /// @param receiver Address to receive the shares
     function mintUnbacked(uint256 shares, address receiver) public onlyOwner {
         _mint(receiver, shares);
+    }
+
+    /// @notice Returns the number of decimals of the vault shares
+    /// @dev Overrides to inherit the ERC4626 decimals function implementation
+    function decimals() public view override(ERC4626, ERC20) returns (uint8) {
+        return super.decimals();
     }
 
     /// @notice Returns the decimal offset used to mitigate share inflation attacks

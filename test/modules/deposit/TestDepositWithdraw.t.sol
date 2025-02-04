@@ -6,6 +6,8 @@ import "@openzeppelin-contracts/utils/math/SignedMath.sol";
 import "@src/libs/Constants.sol";
 import {TestBaseDeposit} from "./TestBaseDeposit.sol";
 import {Errors} from "@src/libs/Errors.sol";
+import {MessageHashUtils} from "@openzeppelin-contracts/utils/cryptography/MessageHashUtils.sol";
+import {IERC20Permit} from "@openzeppelin-contracts/token/ERC20/extensions/IERC20Permit.sol";
 
 uint256 constant MAX_NET_EXIT_FEE_IN_BPS = 5_000;
 uint256 constant MAX_NET_PERFORMANCE_FEE_IN_BPS = 7_000;
@@ -14,6 +16,10 @@ uint256 constant MAX_NET_MANAGEMENT_FEE_IN_BPS = 5_000;
 
 contract TestDepositWithdraw is TestBaseDeposit {
     using SignedMath for int256;
+
+    bytes32 private constant PERMIT_TYPEHASH = keccak256(
+        "Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)"
+    );
 
     function setUp() public override(TestBaseDeposit) {
         TestBaseDeposit.setUp();
@@ -122,6 +128,22 @@ contract TestDepositWithdraw is TestBaseDeposit {
         }
     }
 
+    function _create_permit_signature(
+        uint256 ownerPK,
+        address owner,
+        address asset,
+        address spender,
+        uint256 value,
+        uint256 deadline
+    ) private view returns (uint8 v, bytes32 r, bytes32 s) {
+        uint256 nonce = IERC20Permit(asset).nonces(owner);
+        bytes32 structHash =
+            keccak256(abi.encode(PERMIT_TYPEHASH, owner, spender, value, nonce, deadline));
+        bytes32 theHash =
+            MessageHashUtils.toTypedDataHash(IERC20Permit(asset).DOMAIN_SEPARATOR(), structHash);
+        (v, r, s) = vm.sign(ownerPK, theHash);
+    }
+
     struct TestExitFeeParams {
         bool useIntent;
         uint32 depositAmount;
@@ -132,10 +154,7 @@ contract TestDepositWithdraw is TestBaseDeposit {
         uint8 protocolPerformanceFeeInBps;
     }
 
-    function test_deposit_withdraw_all_with_exit_fees(TestExitFeeParams memory params)
-        public
-        approveAllPeriphery(alice)
-    {
+    function test_deposit_withdraw_all_with_exit_fees(TestExitFeeParams memory params) public {
         vm.assume(params.depositAmount > 10);
 
         /// @notice that the fees are fuzzed in 25bps increments
@@ -183,6 +202,17 @@ contract TestDepositWithdraw is TestBaseDeposit {
 
         /// alice deposits
         if (params.useIntent) {
+            (uint8 v, bytes32 r, bytes32 s) = _create_permit_signature(
+                alicePK,
+                alice,
+                address(mockToken1),
+                address(periphery),
+                depositAmount,
+                block.timestamp + 1000
+            );
+            mockToken1.permit(
+                alice, address(periphery), depositAmount, block.timestamp + 1000, v, r, s
+            );
             periphery.intentDeposit(
                 depositIntent(
                     1,
@@ -196,8 +226,20 @@ contract TestDepositWithdraw is TestBaseDeposit {
                 )
             );
         } else {
-            vm.prank(alice);
+            (uint8 v, bytes32 r, bytes32 s) = _create_permit_signature(
+                alicePK,
+                alice,
+                address(mockToken1),
+                address(periphery),
+                depositAmount,
+                block.timestamp + 1000
+            );
+            vm.startPrank(alice);
+            mockToken1.permit(
+                alice, address(periphery), depositAmount, block.timestamp + 1000, v, r, s
+            );
             periphery.deposit(depositOrder(1, alice, address(mockToken1), type(uint256).max));
+            vm.stopPrank();
         }
 
         /// simulate that the fund makes profit or loses money
@@ -218,6 +260,17 @@ contract TestDepositWithdraw is TestBaseDeposit {
             : 0;
 
         if (params.useIntent) {
+            (uint8 v, bytes32 r, bytes32 s) = _create_permit_signature(
+                alicePK,
+                alice,
+                address(periphery.internalVault()),
+                address(periphery),
+                type(uint256).max,
+                block.timestamp + 1000
+            );
+            periphery.internalVault().permit(
+                alice, address(periphery), type(uint256).max, block.timestamp + 1000, v, r, s
+            );
             periphery.intentWithdraw(
                 signedWithdrawIntent(
                     1,
@@ -231,8 +284,20 @@ contract TestDepositWithdraw is TestBaseDeposit {
                 )
             );
         } else {
-            vm.prank(alice);
+            (uint8 v, bytes32 r, bytes32 s) = _create_permit_signature(
+                alicePK,
+                alice,
+                address(periphery.internalVault()),
+                address(periphery),
+                type(uint256).max,
+                block.timestamp + 1000
+            );
+            vm.startPrank(alice);
+            periphery.internalVault().permit(
+                alice, address(periphery), type(uint256).max, block.timestamp + 1000, v, r, s
+            );
             periphery.withdraw(withdrawOrder(1, claimer, address(mockToken1), type(uint256).max));
+            vm.stopPrank();
         }
 
         uint256 performanceFeeForBroker = brokerPerformanceFeeInBps > 0 && profitAmount > 0
