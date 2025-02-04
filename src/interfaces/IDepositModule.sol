@@ -10,9 +10,12 @@ import {
 } from "@src/modules/deposit/Structs.sol";
 
 interface IDepositModule {
+    event DepositModuleSetUp(
+        address indexed initiator, address indexed owner, address indexed avatar, address target
+    );
+
     function periphery() external view returns (address);
     function nonces(address user) external view returns (uint256);
-    function safe() external view returns (address);
     function withdraw(WithdrawOrder calldata order) external returns (uint256 assetAmountOut);
     function intentWithdraw(SignedWithdrawIntent calldata order)
         external

@@ -2,16 +2,21 @@
 pragma solidity ^0.8.0;
 
 import {TestBaseDeposit, MINIMUM_DEPOSIT} from "./TestBaseDeposit.sol";
-import {PermissionlessDepositModule} from "@src/modules/deposit/PermissionlessDepositModule.sol";
+import {
+    PermissionlessDepositModule,
+    DepositModule
+} from "@src/modules/deposit/PermissionlessDepositModule.sol";
 import {CreateAccountParams} from "@src/modules/deposit/Structs.sol";
 import {SafeL2} from "@safe-contracts/SafeL2.sol";
 import {Errors} from "@src/libs/Errors.sol";
+import {ModuleProxyFactory} from "@zodiac/factory/ModuleProxyFactory.sol";
 
 uint256 constant RELAYER_TIP = 10;
 uint256 constant BRIBE = 10;
 
 contract TestPermissionlessDeposit is TestBaseDeposit {
     SafeL2 internal safe;
+    address internal moduleMasterCopy;
     PermissionlessDepositModule internal permissionlessDepositModule;
     uint256 internal accountId;
 
@@ -23,20 +28,26 @@ contract TestPermissionlessDeposit is TestBaseDeposit {
         safe = deploySafe(admins, 1, 2);
         vm.label(address(safe), "Holding Safe");
 
+        // deploy periphery using module factory
+        ModuleProxyFactory factory = new ModuleProxyFactory();
+
+        moduleMasterCopy = address(new PermissionlessDepositModule());
+
+        bytes memory initializer = abi.encodeWithSelector(
+            DepositModule.setUp.selector,
+            abi.encode(address(fund), address(safe), address(periphery))
+        );
+
         permissionlessDepositModule = PermissionlessDepositModule(
-            deployModule(
-                payable(address(safe)),
-                fundAdmin,
-                fundAdminPK,
-                bytes32("permissionlessDepositModule"),
-                0,
-                abi.encodePacked(
-                    type(PermissionlessDepositModule).creationCode,
-                    abi.encode(address(fund), address(safe), address(periphery))
-                )
-            )
+            factory.deployModule(moduleMasterCopy, initializer, uint256(bytes32("module-salt")))
         );
         vm.label(address(permissionlessDepositModule), "Permissionless Deposit Module");
+
+        vm.startPrank(address(safe));
+        safe.enableModule(address(permissionlessDepositModule));
+        vm.stopPrank();
+
+        assertTrue(safe.isModuleEnabled(address(permissionlessDepositModule)), "Module not enabled");
 
         /// mint broker nft to safe, make unlimited
         vm.startPrank(address(fund));

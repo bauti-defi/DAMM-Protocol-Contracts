@@ -3,7 +3,7 @@
 pragma solidity ^0.8.0;
 
 import "./DepositModule.sol";
-import "@openzeppelin-contracts/access/AccessControl.sol";
+import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 
 bytes32 constant WHITELIST_ROLE = keccak256("WHITELIST_ROLE");
 bytes32 constant USER_ROLE = keccak256("USER_ROLE");
@@ -13,20 +13,31 @@ bytes32 constant USER_ROLE = keccak256("USER_ROLE");
 /// @dev Extends DepositModule to add whitelist functionality
 ///      Only whitelisted users can deposit/withdraw through this module
 ///      The safe must have a valid broker account (nft) from the periphery
-contract WhitelistDepositModule is DepositModule, AccessControl {
-    /// @notice Creates a new whitelist deposit module
-    /// @param fund_ The fund contract address
-    /// @param safe_ The Gnosis Safe address
-    /// @param periphery_ The periphery contract address
-    constructor(address fund_, address safe_, address periphery_)
-        DepositModule(fund_, safe_, periphery_)
-    {
-        _grantRole(DEFAULT_ADMIN_ROLE, fund_);
-    }
-
+contract WhitelistDepositModule is DepositModule, AccessControlUpgradeable {
     modifier onlyWhitelisted(address user_) {
         _checkRole(USER_ROLE, user_);
         _;
+    }
+
+    /// @param initializeParams Encoded parameters for the DepositModule contract
+    function setUp(bytes memory initializeParams) public override initializer {
+        /// @dev fund_ The fund contract address
+        /// @dev safe_ The Gnosis Safe address
+        /// @dev periphery_ The periphery contract address
+        (address fund_, address safe_, address periphery_) =
+            abi.decode(initializeParams, (address, address, address));
+        fund = fund_;
+        periphery = periphery_;
+        target = safe_;
+        avatar = safe_;
+
+        _transferOwnership(fund_);
+        __AccessControl_init();
+        _grantRole(DEFAULT_ADMIN_ROLE, fund);
+
+        emit DepositModuleSetUp(msg.sender, safe_, safe_, safe_);
+        emit AvatarSet(address(0), safe_);
+        emit TargetSet(address(0), periphery_);
     }
 
     /// @inheritdoc IDepositModule

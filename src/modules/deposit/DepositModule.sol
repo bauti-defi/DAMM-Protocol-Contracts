@@ -20,37 +20,44 @@ import {DepositLibs} from "./DepositLibs.sol";
 import {SafeLib} from "@src/libs/SafeLib.sol";
 import {IDepositModule} from "@src/interfaces/IDepositModule.sol";
 import "@openzeppelin-contracts/utils/Pausable.sol";
+import {Module} from "@zodiac/core/Module.sol";
 
 /// @title Deposit Module Base Implementation
 /// @notice A Gnosis Safe module that provides deposit and withdrawal functionality
 /// @dev A gnosis safe module that provides deposit and withdraw functionality
 ///      Has a 1-1 relationship with a safe and periphery
 ///      the safe must have a valid broker account (nft) from the periphery
-abstract contract DepositModule is IDepositModule {
+abstract contract DepositModule is Module, IDepositModule {
     using DepositLibs for BrokerAccountInfo;
     using SafeLib for IAvatar;
     using SafeTransferLib for ERC20;
 
     /// @notice The periphery contract address
-    address public immutable periphery;
-
-    /// @notice The Gnosis Safe this module is attached to
-    address public immutable safe;
+    address public periphery;
 
     /// @notice The fund contract address
-    address public immutable fund;
+    address public fund;
 
     /// @notice Mapping of user nonces for replay protection
     mapping(address user => uint256 nonce) public nonces;
 
-    /// @notice Creates a new deposit module
-    /// @param fund_ The fund contract address
-    /// @param safe_ The Gnosis Safe address
-    /// @param periphery_ The periphery contract address
-    constructor(address fund_, address safe_, address periphery_) {
+    /// @notice Initializes the Periphery contract
+    /// @param initializeParams Encoded parameters for the DepositModule contract
+    function setUp(bytes memory initializeParams) public virtual override initializer {
+        /// @dev fund_ The fund contract address
+        /// @dev safe_ The Gnosis Safe address
+        /// @dev periphery_ The periphery contract address
+        (address fund_, address safe_, address periphery_) =
+            abi.decode(initializeParams, (address, address, address));
         fund = fund_;
-        safe = safe_;
         periphery = periphery_;
+        target = safe_;
+        avatar = safe_;
+
+        _transferOwnership(fund_);
+        emit DepositModuleSetUp(msg.sender, safe_, safe_, safe_);
+        emit AvatarSet(address(0), safe_);
+        emit TargetSet(address(0), periphery_);
     }
 
     /// @notice Internal deposit implementation
@@ -64,9 +71,9 @@ abstract contract DepositModule is IDepositModule {
         /// @notice send the assets to the safe
         /// since safe is the holder of the brokerage nft
         /// it will call periphery to deposit on behalf of the sender
-        asset.safeTransferFrom(msg.sender, safe, amount);
+        asset.safeTransferFrom(msg.sender, avatar, amount);
 
-        bytes memory returnData = IAvatar(safe).executeAndReturnDataOrRevert(
+        bytes memory returnData = IAvatar(avatar).executeAndReturnDataOrRevert(
             periphery,
             0,
             abi.encodeWithSelector(IPeriphery.deposit.selector, order),
@@ -112,9 +119,9 @@ abstract contract DepositModule is IDepositModule {
 
         /// transfer the remaining amount to the safe to be deposited
         /// @dev transfer assets after paying the bribe and relayer tip incase amount = max uint256
-        asset.safeTransferFrom(order.intent.deposit.recipient, safe, amount);
+        asset.safeTransferFrom(order.intent.deposit.recipient, avatar, amount);
 
-        bytes memory returnData = IAvatar(safe).executeAndReturnDataOrRevert(
+        bytes memory returnData = IAvatar(avatar).executeAndReturnDataOrRevert(
             periphery,
             0,
             abi.encodeWithSelector(IPeriphery.deposit.selector, order.intent.deposit),
@@ -131,9 +138,9 @@ abstract contract DepositModule is IDepositModule {
     function _withdraw(WithdrawOrder calldata order) internal returns (uint256 assetAmountOut) {
         ERC20 asset = ERC20(IPeriphery(periphery).getVault());
         uint256 amount = _getAmount(asset, order.shares, msg.sender);
-        asset.safeTransferFrom(msg.sender, safe, amount);
+        asset.safeTransferFrom(msg.sender, avatar, amount);
 
-        bytes memory returnData = IAvatar(safe).executeAndReturnDataOrRevert(
+        bytes memory returnData = IAvatar(avatar).executeAndReturnDataOrRevert(
             periphery,
             0,
             abi.encodeWithSelector(IPeriphery.withdraw.selector, order),
@@ -162,9 +169,9 @@ abstract contract DepositModule is IDepositModule {
 
         ERC20 asset = ERC20(IPeriphery(periphery).getVault());
         uint256 amount = _getAmount(asset, order.intent.withdraw.shares, order.intent.withdraw.to);
-        asset.safeTransferFrom(order.intent.withdraw.to, safe, amount);
+        asset.safeTransferFrom(order.intent.withdraw.to, avatar, amount);
 
-        bytes memory returnData = IAvatar(safe).executeAndReturnDataOrRevert(
+        bytes memory returnData = IAvatar(avatar).executeAndReturnDataOrRevert(
             periphery,
             0,
             abi.encodeWithSelector(IPeriphery.withdraw.selector, order.intent.withdraw),

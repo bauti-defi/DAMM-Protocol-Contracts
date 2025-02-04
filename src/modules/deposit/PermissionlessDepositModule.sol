@@ -11,14 +11,6 @@ import "./DepositModule.sol";
 ///      on behalf of the caller.
 ///      Any user can deposit/withdraw through this module without restrictions
 contract PermissionlessDepositModule is DepositModule {
-    /// @notice Creates a new permissionless deposit module
-    /// @param fund_ The fund contract address
-    /// @param safe_ The Gnosis Safe address
-    /// @param periphery_ The periphery contract address
-    constructor(address fund_, address safe_, address periphery_)
-        DepositModule(fund_, safe_, periphery_)
-    {}
-
     /// @inheritdoc IDepositModule
     function deposit(DepositOrder calldata order) external virtual returns (uint256 sharesOut) {
         sharesOut = _deposit(order);

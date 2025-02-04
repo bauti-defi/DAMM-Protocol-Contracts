@@ -4,6 +4,7 @@ pragma solidity ^0.8.0;
 import {TestBaseDeposit, MINIMUM_DEPOSIT} from "./TestBaseDeposit.sol";
 import {
     WhitelistDepositModule,
+    DepositModule,
     WHITELIST_ROLE,
     USER_ROLE,
     IAccessControl
@@ -11,12 +12,14 @@ import {
 import {CreateAccountParams} from "@src/modules/deposit/Structs.sol";
 import {SafeL2} from "@safe-contracts/SafeL2.sol";
 import {Errors} from "@src/libs/Errors.sol";
+import {ModuleProxyFactory} from "@zodiac/factory/ModuleProxyFactory.sol";
 
 uint256 constant RELAYER_TIP = 10;
 uint256 constant BRIBE = 10;
 
 contract TestWhitelistDeposit is TestBaseDeposit {
     SafeL2 internal safe;
+    address internal moduleMasterCopy;
     WhitelistDepositModule internal whitelistDepositModule;
     uint256 internal accountId;
 
@@ -28,19 +31,27 @@ contract TestWhitelistDeposit is TestBaseDeposit {
         safe = deploySafe(admins, 1, 2);
         vm.label(address(safe), "Holding Safe");
 
+        ModuleProxyFactory factory = new ModuleProxyFactory();
+
+        moduleMasterCopy = address(new WhitelistDepositModule());
+
+        bytes memory initializer = abi.encodeWithSelector(
+            DepositModule.setUp.selector,
+            abi.encode(address(fund), address(safe), address(periphery))
+        );
+
         whitelistDepositModule = WhitelistDepositModule(
-            deployModule(
-                payable(address(safe)),
-                fundAdmin,
-                fundAdminPK,
-                bytes32("whitelistDepositModule"),
-                0,
-                abi.encodePacked(
-                    type(WhitelistDepositModule).creationCode,
-                    abi.encode(address(fund), address(safe), address(periphery))
-                )
+            factory.deployModule(
+                moduleMasterCopy, initializer, uint256(bytes32("whitelist-module-salt"))
             )
         );
+        vm.label(address(whitelistDepositModule), "Whitelist Deposit Module");
+
+        vm.startPrank(address(safe));
+        safe.enableModule(address(whitelistDepositModule));
+        vm.stopPrank();
+
+        assertTrue(safe.isModuleEnabled(address(whitelistDepositModule)), "Module not enabled");
         vm.label(address(whitelistDepositModule), "Whitelist Deposit Module");
 
         /// mint broker nft to safe, make unlimited
