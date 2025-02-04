@@ -2,7 +2,6 @@
 pragma solidity ^0.8.0;
 
 import {TestBaseGnosis} from "@test/base/TestBaseGnosis.sol";
-import {TestBaseProtocol} from "@test/base/TestBaseProtocol.sol";
 import {EulerRouter} from "@euler-price-oracle/EulerRouter.sol";
 import {ISafe} from "@src/interfaces/ISafe.sol";
 import {Periphery} from "@src/modules/deposit/Periphery.sol";
@@ -21,7 +20,7 @@ uint256 constant VAULT_DECIMAL_OFFSET = 1;
 uint256 constant MINIMUM_DEPOSIT = 1000;
 uint256 constant MINIMUM_WITHDRAWAL = 1000;
 
-abstract contract TestBaseDeposit is TestBaseGnosis, TestBaseProtocol {
+abstract contract TestBaseDeposit is TestBaseGnosis {
     using MessageHashUtils for bytes;
     using SignedMath for int256;
 
@@ -48,9 +47,8 @@ abstract contract TestBaseDeposit is TestBaseGnosis, TestBaseProtocol {
     uint256 mock2Unit;
     uint256 oneUnitOfAccount;
 
-    function setUp() public virtual override(TestBaseGnosis, TestBaseProtocol) {
+    function setUp() public virtual override(TestBaseGnosis) {
         TestBaseGnosis.setUp();
-        TestBaseProtocol.setUp();
 
         (feeRecipient, feeRecipientPK) = makeAddrAndKey("FeeRecipient");
 
