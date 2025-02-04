@@ -57,7 +57,7 @@ abstract contract DepositModule is Module, IDepositModule {
         _transferOwnership(fund_);
         emit DepositModuleSetUp(msg.sender, safe_, safe_, safe_);
         emit AvatarSet(address(0), safe_);
-        emit TargetSet(address(0), periphery_);
+        emit TargetSet(address(0), safe_);
     }
 
     /// @notice Internal deposit implementation

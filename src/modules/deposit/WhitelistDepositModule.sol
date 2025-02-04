@@ -37,7 +37,7 @@ contract WhitelistDepositModule is DepositModule, AccessControlUpgradeable {
 
         emit DepositModuleSetUp(msg.sender, safe_, safe_, safe_);
         emit AvatarSet(address(0), safe_);
-        emit TargetSet(address(0), periphery_);
+        emit TargetSet(address(0), safe_);
     }
 
     /// @inheritdoc IDepositModule
