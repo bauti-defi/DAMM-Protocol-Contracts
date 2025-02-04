@@ -8,8 +8,8 @@ import {ISafe, Enum} from "@src/interfaces/ISafe.sol";
 import {IModuleLib} from "@src/interfaces/IModuleLib.sol";
 import {SafeL2} from "@safe-contracts/SafeL2.sol";
 import {SafeUtils} from "@test/utils/SafeUtils.sol";
-import "@openzeppelin-contracts/utils/Create2.sol";
-import "@safe-contracts/libraries/CreateCall.sol";
+import {Create2} from "@openzeppelin-contracts/utils/Create2.sol";
+import {CreateCall} from "@safe-contracts/libraries/CreateCall.sol";
 import "@src/libs/Errors.sol";
 
 contract MockModule {

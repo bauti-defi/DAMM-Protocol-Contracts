@@ -10,7 +10,7 @@ import {
     BrokerAccountInfo
 } from "./Structs.sol";
 import {IPeriphery} from "@src/interfaces/IPeriphery.sol";
-import {ISafe} from "@src/interfaces/ISafe.sol";
+import {IAvatar} from "@zodiac/interfaces/IAvatar.sol";
 import {IERC721} from "@openzeppelin-contracts/token/ERC721/IERC721.sol";
 import {Errors} from "@src/libs/Errors.sol";
 import "@solmate/utils/SafeTransferLib.sol";
@@ -28,7 +28,7 @@ import "@openzeppelin-contracts/utils/Pausable.sol";
 ///      the safe must have a valid broker account (nft) from the periphery
 abstract contract DepositModule is IDepositModule {
     using DepositLibs for BrokerAccountInfo;
-    using SafeLib for ISafe;
+    using SafeLib for IAvatar;
     using SafeTransferLib for ERC20;
 
     /// @notice The periphery contract address
@@ -66,7 +66,7 @@ abstract contract DepositModule is IDepositModule {
         /// it will call periphery to deposit on behalf of the sender
         asset.safeTransferFrom(msg.sender, safe, amount);
 
-        bytes memory returnData = ISafe(safe).executeAndReturnDataOrRevert(
+        bytes memory returnData = IAvatar(safe).executeAndReturnDataOrRevert(
             periphery,
             0,
             abi.encodeWithSelector(IPeriphery.deposit.selector, order),
@@ -104,11 +104,7 @@ abstract contract DepositModule is IDepositModule {
 
         /// if there is a bribe, we need to transfer it to the fund
         if (order.intent.bribe > 0) {
-            asset.safeTransferFrom(
-                order.intent.deposit.recipient,
-                fund,
-                order.intent.bribe
-            );
+            asset.safeTransferFrom(order.intent.deposit.recipient, fund, order.intent.bribe);
         }
 
         uint256 amount =
@@ -118,7 +114,7 @@ abstract contract DepositModule is IDepositModule {
         /// @dev transfer assets after paying the bribe and relayer tip incase amount = max uint256
         asset.safeTransferFrom(order.intent.deposit.recipient, safe, amount);
 
-        bytes memory returnData = ISafe(safe).executeAndReturnDataOrRevert(
+        bytes memory returnData = IAvatar(safe).executeAndReturnDataOrRevert(
             periphery,
             0,
             abi.encodeWithSelector(IPeriphery.deposit.selector, order.intent.deposit),
@@ -137,7 +133,7 @@ abstract contract DepositModule is IDepositModule {
         uint256 amount = _getAmount(asset, order.shares, msg.sender);
         asset.safeTransferFrom(msg.sender, safe, amount);
 
-        bytes memory returnData = ISafe(safe).executeAndReturnDataOrRevert(
+        bytes memory returnData = IAvatar(safe).executeAndReturnDataOrRevert(
             periphery,
             0,
             abi.encodeWithSelector(IPeriphery.withdraw.selector, order),
@@ -168,7 +164,7 @@ abstract contract DepositModule is IDepositModule {
         uint256 amount = _getAmount(asset, order.intent.withdraw.shares, order.intent.withdraw.to);
         asset.safeTransferFrom(order.intent.withdraw.to, safe, amount);
 
-        bytes memory returnData = ISafe(safe).executeAndReturnDataOrRevert(
+        bytes memory returnData = IAvatar(safe).executeAndReturnDataOrRevert(
             periphery,
             0,
             abi.encodeWithSelector(IPeriphery.withdraw.selector, order.intent.withdraw),

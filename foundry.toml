@@ -14,24 +14,22 @@ remappings = [
     "@script/=script/",
 
     # deps
-    "@aave-v3-core/=lib/aave-v3-core/contracts/",
     "@safe-contracts/=lib/safe-contracts/contracts/",
-    "@openzeppelin-contracts/=lib/openzeppelin-contracts/contracts/",
-    "@uniswap-v3-periphery/=lib/v3-periphery/contracts/",
     "@solmate/=lib/solmate/src/",
     "@euler-price-oracle/=lib/euler-price-oracle/src/",
     "@solady/=lib/solady/src/",
-    "@gmx/=lib/gmx-synthetics-fork/contracts/",
+    "@zodiac/=lib/zodiac/contracts/",
+    "@openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/",
 
-    
-    ### @dev These imports are so we can compile the uniswapv3 periphery contracts inside tests
-    "@uniswap/v3-core/=lib/v3-periphery/node_modules/@uniswap/v3-core",
-    "@openzeppelin/contracts/=lib/v3-periphery/node_modules/@openzeppelin/contracts/",
+
+
+    "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
+    "@openzeppelin-contracts/=lib/openzeppelin-contracts/contracts/",
     #####
     ### @dev This import is so we can compile the euler price oracle contracts inside tests
     "ethereum-vault-connector/=lib/euler-price-oracle/lib/ethereum-vault-connector/src/",
     #####
-    "@openzeppelin-contracts-gmx/contracts/=lib/gmx-synthetics-fork/node_modules/@openzeppelin-contracts-gmx/"
+    "@gnosis.pm/safe-contracts/contracts/=lib/safe-contracts/contracts/"
 ] 
 
 fs_permissions = [{ access = "read", path = "./"}]

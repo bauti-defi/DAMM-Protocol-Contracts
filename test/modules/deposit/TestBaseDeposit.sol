@@ -14,6 +14,7 @@ import {SignedMath} from "@openzeppelin-contracts/utils/math/SignedMath.sol";
 import {console2} from "@forge-std/Test.sol";
 import "@src/libs/Constants.sol";
 import "@src/modules/deposit/Structs.sol";
+import {ModuleProxyFactory} from "@zodiac/factory/ModuleProxyFactory.sol";
 
 uint8 constant VALUATION_DECIMALS = 18;
 uint256 constant VAULT_DECIMAL_OFFSET = 1;
@@ -29,6 +30,7 @@ abstract contract TestBaseDeposit is TestBaseGnosis, TestBaseProtocol {
     ISafe internal fund;
     EulerRouter internal oracleRouter;
     Periphery internal periphery;
+    address internal peripheryMastercopy;
     MockERC20 internal mockToken1;
     MockERC20 internal mockToken2;
 
@@ -77,28 +79,32 @@ abstract contract TestBaseDeposit is TestBaseGnosis, TestBaseProtocol {
         vm.label(address(oracleRouter), "OracleRouter");
 
         // deploy periphery using module factory
-        periphery = Periphery(
-            deployModule(
-                payable(address(fund)),
-                fundAdmin,
-                fundAdminPK,
-                bytes32("periphery"),
-                0,
-                abi.encodePacked(
-                    type(Periphery).creationCode,
-                    abi.encode(
-                        "TestVault",
-                        "TV",
-                        VALUATION_DECIMALS, // must be same as underlying oracles response denomination
-                        payable(address(fund)),
-                        address(oracleRouter),
-                        address(fund),
-                        /// fund is admin
-                        feeRecipient
-                    )
-                )
+        ModuleProxyFactory factory = new ModuleProxyFactory();
+
+        peripheryMastercopy = address(new Periphery());
+
+        bytes memory initializer = abi.encodeWithSelector(
+            Periphery.setUp.selector,
+            abi.encode(
+                "TestVault",
+                "TV",
+                18,
+                address(fund),
+                address(oracleRouter),
+                address(fund),
+                address(feeRecipient)
             )
         );
+
+        periphery = Periphery(
+            factory.deployModule(
+                peripheryMastercopy, initializer, uint256(bytes32("periphery-salt"))
+            )
+        );
+
+        vm.startPrank(address(fund));
+        fund.enableModule(address(periphery));
+        vm.stopPrank();
 
         assertTrue(fund.isModuleEnabled(address(periphery)), "Periphery not module");
 

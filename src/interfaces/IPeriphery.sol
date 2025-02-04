@@ -19,6 +19,10 @@ interface IPeriphery {
         bool transferable
     );
 
+    event PeripherySetup(
+        address indexed initiator, address indexed owner, address indexed avatar, address target
+    );
+
     event ProtocolFeeRecipientUpdated(address oldRecipient, address newRecipient);
 
     event BrokerFeeRecipientUpdated(uint256 accountId, address oldRecipient, address newRecipient);

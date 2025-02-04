@@ -3,23 +3,25 @@
 pragma solidity ^0.8.0;
 
 import "@solmate/tokens/ERC20.sol";
-import "@openzeppelin-contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin-contracts/utils/math/SignedMath.sol";
 import "@openzeppelin-contracts/utils/math/SafeCast.sol";
-import "@openzeppelin-contracts/access/AccessControl.sol";
-import "@openzeppelin-contracts/utils/Pausable.sol";
 import "@solady/utils/FixedPointMathLib.sol";
 import "@solmate/utils/SafeTransferLib.sol";
-import "@solady/utils/ReentrancyGuard.sol";
 import "@src/libs/Constants.sol";
 
+import "@openzeppelin/contracts-upgradeable/token/ERC721/ERC721Upgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
+
 import "@src/libs/Errors.sol";
-import "@src/interfaces/ISafe.sol";
+import "@zodiac/interfaces/IAvatar.sol";
 import "@src/interfaces/IPeriphery.sol";
 import "./UnitOfAccount.sol";
 import {FundShareVault} from "./FundShareVault.sol";
 import {DepositLibs} from "./DepositLibs.sol";
 import {SafeLib} from "@src/libs/SafeLib.sol";
+import {Module} from "@zodiac/core/Module.sol";
 
 bytes32 constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 bytes32 constant FUND_ROLE = keccak256("FUND_ROLE");
@@ -34,23 +36,30 @@ bytes32 constant MINTER_ROLE = keccak256("MINTER_ROLE");
 ///      - ERC4626 vault share accounting
 ///      - Broker account management (NFTs)
 ///      - Fee collection and distribution
-contract Periphery is ERC721, AccessControl, Pausable, ReentrancyGuard, IPeriphery {
+contract Periphery is
+    Module,
+    ERC721Upgradeable,
+    AccessControlUpgradeable,
+    PausableUpgradeable,
+    ReentrancyGuardUpgradeable,
+    IPeriphery
+{
     using DepositLibs for BrokerAccountInfo;
     using DepositLibs for address;
-    using SafeLib for ISafe;
+    using SafeLib for IAvatar;
     using SafeTransferLib for ERC20;
     using SafeCast for uint256;
     using SignedMath for int256;
     using FixedPointMathLib for uint256;
 
     /// @dev The DAMM fund the periphery is associated with
-    address public immutable fund;
+    address public fund;
     /// @dev The oracle used for price quotes
-    IPriceOracle public immutable oracleRouter;
+    IPriceOracle public oracleRouter;
     /// @dev Common unit of account for assets and internalVault
-    UnitOfAccount public immutable unitOfAccount;
+    UnitOfAccount public unitOfAccount;
     /// @dev Used internally for yield accounting
-    FundShareVault public immutable internalVault;
+    FundShareVault public internalVault;
 
     /// @dev The recipient of the protocol fees
     address public protocolFeeRecipient;
@@ -74,22 +83,27 @@ contract Periphery is ERC721, AccessControl, Pausable, ReentrancyGuard, IPeriphe
     uint256 private tokenId = 0;
 
     /// @notice Initializes the Periphery contract
-    /// @param vaultName_ Name of the ERC4626 vault
-    /// @param vaultSymbol_ Symbol of the ERC4626 vault
-    /// @param decimals_ Decimals for the unit of account token
-    /// @param fund_ Address of the Fund contract
-    /// @param oracleRouter_ Address of the oracle router for quotes
-    /// @param minter_ Address with minting privileges
-    /// @param protocolFeeRecipient_ Address that receives protocol fees
-    constructor(
-        string memory vaultName_,
-        string memory vaultSymbol_,
-        uint8 decimals_,
-        address fund_,
-        address oracleRouter_,
-        address minter_,
-        address protocolFeeRecipient_
-    ) ERC721(vaultName_, vaultSymbol_) {
+    /// @param initializeParams Encoded parameters for the Periphery contract
+    function setUp(bytes memory initializeParams) public override initializer {
+        /// @dev vaultName_ Name of the ERC4626 vault
+        /// @dev vaultSymbol_ Symbol of the ERC4626 vault
+        /// @dev decimals_ Decimals for the unit of account token
+        /// @dev fund_ Address of the Fund contract
+        /// @dev oracleRouter_ Address of the oracle router for quotes
+        /// @dev minter_ Address with minting privileges
+        /// @dev protocolFeeRecipient_ Address that receives protocol fees
+        (
+            string memory vaultName_,
+            string memory vaultSymbol_,
+            uint8 decimals_,
+            address fund_,
+            address oracleRouter_,
+            address minter_,
+            address protocolFeeRecipient_
+        ) = abi.decode(
+            initializeParams, (string, string, uint8, address, address, address, address)
+        );
+
         if (fund_ == address(0)) {
             revert Errors.Deposit_InvalidConstructorParam();
         }
@@ -104,12 +118,14 @@ contract Periphery is ERC721, AccessControl, Pausable, ReentrancyGuard, IPeriphe
         }
 
         fund = fund_;
-        oracleRouter = IPriceOracle(oracleRouter_);
-        protocolFeeRecipient = protocolFeeRecipient_;
-        lastManagementFeeTimestamp = block.timestamp;
-        netDepositLimit = type(uint256).max;
-        unitOfAccount = new UnitOfAccount("Liquidity", "UNIT", decimals_);
-        internalVault = new FundShareVault(address(unitOfAccount), vaultName_, vaultSymbol_);
+        avatar = fund_;
+        target = fund_;
+
+        _transferOwnership(fund_);
+        __Pausable_init();
+        __ReentrancyGuard_init();
+        __AccessControl_init();
+        __ERC721_init(vaultName_, vaultSymbol_);
 
         _grantRole(DEFAULT_ADMIN_ROLE, fund_);
         _grantRole(FUND_ROLE, fund_);
@@ -117,8 +133,19 @@ contract Periphery is ERC721, AccessControl, Pausable, ReentrancyGuard, IPeriphe
         _grantRole(MINTER_ROLE, minter_);
         _grantRole(MINTER_ROLE, fund_);
 
+        oracleRouter = IPriceOracle(oracleRouter_);
+        protocolFeeRecipient = protocolFeeRecipient_;
+        lastManagementFeeTimestamp = block.timestamp;
+        netDepositLimit = type(uint256).max;
+        unitOfAccount = new UnitOfAccount("Liquidity", "UNIT", decimals_);
+        internalVault = new FundShareVault(address(unitOfAccount), vaultName_, vaultSymbol_);
+
         /// @notice infinite approval for the internalVault to manage periphery's balance
         unitOfAccount.approve(address(internalVault), type(uint256).max);
+
+        emit PeripherySetup(msg.sender, fund_, fund_, fund_);
+        emit AvatarSet(address(0), fund_);
+        emit TargetSet(address(0), fund_);
     }
 
     /// @dev This modifier updates the balances of the internalVault and the fund
@@ -384,7 +411,7 @@ contract Periphery is ERC721, AccessControl, Pausable, ReentrancyGuard, IPeriphe
 
         /// pay the relayer if required
         if (order.intent.relayerTip > 0) {
-            ISafe(fund).transferAssetFromSafeOrRevert(
+            IAvatar(fund).transferAssetFromSafeOrRevert(
                 order.intent.withdraw.asset, msg.sender, order.intent.relayerTip
             );
         }
@@ -518,12 +545,12 @@ contract Periphery is ERC721, AccessControl, Pausable, ReentrancyGuard, IPeriphe
         uint256 toBroker,
         uint256 toProtocol
     ) private {
-        ISafe(fund).transferAssetFromSafeOrRevert(asset, user, toUser);
+        IAvatar(fund).transferAssetFromSafeOrRevert(asset, user, toUser);
         if (toBroker > 0) {
-            ISafe(fund).transferAssetFromSafeOrRevert(asset, broker, toBroker);
+            IAvatar(fund).transferAssetFromSafeOrRevert(asset, broker, toBroker);
         }
         if (toProtocol > 0) {
-            ISafe(fund).transferAssetFromSafeOrRevert(asset, protocolFeeRecipient, toProtocol);
+            IAvatar(fund).transferAssetFromSafeOrRevert(asset, protocolFeeRecipient, toProtocol);
         }
     }
 
@@ -929,7 +956,7 @@ contract Periphery is ERC721, AccessControl, Pausable, ReentrancyGuard, IPeriphe
     function supportsInterface(bytes4 interfaceId)
         public
         view
-        override(ERC721, AccessControl)
+        override(ERC721Upgradeable, AccessControlUpgradeable)
         returns (bool)
     {
         return interfaceId == type(IPeriphery).interfaceId || super.supportsInterface(interfaceId);
