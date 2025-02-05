@@ -7,7 +7,8 @@ import "@src/libs/Constants.sol";
 import {TestBaseDeposit} from "./TestBaseDeposit.sol";
 import {Errors} from "@src/libs/Errors.sol";
 import {MessageHashUtils} from "@openzeppelin-contracts/utils/cryptography/MessageHashUtils.sol";
-import {IERC20Permit} from "@openzeppelin-contracts/token/ERC20/extensions/IERC20Permit.sol";
+import "@permit2/src/interfaces/IAllowanceTransfer.sol";
+import {IPermit2} from "@permit2/src/interfaces/IPermit2.sol";
 
 uint256 constant MAX_NET_EXIT_FEE_IN_BPS = 5_000;
 uint256 constant MAX_NET_PERFORMANCE_FEE_IN_BPS = 7_000;
@@ -16,10 +17,6 @@ uint256 constant MAX_NET_MANAGEMENT_FEE_IN_BPS = 5_000;
 
 contract TestDepositWithdraw is TestBaseDeposit {
     using SignedMath for int256;
-
-    bytes32 private constant PERMIT_TYPEHASH = keccak256(
-        "Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)"
-    );
 
     function setUp() public override(TestBaseDeposit) {
         TestBaseDeposit.setUp();
@@ -37,7 +34,7 @@ contract TestDepositWithdraw is TestBaseDeposit {
 
     function test_deposit_with_entrance_fees(TestEntranceFeeParams memory params)
         public
-        approveAllPeriphery(alice)
+        approvePermit2(alice)
     {
         vm.assume(params.depositAmount > 10);
 
@@ -76,8 +73,19 @@ contract TestDepositWithdraw is TestBaseDeposit {
 
         uint256 sharesOut;
 
+        (IAllowanceTransfer.PermitSingle memory permitSingle, bytes memory signature) =
+        _create_permit2_single_allowance_signature(
+            address(mockToken1),
+            type(uint256).max,
+            block.timestamp + 1000,
+            0,
+            address(periphery),
+            block.timestamp + 1000
+        );
+
         /// alice deposits
         if (params.useIntent) {
+            IPermit2(permit2).permit(alice, permitSingle, signature);
             sharesOut = periphery.intentDeposit(
                 depositIntent(
                     1,
@@ -91,9 +99,11 @@ contract TestDepositWithdraw is TestBaseDeposit {
                 )
             );
         } else {
-            vm.prank(alice);
+            vm.startPrank(alice);
+            IPermit2(permit2).permit(alice, permitSingle, signature);
             sharesOut =
                 periphery.deposit(depositOrder(1, receiver, address(mockToken1), type(uint256).max));
+            vm.stopPrank();
         }
 
         uint256 entranceFeeForBroker =
@@ -128,22 +138,6 @@ contract TestDepositWithdraw is TestBaseDeposit {
         }
     }
 
-    function _create_permit_signature(
-        uint256 ownerPK,
-        address owner,
-        address asset,
-        address spender,
-        uint256 value,
-        uint256 deadline
-    ) private view returns (uint8 v, bytes32 r, bytes32 s) {
-        uint256 nonce = IERC20Permit(asset).nonces(owner);
-        bytes32 structHash =
-            keccak256(abi.encode(PERMIT_TYPEHASH, owner, spender, value, nonce, deadline));
-        bytes32 theHash =
-            MessageHashUtils.toTypedDataHash(IERC20Permit(asset).DOMAIN_SEPARATOR(), structHash);
-        (v, r, s) = vm.sign(ownerPK, theHash);
-    }
-
     struct TestExitFeeParams {
         bool useIntent;
         uint32 depositAmount;
@@ -154,7 +148,10 @@ contract TestDepositWithdraw is TestBaseDeposit {
         uint8 protocolPerformanceFeeInBps;
     }
 
-    function test_deposit_withdraw_all_with_exit_fees(TestExitFeeParams memory params) public {
+    function test_deposit_withdraw_all_with_exit_fees(TestExitFeeParams memory params)
+        public
+        approvePermit2(alice)
+    {
         vm.assume(params.depositAmount > 10);
 
         /// @notice that the fees are fuzzed in 25bps increments
@@ -200,19 +197,30 @@ contract TestDepositWithdraw is TestBaseDeposit {
 
         mockToken1.mint(alice, depositAmount);
 
+        (IAllowanceTransfer.PermitSingle memory permitSingle, bytes memory signature) =
+        _create_permit2_single_allowance_signature(
+            address(mockToken1),
+            depositAmount,
+            block.timestamp + 1000,
+            0,
+            address(periphery),
+            block.timestamp + 1000
+        );
+
         /// alice deposits
         if (params.useIntent) {
-            (uint8 v, bytes32 r, bytes32 s) = _create_permit_signature(
-                alicePK,
-                alice,
-                address(mockToken1),
-                address(periphery),
-                depositAmount,
-                block.timestamp + 1000
-            );
-            mockToken1.permit(
-                alice, address(periphery), depositAmount, block.timestamp + 1000, v, r, s
-            );
+            // (uint8 v, bytes32 r, bytes32 s) = _create_permit_signature(
+            //     alicePK,
+            //     alice,
+            //     address(mockToken1),
+            //     address(periphery),
+            //     depositAmount,
+            //     block.timestamp + 1000
+            // );
+            // mockToken1.permit(
+            //     alice, address(periphery), depositAmount, block.timestamp + 1000, v, r, s
+            // );
+            IPermit2(permit2).permit(alice, permitSingle, signature);
             periphery.intentDeposit(
                 depositIntent(
                     1,
@@ -226,18 +234,19 @@ contract TestDepositWithdraw is TestBaseDeposit {
                 )
             );
         } else {
-            (uint8 v, bytes32 r, bytes32 s) = _create_permit_signature(
-                alicePK,
-                alice,
-                address(mockToken1),
-                address(periphery),
-                depositAmount,
-                block.timestamp + 1000
-            );
+            // (uint8 v, bytes32 r, bytes32 s) = _create_permit_signature(
+            //     alicePK,
+            //     alice,
+            //     address(mockToken1),
+            //     address(periphery),
+            //     depositAmount,
+            //     block.timestamp + 1000
+            // );
             vm.startPrank(alice);
-            mockToken1.permit(
-                alice, address(periphery), depositAmount, block.timestamp + 1000, v, r, s
-            );
+            // mockToken1.permit(
+            //     alice, address(periphery), depositAmount, block.timestamp + 1000, v, r, s
+            // );
+            IPermit2(permit2).permit(alice, permitSingle, signature);
             periphery.deposit(depositOrder(1, alice, address(mockToken1), type(uint256).max));
             vm.stopPrank();
         }
@@ -358,7 +367,7 @@ contract TestDepositWithdraw is TestBaseDeposit {
         uint256 timeDelta1,
         uint256 timeDelta2,
         uint256 timeDelta3
-    ) public approveAllPeriphery(alice) {
+    ) public approvePermit2(alice) {
         vm.assume(managementFeeRateInBps < MAX_NET_MANAGEMENT_FEE_IN_BPS);
         vm.assume(timeDelta1 > 0);
         vm.assume(timeDelta1 < 10 * 365 days);
@@ -396,6 +405,26 @@ contract TestDepositWithdraw is TestBaseDeposit {
         vm.stopPrank();
 
         mockToken1.mint(alice, 50 ether);
+        {
+            uint256 expiration = block.timestamp + timeDelta1 + timeDelta2 + timeDelta3 + 1000;
+            /// make one max permit2 for alice to periphery
+            (IAllowanceTransfer.PermitSingle memory permitSingle, bytes memory signature) =
+            _create_permit2_single_allowance_signature(
+                address(mockToken1),
+                type(uint256).max,
+                expiration,
+                0,
+                address(periphery),
+                expiration
+            );
+
+            vm.startPrank(alice);
+            IPermit2(permit2).permit(alice, permitSingle, signature);
+
+            // also infinite approval to periphery for lp token
+            periphery.internalVault().approve(address(periphery), type(uint256).max);
+            vm.stopPrank();
+        }
 
         vm.prank(alice);
         periphery.deposit(depositOrder(1, alice, address(mockToken1), type(uint256).max));

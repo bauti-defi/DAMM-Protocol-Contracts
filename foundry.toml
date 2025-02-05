@@ -20,15 +20,16 @@ remappings = [
     "@solady/=lib/solady/src/",
     "@zodiac/=lib/zodiac/contracts/",
     "@openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/",
-
-
+    "@permit2/=lib/permit2/",
 
     "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
     "@openzeppelin-contracts/=lib/openzeppelin-contracts/contracts/",
     #####
     ### @dev This import is so we can compile the euler price oracle contracts inside tests
     "ethereum-vault-connector/=lib/euler-price-oracle/lib/ethereum-vault-connector/src/",
-    #####
+    #### this is to compile the permit2 contracts
+    "solmate/src/=lib/permit2/lib/solmate/src/",
+    ##### compile zodiac contracts
     "@gnosis.pm/safe-contracts/contracts/=lib/safe-contracts/contracts/"
 ] 
 

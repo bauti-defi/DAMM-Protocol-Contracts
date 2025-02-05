@@ -14,15 +14,25 @@ import {console2} from "@forge-std/Test.sol";
 import "@src/libs/Constants.sol";
 import "@src/modules/deposit/Structs.sol";
 import {ModuleProxyFactory} from "@zodiac/factory/ModuleProxyFactory.sol";
+import {DeployPermit2} from "@permit2/test/utils/DeployPermit2.sol";
+import {IPermit2} from "@permit2/src/interfaces/IPermit2.sol";
+import {IEIP712} from "@permit2/src/interfaces/IEIP712.sol";
+import "@permit2/src/interfaces/IAllowanceTransfer.sol";
+import "@permit2/src/libraries/PermitHash.sol";
+import {IERC20Permit} from "@openzeppelin-contracts/token/ERC20/extensions/IERC20Permit.sol";
 
 uint8 constant VALUATION_DECIMALS = 18;
 uint256 constant VAULT_DECIMAL_OFFSET = 1;
 uint256 constant MINIMUM_DEPOSIT = 1000;
 uint256 constant MINIMUM_WITHDRAWAL = 1000;
 
-abstract contract TestBaseDeposit is TestBaseGnosis {
+abstract contract TestBaseDeposit is TestBaseGnosis, DeployPermit2 {
     using MessageHashUtils for bytes;
     using SignedMath for int256;
+
+    bytes32 internal constant PERMIT_TYPEHASH = keccak256(
+        "Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)"
+    );
 
     address internal fundAdmin;
     uint256 internal fundAdminPK;
@@ -46,6 +56,7 @@ abstract contract TestBaseDeposit is TestBaseGnosis {
     uint256 mock1Unit;
     uint256 mock2Unit;
     uint256 oneUnitOfAccount;
+    address permit2;
 
     function setUp() public virtual override(TestBaseGnosis) {
         TestBaseGnosis.setUp();
@@ -78,8 +89,9 @@ abstract contract TestBaseDeposit is TestBaseGnosis {
 
         // deploy periphery using module factory
         ModuleProxyFactory factory = new ModuleProxyFactory();
+        permit2 = address(deployPermit2());
 
-        peripheryMastercopy = address(new Periphery());
+        peripheryMastercopy = address(new Periphery(permit2));
 
         bytes memory initializer = abi.encodeWithSelector(
             Periphery.setUp.selector,
@@ -184,6 +196,52 @@ abstract contract TestBaseDeposit is TestBaseGnosis {
         vm.stopPrank();
     }
 
+    function _create_permit2_single_allowance_signature(
+        address token,
+        uint256 amount,
+        uint256 expiration,
+        uint256 nonce,
+        address spender,
+        uint256 sigDeadline
+    )
+        internal
+        returns (IAllowanceTransfer.PermitSingle memory permitSingle, bytes memory signature)
+    {
+        permitSingle = IAllowanceTransfer.PermitSingle({
+            details: IAllowanceTransfer.PermitDetails({
+                token: token,
+                amount: uint160(amount),
+                expiration: uint48(expiration),
+                nonce: uint48(nonce)
+            }),
+            spender: spender,
+            sigDeadline: sigDeadline
+        });
+
+        bytes32 theHash = PermitHash.hash(permitSingle);
+        theHash =
+            keccak256(abi.encodePacked("\x19\x01", IEIP712(permit2).DOMAIN_SEPARATOR(), theHash));
+
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(alicePK, theHash);
+        signature = abi.encodePacked(r, s, v);
+    }
+
+    function _create_permit_signature(
+        uint256 ownerPK,
+        address owner,
+        address asset,
+        address spender,
+        uint256 value,
+        uint256 deadline
+    ) internal view returns (uint8 v, bytes32 r, bytes32 s) {
+        uint256 nonce = IERC20Permit(asset).nonces(owner);
+        bytes32 structHash =
+            keccak256(abi.encode(PERMIT_TYPEHASH, owner, spender, value, nonce, deadline));
+        bytes32 theHash =
+            MessageHashUtils.toTypedDataHash(IERC20Permit(asset).DOMAIN_SEPARATOR(), structHash);
+        (v, r, s) = vm.sign(ownerPK, theHash);
+    }
+
     function _enableBrokerAssetPolicy(
         address enabler,
         uint256 accountId,
@@ -237,6 +295,16 @@ abstract contract TestBaseDeposit is TestBaseGnosis {
         mockToken1.approve(address(periphery), type(uint256).max);
         mockToken2.approve(address(periphery), type(uint256).max);
         periphery.internalVault().approve(address(periphery), type(uint256).max);
+        vm.stopPrank();
+
+        _;
+    }
+
+    modifier approvePermit2(address user) {
+        vm.startPrank(user);
+        mockToken1.approve(permit2, type(uint256).max);
+        mockToken2.approve(permit2, type(uint256).max);
+        periphery.internalVault().approve(permit2, type(uint256).max);
         vm.stopPrank();
 
         _;

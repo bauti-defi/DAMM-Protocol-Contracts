@@ -6,7 +6,6 @@ import "@solmate/tokens/ERC20.sol";
 import "@openzeppelin-contracts/utils/math/SignedMath.sol";
 import "@openzeppelin-contracts/utils/math/SafeCast.sol";
 import "@solady/utils/FixedPointMathLib.sol";
-import "@solmate/utils/SafeTransferLib.sol";
 import "@src/libs/Constants.sol";
 
 import "@openzeppelin/contracts-upgradeable/token/ERC721/ERC721Upgradeable.sol";
@@ -22,6 +21,7 @@ import {FundShareVault} from "./FundShareVault.sol";
 import {DepositLibs} from "./DepositLibs.sol";
 import {SafeLib} from "@src/libs/SafeLib.sol";
 import {Module} from "@zodiac/core/Module.sol";
+import {IPermit2} from "@permit2/src/interfaces/IPermit2.sol";
 
 bytes32 constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 bytes32 constant FUND_ROLE = keccak256("FUND_ROLE");
@@ -47,10 +47,12 @@ contract Periphery is
     using DepositLibs for BrokerAccountInfo;
     using DepositLibs for address;
     using SafeLib for IAvatar;
-    using SafeTransferLib for ERC20;
     using SafeCast for uint256;
     using SignedMath for int256;
     using FixedPointMathLib for uint256;
+
+    /// @dev The permit2 contract
+    address public immutable permit2;
 
     /// @dev The DAMM fund the periphery is associated with
     address public fund;
@@ -81,6 +83,12 @@ contract Periphery is
 
     /// @dev Counter for brokerage account token IDs
     uint256 private tokenId = 0;
+
+    /// @dev Constructor for the Periphery contract
+    /// @param permit2_ The address of the permit2 contract
+    constructor(address permit2_) {
+        permit2 = permit2_;
+    }
 
     /// @notice Initializes the Periphery contract
     /// @param initializeParams Encoded parameters for the Periphery contract
@@ -200,14 +208,20 @@ contract Periphery is
 
         /// pay the relayer if required
         if (order.intent.relayerTip > 0) {
-            ERC20(order.intent.deposit.asset).safeTransferFrom(
-                minter, msg.sender, order.intent.relayerTip
+            IPermit2(permit2).transferFrom(
+                minter, msg.sender, uint160(order.intent.relayerTip), order.intent.deposit.asset
             );
+            // ERC20(order.intent.deposit.asset).safeTransferFrom(
+            //     minter, msg.sender, order.intent.relayerTip
+            // );
         }
 
         /// bribe the fund if required
         if (order.intent.bribe > 0) {
-            ERC20(order.intent.deposit.asset).safeTransferFrom(minter, fund, order.intent.bribe);
+            // ERC20(order.intent.deposit.asset).safeTransferFrom(minter, fund, order.intent.bribe);
+            IPermit2(permit2).transferFrom(
+                minter, fund, uint160(order.intent.bribe), order.intent.deposit.asset
+            );
         }
 
         sharesOut = _deposit(
@@ -303,7 +317,8 @@ contract Periphery is
         }
 
         /// transfer asset from broker to fund
-        assetToken.safeTransferFrom(broker, fund, assetAmountIn);
+        // assetToken.safeTransferFrom(broker, fund, assetAmountIn);
+        IPermit2(permit2).transferFrom(broker, fund, uint160(assetAmountIn), order.asset);
 
         /// calculate how much liquidity for this amount of deposited asset
         uint256 liquidity =
