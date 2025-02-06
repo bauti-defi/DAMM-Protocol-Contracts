@@ -93,8 +93,10 @@ contract TestDepositWithdraw is TestBaseDeposit {
                     alicePK,
                     address(mockToken1),
                     type(uint256).max,
-                    0,
-                    0,
+                    10,
+                    /// neglible tip
+                    10,
+                    /// neglible bribe
                     periphery.getAccountNonce(1)
                 )
             );
@@ -115,14 +117,14 @@ contract TestDepositWithdraw is TestBaseDeposit {
             mockToken1.balanceOf(address(fund)), depositAmount, 0.1e18, "Fund balance wrong"
         );
         assertApproxEqRel(
-            periphery.internalVault().balanceOf(receiver),
+            depositModule.internalVault().balanceOf(receiver),
             sharesOut - entranceFeeForBroker - entranceFeeForProtocol,
             0.1e18,
             "Broker entrance fee balance wrong"
         );
         if (brokerEntranceFeeInBps > 0) {
             assertApproxEqRel(
-                periphery.internalVault().balanceOf(alice),
+                depositModule.internalVault().balanceOf(alice),
                 entranceFeeForBroker,
                 0.1e18,
                 "Broker entrance fee balance wrong"
@@ -130,7 +132,7 @@ contract TestDepositWithdraw is TestBaseDeposit {
         }
         if (protocolEntranceFeeInBps > 0) {
             assertApproxEqRel(
-                periphery.internalVault().balanceOf(feeRecipient),
+                depositModule.internalVault().balanceOf(feeRecipient),
                 entranceFeeForProtocol,
                 0.1e18,
                 "Protocol entrance fee balance wrong"
@@ -209,17 +211,6 @@ contract TestDepositWithdraw is TestBaseDeposit {
 
         /// alice deposits
         if (params.useIntent) {
-            // (uint8 v, bytes32 r, bytes32 s) = _create_permit_signature(
-            //     alicePK,
-            //     alice,
-            //     address(mockToken1),
-            //     address(periphery),
-            //     depositAmount,
-            //     block.timestamp + 1000
-            // );
-            // mockToken1.permit(
-            //     alice, address(periphery), depositAmount, block.timestamp + 1000, v, r, s
-            // );
             IPermit2(permit2).permit(alice, permitSingle, signature);
             periphery.intentDeposit(
                 depositIntent(
@@ -234,18 +225,7 @@ contract TestDepositWithdraw is TestBaseDeposit {
                 )
             );
         } else {
-            // (uint8 v, bytes32 r, bytes32 s) = _create_permit_signature(
-            //     alicePK,
-            //     alice,
-            //     address(mockToken1),
-            //     address(periphery),
-            //     depositAmount,
-            //     block.timestamp + 1000
-            // );
             vm.startPrank(alice);
-            // mockToken1.permit(
-            //     alice, address(periphery), depositAmount, block.timestamp + 1000, v, r, s
-            // );
             IPermit2(permit2).permit(alice, permitSingle, signature);
             periphery.deposit(depositOrder(1, alice, address(mockToken1), type(uint256).max));
             vm.stopPrank();
@@ -268,18 +248,17 @@ contract TestDepositWithdraw is TestBaseDeposit {
             ? mockToken1.balanceOf(address(fund)) * protocolExitFeeInBps / BP_DIVISOR
             : 0;
 
+        (permitSingle, signature) = _create_permit2_single_allowance_signature(
+            address(depositModule.getVault()),
+            type(uint256).max,
+            block.timestamp + 1000,
+            0,
+            address(periphery),
+            block.timestamp + 1000
+        );
+
         if (params.useIntent) {
-            (uint8 v, bytes32 r, bytes32 s) = _create_permit_signature(
-                alicePK,
-                alice,
-                address(periphery.internalVault()),
-                address(periphery),
-                type(uint256).max,
-                block.timestamp + 1000
-            );
-            periphery.internalVault().permit(
-                alice, address(periphery), type(uint256).max, block.timestamp + 1000, v, r, s
-            );
+            IPermit2(permit2).permit(alice, permitSingle, signature);
             periphery.intentWithdraw(
                 signedWithdrawIntent(
                     1,
@@ -293,18 +272,8 @@ contract TestDepositWithdraw is TestBaseDeposit {
                 )
             );
         } else {
-            (uint8 v, bytes32 r, bytes32 s) = _create_permit_signature(
-                alicePK,
-                alice,
-                address(periphery.internalVault()),
-                address(periphery),
-                type(uint256).max,
-                block.timestamp + 1000
-            );
+            IPermit2(permit2).permit(alice, permitSingle, signature);
             vm.startPrank(alice);
-            periphery.internalVault().permit(
-                alice, address(periphery), type(uint256).max, block.timestamp + 1000, v, r, s
-            );
             periphery.withdraw(withdrawOrder(1, claimer, address(mockToken1), type(uint256).max));
             vm.stopPrank();
         }
@@ -358,8 +327,8 @@ contract TestDepositWithdraw is TestBaseDeposit {
             );
         }
 
-        assertEq(periphery.internalVault().balanceOf(alice), 0);
-        assertEq(mockToken1.balanceOf(address(fund)), periphery.internalVault().totalAssets());
+        assertEq(depositModule.internalVault().balanceOf(alice), 0);
+        assertEq(mockToken1.balanceOf(address(fund)), depositModule.internalVault().totalAssets());
     }
 
     function test_management_fee(
@@ -418,38 +387,48 @@ contract TestDepositWithdraw is TestBaseDeposit {
                 expiration
             );
 
-            vm.startPrank(alice);
+            vm.prank(alice);
             IPermit2(permit2).permit(alice, permitSingle, signature);
 
-            // also infinite approval to periphery for lp token
-            periphery.internalVault().approve(address(periphery), type(uint256).max);
-            vm.stopPrank();
+            (permitSingle, signature) = _create_permit2_single_allowance_signature(
+                address(depositModule.getVault()),
+                type(uint256).max,
+                expiration,
+                0,
+                address(periphery),
+                expiration
+            );
+
+            vm.prank(alice);
+            IPermit2(permit2).permit(alice, permitSingle, signature);
         }
 
         vm.prank(alice);
         periphery.deposit(depositOrder(1, alice, address(mockToken1), type(uint256).max));
         assertEq(
-            periphery.internalVault().balanceOf(alice), periphery.internalVault().totalSupply()
+            depositModule.internalVault().balanceOf(alice),
+            depositModule.internalVault().totalSupply()
         );
 
         /// @notice that now blocks have passed, so no time has passed, so there is no management fee
-        assertEq(periphery.internalVault().balanceOf(managementFeeRecipient), 0);
+        assertEq(depositModule.internalVault().balanceOf(managementFeeRecipient), 0);
 
         mockToken1.mint(alice, 50 ether);
 
         vm.prank(alice);
         periphery.withdraw(withdrawOrder(1, alice, address(mockToken1), type(uint256).max));
         assertEq(
-            periphery.internalVault().balanceOf(alice), periphery.internalVault().totalSupply()
+            depositModule.internalVault().balanceOf(alice),
+            depositModule.internalVault().totalSupply()
         );
 
         /// @notice that now blocks have passed, so no time has passed, so there is no management fee
-        assertEq(periphery.internalVault().balanceOf(managementFeeRecipient), 0);
+        assertEq(depositModule.internalVault().balanceOf(managementFeeRecipient), 0);
 
         /// now we simulate time passing
         vm.warp(block.timestamp + timeDelta1);
 
-        uint256 managementFee1 = periphery.internalVault().totalSupply() * timeDelta1
+        uint256 managementFee1 = depositModule.internalVault().totalSupply() * timeDelta1
             * managementFeeRateInBps / BP_DIVISOR / 365 days;
 
         mockToken1.mint(alice, 50 ether);
@@ -457,17 +436,17 @@ contract TestDepositWithdraw is TestBaseDeposit {
         vm.prank(alice);
         periphery.deposit(depositOrder(1, alice, address(mockToken1), type(uint256).max));
         assertEq(
-            periphery.internalVault().balanceOf(alice),
-            periphery.internalVault().totalSupply() - managementFee1
+            depositModule.internalVault().balanceOf(alice),
+            depositModule.internalVault().totalSupply() - managementFee1
         );
 
         /// @notice now the management fee should have been minted to the management fee recipient
         /// since time has passed between deposits
-        assertEq(periphery.internalVault().balanceOf(managementFeeRecipient), managementFee1);
+        assertEq(depositModule.internalVault().balanceOf(managementFeeRecipient), managementFee1);
 
         vm.warp(block.timestamp + timeDelta2);
 
-        uint256 managementFee2 = periphery.internalVault().totalSupply() * timeDelta2
+        uint256 managementFee2 = depositModule.internalVault().totalSupply() * timeDelta2
             * managementFeeRateInBps / BP_DIVISOR / 365 days;
 
         mockToken1.mint(alice, 50 ether);
@@ -476,14 +455,14 @@ contract TestDepositWithdraw is TestBaseDeposit {
         periphery.deposit(depositOrder(1, alice, address(mockToken1), type(uint256).max));
 
         assertApproxEqRel(
-            periphery.internalVault().balanceOf(alice),
-            periphery.internalVault().totalSupply() - managementFee1 - managementFee2,
+            depositModule.internalVault().balanceOf(alice),
+            depositModule.internalVault().totalSupply() - managementFee1 - managementFee2,
             0.1e18,
             "Alice balance wrong"
         );
 
         assertApproxEqRel(
-            periphery.internalVault().balanceOf(managementFeeRecipient),
+            depositModule.internalVault().balanceOf(managementFeeRecipient),
             managementFee1 + managementFee2,
             0.1e18,
             "Management fee recipient balance wrong"
@@ -491,19 +470,19 @@ contract TestDepositWithdraw is TestBaseDeposit {
 
         vm.warp(block.timestamp + timeDelta3);
 
-        uint256 managementFee3 = periphery.internalVault().totalSupply() * timeDelta3
+        uint256 managementFee3 = depositModule.internalVault().totalSupply() * timeDelta3
             * managementFeeRateInBps / BP_DIVISOR / 365 days;
 
         vm.prank(alice);
         periphery.withdraw(withdrawOrder(1, alice, address(mockToken1), type(uint256).max));
 
         assertApproxEqRel(
-            periphery.internalVault().balanceOf(managementFeeRecipient),
+            depositModule.internalVault().balanceOf(managementFeeRecipient),
             managementFee1 + managementFee2 + managementFee3,
             0.1e18,
             "Management fee recipient balance wrong"
         );
 
-        assertEq(periphery.internalVault().balanceOf(alice), 0);
+        assertEq(depositModule.internalVault().balanceOf(alice), 0);
     }
 }

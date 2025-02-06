@@ -10,8 +10,8 @@ import "@src/libs/Errors.sol";
 /// @notice An ERC4626 vault that tokenizes shares in the fund
 /// @dev All operations are restricted to the periphery contract to ensure proper accounting
 contract FundShareVault is ERC4626, ERC20Permit, Ownable {
-    /// @notice The periphery contract address that has exclusive operation rights
-    address public immutable periphery;
+    /// @notice The deposit module contract address that has exclusive operation rights
+    address public immutable controller;
 
     /// @notice Creates a new Fund Share Vault
     /// @param _unitOfAccount The underlying unit of account token
@@ -23,7 +23,7 @@ contract FundShareVault is ERC4626, ERC20Permit, Ownable {
         ERC20Permit(_name)
         Ownable(msg.sender)
     {
-        periphery = msg.sender;
+        controller = msg.sender;
     }
 
     /// @notice Deposits assets into the vault

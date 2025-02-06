@@ -4,7 +4,7 @@ pragma solidity ^0.8.0;
 import {TestBaseGnosis} from "@test/base/TestBaseGnosis.sol";
 import {EulerRouter} from "@euler-price-oracle/EulerRouter.sol";
 import {ISafe} from "@src/interfaces/ISafe.sol";
-import {Periphery} from "@src/modules/deposit/Periphery.sol";
+import {PeripheryV2} from "@src/modules/deposit/PeripheryV2.sol";
 import {BalanceOfOracle} from "@src/oracles/BalanceOfOracle.sol";
 import {MockERC20} from "@test/mocks/MockERC20.sol";
 import {MockPriceOracle} from "@test/mocks/MockPriceOracle.sol";
@@ -20,6 +20,7 @@ import {IEIP712} from "@permit2/src/interfaces/IEIP712.sol";
 import "@permit2/src/interfaces/IAllowanceTransfer.sol";
 import "@permit2/src/libraries/PermitHash.sol";
 import {IERC20Permit} from "@openzeppelin-contracts/token/ERC20/extensions/IERC20Permit.sol";
+import "@src/modules/deposit/DepositModule.sol";
 
 uint8 constant VALUATION_DECIMALS = 18;
 uint256 constant VAULT_DECIMAL_OFFSET = 1;
@@ -38,8 +39,10 @@ abstract contract TestBaseDeposit is TestBaseGnosis, DeployPermit2 {
     uint256 internal fundAdminPK;
     ISafe internal fund;
     EulerRouter internal oracleRouter;
-    Periphery internal periphery;
+    PeripheryV2 internal periphery;
     address internal peripheryMastercopy;
+    DepositModule internal depositModule;
+    address internal depositModuleMastercopy;
     MockERC20 internal mockToken1;
     MockERC20 internal mockToken2;
 
@@ -87,40 +90,6 @@ abstract contract TestBaseDeposit is TestBaseGnosis, DeployPermit2 {
         oracleRouter = new EulerRouter(address(1), address(fund));
         vm.label(address(oracleRouter), "OracleRouter");
 
-        // deploy periphery using module factory
-        ModuleProxyFactory factory = new ModuleProxyFactory();
-        permit2 = address(deployPermit2());
-
-        peripheryMastercopy = address(new Periphery(permit2));
-
-        bytes memory initializer = abi.encodeWithSelector(
-            Periphery.setUp.selector,
-            abi.encode(
-                "TestVault",
-                "TV",
-                18,
-                address(fund),
-                address(oracleRouter),
-                address(fund),
-                address(feeRecipient)
-            )
-        );
-
-        periphery = Periphery(
-            factory.deployModule(
-                peripheryMastercopy, initializer, uint256(bytes32("periphery-salt"))
-            )
-        );
-
-        vm.startPrank(address(fund));
-        fund.enableModule(address(periphery));
-        vm.stopPrank();
-
-        assertTrue(fund.isModuleEnabled(address(periphery)), "Periphery not module");
-
-        /// @notice this much match the vault implementation
-        oneUnitOfAccount = 1 * 10 ** (periphery.unitOfAccount().decimals() + VAULT_DECIMAL_OFFSET);
-
         mockToken1 = new MockERC20(18);
         vm.label(address(mockToken1), "MockToken1");
 
@@ -130,10 +99,70 @@ abstract contract TestBaseDeposit is TestBaseGnosis, DeployPermit2 {
         mock1Unit = 1 * 10 ** mockToken1.decimals();
         mock2Unit = 1 * 10 ** mockToken2.decimals();
 
+        // deploy periphery using module factory
+        ModuleProxyFactory factory = new ModuleProxyFactory();
+        permit2 = address(deployPermit2());
+
+        depositModuleMastercopy = address(new DepositModule());
+
+        bytes memory depositModuleInitializer = abi.encodeWithSelector(
+            DepositModule.setUp.selector,
+            abi.encode("DepositModule", "DM", 18, address(fund), address(oracleRouter))
+        );
+
+        depositModule = DepositModule(
+            factory.deployModule(
+                depositModuleMastercopy,
+                depositModuleInitializer,
+                uint256(bytes32("depositModule-salt"))
+            )
+        );
+
+        vm.label(address(depositModule), "DepositModule");
+
+        vm.startPrank(address(fund));
+        fund.enableModule(address(depositModule));
+        vm.stopPrank();
+
+        assertTrue(fund.isModuleEnabled(address(depositModule)), "DepositModule not module");
+
+        peripheryMastercopy = address(new PeripheryV2(permit2));
+
+        bytes memory initializer = abi.encodeWithSelector(
+            PeripheryV2.setUp.selector,
+            abi.encode(
+                "BrokerNft",
+                "bNFT",
+                address(fund),
+                address(fund),
+                address(fund),
+                address(depositModule),
+                address(feeRecipient)
+            )
+        );
+
+        periphery = PeripheryV2(
+            factory.deployModule(
+                peripheryMastercopy, initializer, uint256(bytes32("periphery-salt"))
+            )
+        );
+
+        vm.label(address(periphery), "Periphery");
+
+        vm.startPrank(address(fund));
+        periphery.grantApproval(address(mockToken1));
+        periphery.grantApproval(address(mockToken2));
+        periphery.grantApproval(address(depositModule.getVault()));
+        depositModule.grantRole(CONTROLLER_ROLE, address(periphery));
+        vm.stopPrank();
+
+        /// @notice this much match the vault implementation
+        oneUnitOfAccount =
+            1 * 10 ** (depositModule.unitOfAccount().decimals() + VAULT_DECIMAL_OFFSET);
+
         // lets enable assets on the fund
         vm.startPrank(address(fund));
-        // fund.setAssetToValuate(address(mockToken1));
-        periphery.enableGlobalAssetPolicy(
+        depositModule.enableGlobalAssetPolicy(
             address(mockToken1),
             AssetPolicy({
                 minimumDeposit: MINIMUM_DEPOSIT,
@@ -144,8 +173,7 @@ abstract contract TestBaseDeposit is TestBaseGnosis, DeployPermit2 {
             })
         );
 
-        // fund.setAssetToValuate(address(mockToken2));
-        periphery.enableGlobalAssetPolicy(
+        depositModule.enableGlobalAssetPolicy(
             address(mockToken2),
             AssetPolicy({
                 minimumDeposit: MINIMUM_DEPOSIT,
@@ -155,22 +183,9 @@ abstract contract TestBaseDeposit is TestBaseGnosis, DeployPermit2 {
                 enabled: true
             })
         );
-
-        // native eth
-        // fund.setAssetToValuate(NATIVE_ASSET);
-        periphery.enableGlobalAssetPolicy(
-            NATIVE_ASSET,
-            AssetPolicy({
-                minimumDeposit: MINIMUM_DEPOSIT,
-                minimumWithdrawal: MINIMUM_WITHDRAWAL,
-                canDeposit: false,
-                canWithdraw: false,
-                enabled: true
-            })
-        );
         vm.stopPrank();
 
-        address unitOfAccount = address(periphery.unitOfAccount());
+        address unitOfAccount = address(depositModule.unitOfAccount());
 
         balanceOfOracle = new BalanceOfOracle(address(fund), address(oracleRouter));
         vm.label(address(balanceOfOracle), "BalanceOfOracle");
@@ -192,7 +207,7 @@ abstract contract TestBaseDeposit is TestBaseGnosis, DeployPermit2 {
         oracleRouter.govSetConfig(address(mockToken2), unitOfAccount, address(mockPriceOracle));
 
         vm.startPrank(address(fund));
-        oracleRouter.govSetResolvedVault(periphery.getVault(), true);
+        oracleRouter.govSetResolvedVault(depositModule.getVault(), true);
         vm.stopPrank();
     }
 
@@ -294,7 +309,7 @@ abstract contract TestBaseDeposit is TestBaseGnosis, DeployPermit2 {
         vm.startPrank(user);
         mockToken1.approve(address(periphery), type(uint256).max);
         mockToken2.approve(address(periphery), type(uint256).max);
-        periphery.internalVault().approve(address(periphery), type(uint256).max);
+        depositModule.internalVault().approve(address(periphery), type(uint256).max);
         vm.stopPrank();
 
         _;
@@ -304,7 +319,7 @@ abstract contract TestBaseDeposit is TestBaseGnosis, DeployPermit2 {
         vm.startPrank(user);
         mockToken1.approve(permit2, type(uint256).max);
         mockToken2.approve(permit2, type(uint256).max);
-        periphery.internalVault().approve(permit2, type(uint256).max);
+        depositModule.internalVault().approve(permit2, type(uint256).max);
         vm.stopPrank();
 
         _;
