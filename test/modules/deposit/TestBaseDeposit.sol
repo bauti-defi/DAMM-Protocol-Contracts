@@ -4,7 +4,7 @@ pragma solidity ^0.8.0;
 import {TestBaseGnosis} from "@test/base/TestBaseGnosis.sol";
 import {EulerRouter} from "@euler-price-oracle/EulerRouter.sol";
 import {ISafe} from "@src/interfaces/ISafe.sol";
-import {PeripheryV2} from "@src/modules/deposit/PeripheryV2.sol";
+import {Periphery} from "@src/modules/deposit/Periphery.sol";
 import {BalanceOfOracle} from "@src/oracles/BalanceOfOracle.sol";
 import {MockERC20} from "@test/mocks/MockERC20.sol";
 import {MockPriceOracle} from "@test/mocks/MockPriceOracle.sol";
@@ -39,7 +39,7 @@ abstract contract TestBaseDeposit is TestBaseGnosis, DeployPermit2 {
     uint256 internal fundAdminPK;
     ISafe internal fund;
     EulerRouter internal oracleRouter;
-    PeripheryV2 internal periphery;
+    Periphery internal periphery;
     address internal peripheryMastercopy;
     DepositModule internal depositModule;
     address internal depositModuleMastercopy;
@@ -126,10 +126,10 @@ abstract contract TestBaseDeposit is TestBaseGnosis, DeployPermit2 {
 
         assertTrue(fund.isModuleEnabled(address(depositModule)), "DepositModule not module");
 
-        peripheryMastercopy = address(new PeripheryV2(permit2));
+        peripheryMastercopy = address(new Periphery(permit2));
 
         bytes memory initializer = abi.encodeWithSelector(
-            PeripheryV2.setUp.selector,
+            Periphery.setUp.selector,
             abi.encode(
                 "BrokerNft",
                 "bNFT",
@@ -141,7 +141,7 @@ abstract contract TestBaseDeposit is TestBaseGnosis, DeployPermit2 {
             )
         );
 
-        periphery = PeripheryV2(
+        periphery = Periphery(
             factory.deployModule(
                 peripheryMastercopy, initializer, uint256(bytes32("periphery-salt"))
             )

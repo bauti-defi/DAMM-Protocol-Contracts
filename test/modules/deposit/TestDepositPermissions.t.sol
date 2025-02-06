@@ -3,13 +3,13 @@ pragma solidity ^0.8.0;
 
 import {EulerRouter} from "@euler-price-oracle/EulerRouter.sol";
 import {
-    PeripheryV2,
+    Periphery,
     CONTROLLER_ROLE,
     MINTER_ROLE,
     PAUSER_ROLE,
     IAccessControl,
     IERC721Errors
-} from "@src/modules/deposit/PeripheryV2.sol";
+} from "@src/modules/deposit/Periphery.sol";
 import "@src/modules/deposit/Structs.sol";
 import {MockERC20} from "@test/mocks/MockERC20.sol";
 import {MockPriceOracle} from "@test/mocks/MockPriceOracle.sol";

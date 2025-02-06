@@ -27,10 +27,6 @@ interface IPeriphery {
 
     event BrokerFeeRecipientUpdated(uint256 accountId, address oldRecipient, address newRecipient);
 
-    event GlobalAssetPolicyEnabled(address asset, AssetPolicy policy);
-
-    event GlobalAssetPolicyDisabled(address asset);
-
     event BrokerAssetPolicyEnabled(uint256 accountId, address asset, bool isDeposit);
 
     event BrokerAssetPolicyDisabled(uint256 accountId, address asset, bool isDeposit);
@@ -38,8 +34,6 @@ interface IPeriphery {
     event AccountPaused(uint256 accountId);
 
     event AccountUnpaused(uint256 accountId);
-
-    event AdminUpdated(address oldAdmin, address newAdmin);
 
     event ManagementFeeRateUpdated(uint256 oldRateInBps, uint256 newRateInBps);
 
@@ -62,26 +56,6 @@ interface IPeriphery {
         uint256 bribe,
         uint16 referralCode
     );
-
-    event NetDepositLimitUpdated(uint256 oldLimit, uint256 newLimit);
-
-    /// @notice The Fund contract this Periphery is associated with
-    function fund() external returns (address);
-
-    /// @notice The oracle used for price quotes
-    function oracleRouter() external returns (IPriceOracle);
-
-    /// @notice The internal ERC4626 LP vault
-    function internalVault() external returns (FundShareVault);
-
-    /// @notice The token used for internal fund accounting
-    function unitOfAccount() external returns (UnitOfAccount);
-
-    /// @notice The address of the LP vault
-    function getVault() external returns (address);
-
-    /// @notice The address of the unit of account token
-    function getUnitOfAccountToken() external returns (address);
 
     /// @notice The address that receives protocol fees
     function protocolFeeRecipient() external returns (address);
@@ -122,25 +96,8 @@ interface IPeriphery {
     /// @notice Updates the management fee rate
     function setManagementFeeRateInBps(uint256 rateInBps) external;
 
-    /// @notice Updates the net deposit limit
-    function setNetDepositLimit(uint256 limit) external;
-
     /// @notice Skims the management fee
     function skimManagementFee() external;
-
-    /// @notice Enables an asset for deposits and withdrawals
-    /// @param asset The asset to enable
-    /// @param policy The deposit/withdrawal policy for the asset
-    function enableGlobalAssetPolicy(address asset, AssetPolicy memory policy) external;
-
-    /// @notice Disables an asset for deposits and withdrawals
-    /// @param asset The asset to disable
-    function disableGlobalAssetPolicy(address asset) external;
-
-    /// @notice Gets the deposit/withdrawal policy for an asset
-    /// @param asset The asset to get the policy for
-    /// @return The asset's policy
-    function getGlobalAssetPolicy(address asset) external returns (AssetPolicy memory);
 
     /// @notice Enables an asset for deposits and withdrawals for a specific brokerage account
     /// @param accountId The ID of the brokerage account
@@ -194,6 +151,15 @@ interface IPeriphery {
 
     /// @notice The current nonce for a brokerage account
     function getAccountNonce(uint256 accountId) external returns (uint256);
+
+    /// @notice Grants approval for the deposit module to manage the periphery's balance
+    /// @notice Grants infinite approval
+    /// @param token_ The address of the token to grant approval for
+    function grantApproval(address token_) external;
+
+    /// @notice Revokes approval for the deposit module to manage the periphery's balance
+    /// @param token_ The address of the token to revoke approval for
+    function revokeApproval(address token_) external;
 
     /// @notice Pauses the periphery
     function pause() external;

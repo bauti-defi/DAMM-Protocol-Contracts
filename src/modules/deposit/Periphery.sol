@@ -3,6 +3,7 @@
 pragma solidity ^0.8.0;
 
 import "@solmate/tokens/ERC20.sol";
+import "@solmate/utils/SafeTransferLib.sol";
 import "@openzeppelin-contracts/utils/math/SignedMath.sol";
 import "@openzeppelin-contracts/utils/math/SafeCast.sol";
 import "@solady/utils/FixedPointMathLib.sol";
@@ -20,11 +21,13 @@ import "./UnitOfAccount.sol";
 import {FundShareVault} from "./FundShareVault.sol";
 import {DepositLibs} from "./DepositLibs.sol";
 import {SafeLib} from "@src/libs/SafeLib.sol";
-import {Module} from "@zodiac/core/Module.sol";
 import {IPermit2} from "@permit2/src/interfaces/IPermit2.sol";
+import "@zodiac/factory/FactoryFriendly.sol";
+import "@src/interfaces/IPeriphery.sol";
+import "@src/interfaces/IDepositModule.sol";
 
 bytes32 constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
-bytes32 constant FUND_ROLE = keccak256("FUND_ROLE");
+bytes32 constant CONTROLLER_ROLE = keccak256("CONTROLLER_ROLE");
 bytes32 constant MINTER_ROLE = keccak256("MINTER_ROLE");
 
 /// @title Periphery
@@ -37,7 +40,7 @@ bytes32 constant MINTER_ROLE = keccak256("MINTER_ROLE");
 ///      - Broker account management (NFTs)
 ///      - Fee collection and distribution
 contract Periphery is
-    Module,
+    FactoryFriendly,
     ERC721Upgradeable,
     AccessControlUpgradeable,
     PausableUpgradeable,
@@ -46,6 +49,7 @@ contract Periphery is
 {
     using DepositLibs for BrokerAccountInfo;
     using DepositLibs for address;
+    using SafeTransferLib for ERC20;
     using SafeLib for IAvatar;
     using SafeCast for uint256;
     using SignedMath for int256;
@@ -54,14 +58,8 @@ contract Periphery is
     /// @dev The permit2 contract
     address public immutable permit2;
 
-    /// @dev The DAMM fund the periphery is associated with
-    address public fund;
-    /// @dev The oracle used for price quotes
-    IPriceOracle public oracleRouter;
-    /// @dev Common unit of account for assets and internalVault
-    UnitOfAccount public unitOfAccount;
-    /// @dev Used internally for yield accounting
-    FundShareVault public internalVault;
+    /// @dev The deposit module for the fund
+    IDepositModule public depositModule;
 
     /// @dev The recipient of the protocol fees
     address public protocolFeeRecipient;
@@ -69,14 +67,6 @@ contract Periphery is
     uint256 private lastManagementFeeTimestamp;
     /// @dev The management fee rate in basis points
     uint256 public managementFeeRateInBps;
-
-    /// @dev The maximum amount of assets that can be deposited into the fund
-    /// @notice fund valuation must be less than or equal to this value to accept deposits
-    /// @notice default is set to type(uint256).max
-    uint256 public netDepositLimit;
-
-    /// @dev Maps assets to their deposit/withdrawal policies
-    mapping(address asset => AssetPolicy policy) private assetPolicy;
 
     /// @dev Maps token IDs to their brokerage account information
     mapping(uint256 tokenId => Broker broker) private brokers;
@@ -93,77 +83,52 @@ contract Periphery is
     /// @notice Initializes the Periphery contract
     /// @param initializeParams Encoded parameters for the Periphery contract
     function setUp(bytes memory initializeParams) public override initializer {
-        /// @dev vaultName_ Name of the ERC4626 vault
-        /// @dev vaultSymbol_ Symbol of the ERC4626 vault
-        /// @dev decimals_ Decimals for the unit of account token
-        /// @dev fund_ Address of the Fund contract
-        /// @dev oracleRouter_ Address of the oracle router for quotes
+        /// @dev vaultName_ Name of the Brokerage NFT
+        /// @dev vaultSymbol_ Symbol of the Brokerage NFT
+        /// @dev owner_ Address that owns the Periphery
         /// @dev minter_ Address with minting privileges
+        /// @dev depositModule_ Address of the deposit module
         /// @dev protocolFeeRecipient_ Address that receives protocol fees
         (
-            string memory vaultName_,
-            string memory vaultSymbol_,
-            uint8 decimals_,
-            address fund_,
-            address oracleRouter_,
+            string memory brokerNftName_,
+            string memory brokerNftSymbol_,
+            address owner_,
             address minter_,
+            address controller_,
+            address depositModule_,
             address protocolFeeRecipient_
         ) = abi.decode(
-            initializeParams, (string, string, uint8, address, address, address, address)
+            initializeParams, (string, string, address, address, address, address, address)
         );
-
-        if (fund_ == address(0)) {
-            revert Errors.Deposit_InvalidConstructorParam();
-        }
-        if (oracleRouter_ == address(0)) {
+        if (owner_ == address(0)) {
             revert Errors.Deposit_InvalidConstructorParam();
         }
         if (minter_ == address(0)) {
+            revert Errors.Deposit_InvalidConstructorParam();
+        }
+        if (depositModule_ == address(0)) {
             revert Errors.Deposit_InvalidConstructorParam();
         }
         if (protocolFeeRecipient_ == address(0)) {
             revert Errors.Deposit_InvalidConstructorParam();
         }
 
-        fund = fund_;
-        avatar = fund_;
-        target = fund_;
-
-        _transferOwnership(fund_);
+        _transferOwnership(owner_);
         __Pausable_init();
         __ReentrancyGuard_init();
         __AccessControl_init();
-        __ERC721_init(vaultName_, vaultSymbol_);
+        __ERC721_init(brokerNftName_, brokerNftSymbol_);
 
-        _grantRole(DEFAULT_ADMIN_ROLE, fund_);
-        _grantRole(FUND_ROLE, fund_);
-        _grantRole(PAUSER_ROLE, fund_);
+        _grantRole(DEFAULT_ADMIN_ROLE, owner_);
+        _grantRole(PAUSER_ROLE, owner_);
         _grantRole(MINTER_ROLE, minter_);
-        _grantRole(MINTER_ROLE, fund_);
+        _grantRole(CONTROLLER_ROLE, controller_);
 
-        oracleRouter = IPriceOracle(oracleRouter_);
+        depositModule = IDepositModule(depositModule_);
         protocolFeeRecipient = protocolFeeRecipient_;
         lastManagementFeeTimestamp = block.timestamp;
-        netDepositLimit = type(uint256).max;
-        unitOfAccount = new UnitOfAccount("Liquidity", "UNIT", decimals_);
-        internalVault = new FundShareVault(address(unitOfAccount), vaultName_, vaultSymbol_);
 
-        /// @notice infinite approval for the internalVault to manage periphery's balance
-        unitOfAccount.approve(address(internalVault), type(uint256).max);
-
-        emit PeripherySetup(msg.sender, fund_, fund_, fund_);
-        emit AvatarSet(address(0), fund_);
-        emit TargetSet(address(0), fund_);
-    }
-
-    /// @dev This modifier updates the balances of the internalVault and the fund
-    /// this ensures that the internalVault's total assets are always equal to the fund's total assets
-    modifier rebalanceVault() {
-        _updateVaultBalance();
-
-        _;
-
-        _updateVaultBalance();
+        emit PeripherySetup(msg.sender, owner_, owner_, owner_);
     }
 
     /// @dev this modifier ensures that the account info is zeroed out if the broker has no shares outstanding
@@ -175,12 +140,19 @@ contract Periphery is
         }
     }
 
+    modifier checkOrderDeadline(uint256 deadline_) {
+        if (deadline_ < block.timestamp) {
+            revert Errors.Deposit_OrderExpired();
+        }
+        _;
+    }
+
     /// @inheritdoc IPeriphery
     function intentDeposit(SignedDepositIntent calldata order)
         public
         whenNotPaused
         nonReentrant
-        rebalanceVault
+        checkOrderDeadline(order.intent.deposit.deadline)
         returns (uint256 sharesOut)
     {
         address minter = _ownerOf(order.intent.deposit.accountId);
@@ -188,10 +160,10 @@ contract Periphery is
             revert Errors.Deposit_AccountDoesNotExist();
         }
 
-        AssetPolicy memory policy = assetPolicy[order.intent.deposit.asset];
         Broker storage broker = brokers[order.intent.deposit.accountId];
 
-        DepositLibs.validateBrokerAssetPolicy(order.intent.deposit.asset, broker, policy, true);
+        // DepositLibs.validateBrokerAssetPolicy(order.intent.deposit.asset, broker, policy, true);
+        _validateBrokerAssetPolicy(order.intent.deposit.asset, broker, true);
 
         DepositLibs.validateIntent(
             abi.encode(order.intent),
@@ -206,32 +178,38 @@ contract Periphery is
         /// otherwise, the management fee will be charged on the deposit amount
         _takeManagementFee();
 
+        uint256 assetAmountIn = order.intent.deposit.amount;
+
+        /// if amount is type(uint256).max, then deposit the broker's entire balance
+        if (assetAmountIn == type(uint256).max) {
+            assetAmountIn = ERC20(order.intent.deposit.asset).balanceOf(minter);
+        }
+
+        /// transfer the net amount in from the broker to the periphery
+        IPermit2(permit2).transferFrom(
+            minter, address(this), uint160(assetAmountIn), order.intent.deposit.asset
+        );
+
         /// pay the relayer if required
         if (order.intent.relayerTip > 0) {
-            IPermit2(permit2).transferFrom(
-                minter, msg.sender, uint160(order.intent.relayerTip), order.intent.deposit.asset
-            );
-            // ERC20(order.intent.deposit.asset).safeTransferFrom(
-            //     minter, msg.sender, order.intent.relayerTip
-            // );
+            ERC20(order.intent.deposit.asset).safeTransfer(msg.sender, order.intent.relayerTip);
+
+            assetAmountIn -= order.intent.relayerTip;
         }
 
         /// bribe the fund if required
         if (order.intent.bribe > 0) {
-            // ERC20(order.intent.deposit.asset).safeTransferFrom(minter, fund, order.intent.bribe);
-            IPermit2(permit2).transferFrom(
-                minter, fund, uint160(order.intent.bribe), order.intent.deposit.asset
-            );
+            ERC20(order.intent.deposit.asset).safeTransfer(depositModule.fund(), order.intent.bribe);
+            assetAmountIn -= order.intent.bribe;
         }
 
         sharesOut = _deposit(
-            order.intent.deposit,
-            minter,
-            policy.minimumDeposit,
-            broker.account.totalSharesOutstanding,
-            broker.account.shareMintLimit,
-            broker.account.brokerEntranceFeeInBps,
-            broker.account.protocolEntranceFeeInBps
+            broker,
+            broker.account,
+            order.intent.deposit.asset,
+            assetAmountIn,
+            order.intent.deposit.recipient,
+            order.intent.deposit.minSharesOut
         );
 
         emit Deposit(
@@ -250,7 +228,7 @@ contract Periphery is
         public
         whenNotPaused
         nonReentrant
-        rebalanceVault
+        checkOrderDeadline(order.deadline)
         returns (uint256 sharesOut)
     {
         address minter = _ownerOf(order.accountId);
@@ -266,123 +244,86 @@ contract Periphery is
         /// otherwise, the management fee will be charged on the deposit amount
         _takeManagementFee();
 
-        AssetPolicy memory policy = assetPolicy[order.asset];
+        // AssetPolicy memory policy = assetPolicy[order.asset];
         Broker storage broker = brokers[order.accountId];
 
-        DepositLibs.validateBrokerAssetPolicy(order.asset, broker, policy, true);
+        // DepositLibs.validateBrokerAssetPolicy(order.asset, broker, policy, true);
+        _validateBrokerAssetPolicy(order.asset, broker, true);
+
+        uint256 assetAmountIn = order.amount;
+
+        /// if amount is type(uint256).max, then deposit the broker's entire balance
+        if (assetAmountIn == type(uint256).max) {
+            assetAmountIn = ERC20(order.asset).balanceOf(minter);
+        }
+
+        /// transfer the net amount in from the broker to the periphery
+        IPermit2(permit2).transferFrom(minter, address(this), uint160(assetAmountIn), order.asset);
 
         sharesOut = _deposit(
-            order,
-            minter,
-            policy.minimumDeposit,
-            broker.account.totalSharesOutstanding,
-            broker.account.shareMintLimit,
-            broker.account.brokerEntranceFeeInBps,
-            broker.account.protocolEntranceFeeInBps
+            broker, broker.account, order.asset, assetAmountIn, order.recipient, order.minSharesOut
         );
 
         emit Deposit(
-            order.accountId, order.asset, order.amount, sharesOut, 0, 0, order.referralCode
+            order.accountId, order.asset, assetAmountIn, sharesOut, 0, 0, order.referralCode
         );
     }
 
     function _deposit(
-        DepositOrder calldata order,
-        address broker,
-        uint256 minimumDeposit,
-        uint256 totalSharesOutstanding,
-        uint256 shareMintLimit,
-        uint256 brokerEntranceFeeInBps,
-        uint256 protocolEntranceFeeInBps
-    ) private returns (uint256 sharesOut) {
-        if (order.deadline < block.timestamp) {
-            revert Errors.Deposit_OrderExpired();
-        }
-
-        uint256 assetAmountIn = order.amount;
-        ERC20 assetToken = ERC20(order.asset);
-
-        if (assetAmountIn == 0) {
-            revert Errors.Deposit_InsufficientDeposit();
-        }
-
-        /// if amount is type(uint256).max, then deposit the broker's entire balance
-        if (assetAmountIn == type(uint256).max) {
-            assetAmountIn = assetToken.balanceOf(broker);
-        }
-
-        /// make sure the deposit is above the minimum
-        if (assetAmountIn < minimumDeposit) {
-            revert Errors.Deposit_InsufficientDeposit();
-        }
-
-        /// transfer asset from broker to fund
-        // assetToken.safeTransferFrom(broker, fund, assetAmountIn);
-        IPermit2(permit2).transferFrom(broker, fund, uint160(assetAmountIn), order.asset);
-
-        /// calculate how much liquidity for this amount of deposited asset
-        uint256 liquidity =
-            oracleRouter.getQuote(assetAmountIn, order.asset, address(unitOfAccount));
-
-        /// mint liquidity to periphery
-        unitOfAccount.mint(address(this), liquidity);
-
+        Broker storage broker,
+        BrokerAccountInfo memory accountInfo,
+        address asset,
+        uint256 assetAmountIn,
+        address recipient,
+        uint256 minSharesOut
+    ) private returns (uint256) {
         /// mint shares to the periphery using the liquidity that was just minted
-        sharesOut = internalVault.deposit(liquidity, address(this));
-
-        /// check if the net deposit limit is exceeded
-        if (internalVault.totalAssets() > netDepositLimit) {
-            revert Errors.Deposit_NetDepositLimitExceeded();
-        }
-
-        /// @notice this edge case is possible if a big amount of token is transferred
-        /// to the fund before the deposit is processed
-        if (sharesOut == 0) {
-            revert Errors.Deposit_InsufficientShares();
-        }
-
-        /// lets make sure slippage is acceptable
-        if (sharesOut < order.minSharesOut) {
-            revert Errors.Deposit_SlippageLimitExceeded();
-        }
+        (uint256 sharesOut, uint256 liquidity) =
+            depositModule.deposit(asset, assetAmountIn, minSharesOut, address(this));
 
         /// make sure the broker hasn't exceeded their share mint limit
-        if (totalSharesOutstanding + sharesOut > shareMintLimit) {
+        if (accountInfo.totalSharesOutstanding + sharesOut > accountInfo.shareMintLimit) {
             revert Errors.Deposit_ShareMintLimitExceeded();
         }
 
         /// update the broker's cumulative units deposited
-        brokers[order.accountId].account.cumulativeUnitsDeposited += liquidity;
+        broker.account.cumulativeUnitsDeposited += liquidity;
 
         /// update the broker's total shares outstanding
-        brokers[order.accountId].account.totalSharesOutstanding += sharesOut;
+        broker.account.totalSharesOutstanding += sharesOut;
 
         /// update the broker's cumulative shares minted
-        brokers[order.accountId].account.cumulativeSharesMinted += sharesOut;
+        broker.account.cumulativeSharesMinted += sharesOut;
+
+        ERC20 shareToken = ERC20(depositModule.getVault());
 
         /// take the broker entrance fees
-        if (brokerEntranceFeeInBps > 0) {
-            internalVault.transfer(
-                broker, sharesOut.fullMulDivUp(brokerEntranceFeeInBps, BP_DIVISOR)
+        if (accountInfo.brokerEntranceFeeInBps > 0) {
+            shareToken.safeTransfer(
+                accountInfo.feeRecipient,
+                sharesOut.fullMulDivUp(accountInfo.brokerEntranceFeeInBps, BP_DIVISOR)
             );
         }
 
         /// take the protocol entrance fees
-        if (protocolEntranceFeeInBps > 0) {
-            internalVault.transfer(
-                protocolFeeRecipient, sharesOut.fullMulDivUp(protocolEntranceFeeInBps, BP_DIVISOR)
+        if (accountInfo.protocolEntranceFeeInBps > 0) {
+            shareToken.safeTransfer(
+                protocolFeeRecipient,
+                sharesOut.fullMulDivUp(accountInfo.protocolEntranceFeeInBps, BP_DIVISOR)
             );
         }
 
         /// forward the remaining shares to the recipient
-        internalVault.transfer(order.recipient, internalVault.balanceOf(address(this)));
+        shareToken.safeTransfer(recipient, shareToken.balanceOf(address(this)));
+
+        return sharesOut;
     }
 
     function intentWithdraw(SignedWithdrawIntent calldata order)
         public
         whenNotPaused
         nonReentrant
-        rebalanceVault
+        checkOrderDeadline(order.intent.withdraw.deadline)
         zeroOutAccountInfo(order.intent.withdraw.accountId)
         returns (uint256 assetAmountOut)
     {
@@ -391,10 +332,11 @@ contract Periphery is
             revert Errors.Deposit_AccountDoesNotExist();
         }
 
-        AssetPolicy memory policy = assetPolicy[order.intent.withdraw.asset];
+        // AssetPolicy memory policy = assetPolicy[order.intent.withdraw.asset];
         Broker storage broker = brokers[order.intent.withdraw.accountId];
 
-        DepositLibs.validateBrokerAssetPolicy(order.intent.withdraw.asset, broker, policy, false);
+        // DepositLibs.validateBrokerAssetPolicy(order.intent.withdraw.asset, broker, policy, false);
+        _validateBrokerAssetPolicy(order.intent.withdraw.asset, broker, false);
 
         DepositLibs.validateIntent(
             abi.encode(order.intent),
@@ -410,9 +352,8 @@ contract Periphery is
         _takeManagementFee();
 
         (uint256 netAssetAmountOut, uint256 netBrokerFee, uint256 netProtocolFee) =
-            _withdraw(burner, order.intent.withdraw, broker.account, policy.minimumWithdrawal);
+            _withdraw(burner, order.intent.withdraw, broker.account);
 
-        /// start calculating the amount of asset to transfer to the user
         assetAmountOut = netAssetAmountOut - netBrokerFee - netProtocolFee;
 
         /// check that we can pay the bribe and relay tip with the net asset amount out
@@ -421,13 +362,16 @@ contract Periphery is
         }
 
         /// deduct the bribe and relay tip from the net asset amount out
-        /// @notice this will implicitly pay the bribe to the fund
         assetAmountOut = assetAmountOut - order.intent.relayerTip - order.intent.bribe;
 
         /// pay the relayer if required
         if (order.intent.relayerTip > 0) {
-            IAvatar(fund).transferAssetFromSafeOrRevert(
-                order.intent.withdraw.asset, msg.sender, order.intent.relayerTip
+            ERC20(order.intent.withdraw.asset).safeTransfer(msg.sender, order.intent.relayerTip);
+        }
+
+        if (order.intent.bribe > 0) {
+            ERC20(order.intent.withdraw.asset).safeTransfer(
+                depositModule.fund(), order.intent.bribe
             );
         }
 
@@ -456,7 +400,7 @@ contract Periphery is
         public
         whenNotPaused
         nonReentrant
-        rebalanceVault
+        checkOrderDeadline(order.deadline)
         zeroOutAccountInfo(order.accountId)
         returns (uint256 assetAmountOut)
     {
@@ -469,17 +413,18 @@ contract Periphery is
             revert Errors.Deposit_OnlyAccountOwner();
         }
 
-        AssetPolicy memory policy = assetPolicy[order.asset];
+        // AssetPolicy memory policy = assetPolicy[order.asset];
         Broker storage broker = brokers[order.accountId];
 
-        DepositLibs.validateBrokerAssetPolicy(order.asset, broker, policy, false);
+        // DepositLibs.validateBrokerAssetPolicy(order.asset, broker, policy, false);
+        _validateBrokerAssetPolicy(order.asset, broker, false);
 
         /// @notice The management fee should be charged before the withdrawal is processed
         /// otherwise, the management fee will be charged on the withdrawal amount
         _takeManagementFee();
 
         (uint256 netAssetAmountOut, uint256 netBrokerFee, uint256 netProtocolFee) =
-            _withdraw(burner, order, broker.account, policy.minimumWithdrawal);
+            _withdraw(burner, order, broker.account);
 
         assetAmountOut = netAssetAmountOut - netBrokerFee - netProtocolFee;
 
@@ -496,9 +441,8 @@ contract Periphery is
     function _withdraw(
         address broker,
         WithdrawOrder calldata order,
-        BrokerAccountInfo memory account,
-        uint256 minimumWithdrawal
-    ) private returns (uint256 netAssetAmountOut, uint256 netBrokerFee, uint256 netProtocolFee) {
+        BrokerAccountInfo memory account
+    ) private returns (uint256, uint256, uint256) {
         if (order.deadline < block.timestamp) revert Errors.Deposit_OrderExpired();
 
         uint256 sharesToBurn = order.shares;
@@ -507,9 +451,11 @@ contract Periphery is
             revert Errors.Deposit_InsufficientWithdrawal();
         }
 
+        ERC20 shareToken = ERC20(depositModule.getVault());
+
         /// if shares to burn is max uint256, then burn all shares owned by broker
         if (sharesToBurn == type(uint256).max) {
-            sharesToBurn = internalVault.balanceOf(broker);
+            sharesToBurn = shareToken.balanceOf(broker);
         }
 
         /// make sure the broker has not exceeded their share burn limit
@@ -522,33 +468,41 @@ contract Periphery is
             brokers[order.accountId].account.totalSharesOutstanding -= sharesToBurn;
         }
 
-        /// burn internalVault shares in exchange for liquidity (unit of account) tokens
-        uint256 liquidity = internalVault.redeem(sharesToBurn, address(this), broker);
+        IPermit2(permit2).transferFrom(
+            broker, address(this), uint160(sharesToBurn), address(shareToken)
+        );
 
-        /// burn liquidity from periphery
-        unitOfAccount.burn(address(this), liquidity);
+        /// burn internalVault shares in exchange for liquidity (unit of account) tokens
+        (uint256 netAssetAmountOut, uint256 liquidity) =
+            depositModule.withdraw(order.asset, sharesToBurn, order.minAmountOut, address(this));
 
         /// take the withdrawal fees, and return the net liquidity left for the broker
         /// @notice this will consume part of the liquidity that was redeemed
         (uint256 netBrokerFeeInLiquidity, uint256 netProtocolFeeInLiquidity) =
             _calculateWithdrawalFees(account, sharesToBurn, liquidity);
 
-        /// calculate how much asset for this amount of liquidity
-        netAssetAmountOut = oracleRouter.getQuote(liquidity, address(unitOfAccount), order.asset);
+        /// convert the fees to asset amount
+        uint256 netBrokerFee =
+            netBrokerFeeInLiquidity.divWadUp(liquidity).mulWadUp(netAssetAmountOut);
+        uint256 netProtocolFee =
+            netProtocolFeeInLiquidity.divWadUp(liquidity).mulWadUp(netAssetAmountOut);
 
-        /// make sure the withdrawal is above the minimum
-        if (netAssetAmountOut < minimumWithdrawal) {
-            revert Errors.Deposit_InsufficientWithdrawal();
+        return (netAssetAmountOut, netBrokerFee, netProtocolFee);
+    }
+
+    function _validateBrokerAssetPolicy(address asset, Broker storage broker, bool isDeposit)
+        internal
+        view
+    {
+        BrokerAccountInfo memory account = broker.account;
+        if (!account.isActive()) revert Errors.Deposit_AccountNotActive();
+
+        if (account.isExpired() && isDeposit) {
+            revert Errors.Deposit_AccountExpired();
         }
 
-        /// convert the fees to asset amount
-        netBrokerFee = netBrokerFeeInLiquidity.divWadUp(liquidity).mulWadUp(netAssetAmountOut);
-        netProtocolFee = netProtocolFeeInLiquidity.divWadUp(liquidity).mulWadUp(netAssetAmountOut);
-
-        /// make sure slippage is acceptable
-        ///@notice if minAmountOut is 0, then slippage is not checked
-        if (order.minAmountOut != 0 && netAssetAmountOut < order.minAmountOut) {
-            revert Errors.Deposit_SlippageLimitExceeded();
+        if (!broker.assetPolicy[asset.brokerAssetPolicyPointer(isDeposit)]) {
+            revert Errors.Deposit_AssetUnavailable();
         }
     }
 
@@ -560,12 +514,14 @@ contract Periphery is
         uint256 toBroker,
         uint256 toProtocol
     ) private {
-        IAvatar(fund).transferAssetFromSafeOrRevert(asset, user, toUser);
+        ERC20 assetToken = ERC20(asset);
+
+        assetToken.safeTransfer(user, toUser);
         if (toBroker > 0) {
-            IAvatar(fund).transferAssetFromSafeOrRevert(asset, broker, toBroker);
+            assetToken.safeTransfer(broker, toBroker);
         }
         if (toProtocol > 0) {
-            IAvatar(fund).transferAssetFromSafeOrRevert(asset, protocolFeeRecipient, toProtocol);
+            assetToken.safeTransfer(protocolFeeRecipient, toProtocol);
         }
     }
 
@@ -623,8 +579,9 @@ contract Periphery is
             /// update the last management fee timestamp
             lastManagementFeeTimestamp = block.timestamp;
 
-            uint256 totalSupply = internalVault.totalSupply();
-            uint256 totalAssets = internalVault.totalAssets();
+            FundShareVault shareToken = depositModule.internalVault();
+            uint256 totalSupply = shareToken.totalSupply();
+            uint256 totalAssets = shareToken.totalAssets();
 
             /// if the internalVault has no assets, then we don't take any fees
             if (totalAssets == 0 || totalSupply == 0) {
@@ -639,28 +596,18 @@ contract Periphery is
             uint256 managementFeeInShares = totalSupply.mulWadUp(annualizedFeeRate);
 
             /// mint the management fee to the fee recipient
-            internalVault.mintUnbacked(managementFeeInShares, protocolFeeRecipient);
+            depositModule.dilute(managementFeeInShares, protocolFeeRecipient);
         }
     }
 
-    function _updateVaultBalance() private {
-        uint256 assetsInFund =
-            oracleRouter.getQuote(internalVault.totalSupply(), fund, address(unitOfAccount));
-        uint256 assetsInVault = internalVault.totalAssets();
+    /// @inheritdoc IPeriphery
+    function grantApproval(address token_) external onlyRole(CONTROLLER_ROLE) {
+        ERC20(token_).approve(address(depositModule), type(uint256).max);
+    }
 
-        /// @notice assetsInFund is part of [0, uint256.max]
-        int256 profitDelta = assetsInFund.toInt256() - assetsInVault.toInt256();
-
-        if (profitDelta > 0) {
-            /// we transfer the mint into the internalVault
-            /// this will distribute the profit to the internalVault's shareholders
-            unitOfAccount.mint(address(internalVault), profitDelta.abs());
-        } else if (profitDelta < 0) {
-            /// if the fund has lost value, we need to account for it
-            /// so we decrease the internalVault's total assets to match the fund's total assets
-            /// by burning the loss
-            unitOfAccount.burn(address(internalVault), profitDelta.abs());
-        }
+    /// @inheritdoc IPeriphery
+    function revokeApproval(address token_) external onlyRole(CONTROLLER_ROLE) {
+        ERC20(token_).approve(address(depositModule), 0);
     }
 
     /// @inheritdoc IPeriphery
@@ -669,7 +616,7 @@ contract Periphery is
     }
 
     /// @inheritdoc IPeriphery
-    function setProtocolFeeRecipient(address recipient_) external onlyRole(FUND_ROLE) {
+    function setProtocolFeeRecipient(address recipient_) external onlyRole(CONTROLLER_ROLE) {
         if (recipient_ == address(0)) {
             revert Errors.Deposit_InvalidProtocolFeeRecipient();
         }
@@ -703,7 +650,7 @@ contract Periphery is
     }
 
     /// @inheritdoc IPeriphery
-    function setManagementFeeRateInBps(uint256 rateInBps_) external onlyRole(FUND_ROLE) {
+    function setManagementFeeRateInBps(uint256 rateInBps_) external onlyRole(CONTROLLER_ROLE) {
         if (rateInBps_ > BP_DIVISOR) {
             revert Errors.Deposit_InvalidManagementFeeRate();
         }
@@ -716,56 +663,6 @@ contract Periphery is
     }
 
     /// @inheritdoc IPeriphery
-    function setNetDepositLimit(uint256 limit_) external onlyRole(FUND_ROLE) {
-        if (limit_ == 0) {
-            revert Errors.Deposit_InvalidNetDepositLimit();
-        }
-
-        uint256 previous = netDepositLimit;
-
-        netDepositLimit = limit_;
-
-        emit NetDepositLimitUpdated(previous, limit_);
-    }
-
-    /// @inheritdoc IPeriphery
-    function getUnitOfAccountToken() external view returns (address) {
-        return address(unitOfAccount);
-    }
-
-    /// @inheritdoc IPeriphery
-    function getVault() external view returns (address) {
-        return address(internalVault);
-    }
-
-    /// @inheritdoc IPeriphery
-    function enableGlobalAssetPolicy(address asset_, AssetPolicy memory policy_)
-        external
-        whenNotPaused
-        onlyRole(FUND_ROLE)
-    {
-        if (!policy_.enabled) {
-            revert Errors.Deposit_InvalidAssetPolicy();
-        }
-
-        assetPolicy[asset_] = policy_;
-
-        emit GlobalAssetPolicyEnabled(asset_, policy_);
-    }
-
-    /// @inheritdoc IPeriphery
-    function disableGlobalAssetPolicy(address asset_) external onlyRole(FUND_ROLE) {
-        assetPolicy[asset_].enabled = false;
-
-        emit GlobalAssetPolicyDisabled(asset_);
-    }
-
-    /// @inheritdoc IPeriphery
-    function getGlobalAssetPolicy(address asset_) external view returns (AssetPolicy memory) {
-        return assetPolicy[asset_];
-    }
-
-    /// @inheritdoc IPeriphery
     function skimManagementFee() external {
         _takeManagementFee();
     }
@@ -774,12 +671,8 @@ contract Periphery is
     function enableBrokerAssetPolicy(uint256 accountId_, address asset_, bool isDeposit_)
         external
         whenNotPaused
-        onlyRole(FUND_ROLE)
+        onlyRole(CONTROLLER_ROLE)
     {
-        if (!assetPolicy[asset_].enabled) {
-            revert Errors.Deposit_AssetNotSupported();
-        }
-
         Broker storage broker = brokers[accountId_];
 
         if (!broker.account.isActive()) {
@@ -797,7 +690,7 @@ contract Periphery is
     /// @inheritdoc IPeriphery
     function disableBrokerAssetPolicy(uint256 accountId_, address asset_, bool isDeposit_)
         external
-        onlyRole(FUND_ROLE)
+        onlyRole(CONTROLLER_ROLE)
     {
         Broker storage broker = brokers[accountId_];
 
@@ -959,12 +852,12 @@ contract Periphery is
     }
 
     /// @inheritdoc IPeriphery
-    function setPauser(address _pauser) external onlyRole(FUND_ROLE) {
+    function setPauser(address _pauser) external onlyRole(CONTROLLER_ROLE) {
         _grantRole(PAUSER_ROLE, _pauser);
     }
 
     /// @inheritdoc IPeriphery
-    function revokePauser(address _pauser) external onlyRole(FUND_ROLE) {
+    function revokePauser(address _pauser) external onlyRole(CONTROLLER_ROLE) {
         _revokeRole(PAUSER_ROLE, _pauser);
     }
 
