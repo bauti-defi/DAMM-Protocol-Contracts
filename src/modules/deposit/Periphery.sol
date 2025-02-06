@@ -34,9 +34,7 @@ bytes32 constant MINTER_ROLE = keccak256("MINTER_ROLE");
 /// @notice Manages deposits, withdrawals, and brokerage accounts for a Fund
 /// @dev Each Periphery is paired with exactly one Fund and manages ERC721 tokens representing brokerage accounts.
 ///      The Periphery handles:
-///      - Asset deposits/withdrawals through the Fund
-///      - Unit of account token minting/burning
-///      - ERC4626 vault share accounting
+///      - Asset deposits/withdrawals through the DepositModule
 ///      - Broker account management (NFTs)
 ///      - Fee collection and distribution
 contract Periphery is
@@ -181,18 +179,14 @@ contract Periphery is
             minter, address(this), uint160(assetAmountIn), order.intent.deposit.asset
         );
 
+        ERC20 assetToken = ERC20(order.intent.deposit.asset);
         /// pay the relayer if required
-        if (order.intent.relayerTip > 0) {
-            ERC20(order.intent.deposit.asset).safeTransfer(msg.sender, order.intent.relayerTip);
+        assetToken.pay(msg.sender, order.intent.relayerTip);
 
-            assetAmountIn -= order.intent.relayerTip;
-        }
+        /// pay the bribe to the fund if required
+        assetToken.pay(depositModule.fund(), order.intent.bribe);
 
-        /// bribe the fund if required
-        if (order.intent.bribe > 0) {
-            ERC20(order.intent.deposit.asset).safeTransfer(depositModule.fund(), order.intent.bribe);
-            assetAmountIn -= order.intent.bribe;
-        }
+        assetAmountIn -= order.intent.bribe + order.intent.relayerTip;
 
         sharesOut = _deposit(
             broker,
