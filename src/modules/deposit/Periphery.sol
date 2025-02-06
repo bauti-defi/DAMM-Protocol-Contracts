@@ -49,6 +49,7 @@ contract Periphery is
 {
     using DepositLibs for BrokerAccountInfo;
     using DepositLibs for address;
+    using DepositLibs for ERC20;
     using SafeTransferLib for ERC20;
     using SafeLib for IAvatar;
     using SafeCast for uint256;
@@ -155,14 +156,8 @@ contract Periphery is
         checkOrderDeadline(order.intent.deposit.deadline)
         returns (uint256 sharesOut)
     {
-        address minter = _ownerOf(order.intent.deposit.accountId);
-        if (minter == address(0)) {
-            revert Errors.Deposit_AccountDoesNotExist();
-        }
+        (Broker storage broker, address minter) = _getBrokerOrRevert(order.intent.deposit.accountId);
 
-        Broker storage broker = brokers[order.intent.deposit.accountId];
-
-        // DepositLibs.validateBrokerAssetPolicy(order.intent.deposit.asset, broker, policy, true);
         _validateBrokerAssetPolicy(order.intent.deposit.asset, broker, true);
 
         DepositLibs.validateIntent(
@@ -178,12 +173,8 @@ contract Periphery is
         /// otherwise, the management fee will be charged on the deposit amount
         _takeManagementFee();
 
-        uint256 assetAmountIn = order.intent.deposit.amount;
-
-        /// if amount is type(uint256).max, then deposit the broker's entire balance
-        if (assetAmountIn == type(uint256).max) {
-            assetAmountIn = ERC20(order.intent.deposit.asset).balanceOf(minter);
-        }
+        uint256 assetAmountIn =
+            order.intent.deposit.asset.deduceAssetAmount(order.intent.deposit.amount, minter);
 
         /// transfer the net amount in from the broker to the periphery
         IPermit2(permit2).transferFrom(
@@ -231,10 +222,7 @@ contract Periphery is
         checkOrderDeadline(order.deadline)
         returns (uint256 sharesOut)
     {
-        address minter = _ownerOf(order.accountId);
-        if (minter == address(0)) {
-            revert Errors.Deposit_AccountDoesNotExist();
-        }
+        (Broker storage broker, address minter) = _getBrokerOrRevert(order.accountId);
 
         if (minter != msg.sender) {
             revert Errors.Deposit_OnlyAccountOwner();
@@ -244,18 +232,10 @@ contract Periphery is
         /// otherwise, the management fee will be charged on the deposit amount
         _takeManagementFee();
 
-        // AssetPolicy memory policy = assetPolicy[order.asset];
-        Broker storage broker = brokers[order.accountId];
-
-        // DepositLibs.validateBrokerAssetPolicy(order.asset, broker, policy, true);
         _validateBrokerAssetPolicy(order.asset, broker, true);
 
-        uint256 assetAmountIn = order.amount;
-
-        /// if amount is type(uint256).max, then deposit the broker's entire balance
-        if (assetAmountIn == type(uint256).max) {
-            assetAmountIn = ERC20(order.asset).balanceOf(minter);
-        }
+        // uint256 assetAmountIn = order.amount;
+        uint256 assetAmountIn = order.asset.deduceAssetAmount(order.amount, minter);
 
         /// transfer the net amount in from the broker to the periphery
         IPermit2(permit2).transferFrom(minter, address(this), uint160(assetAmountIn), order.asset);
@@ -327,15 +307,9 @@ contract Periphery is
         zeroOutAccountInfo(order.intent.withdraw.accountId)
         returns (uint256 assetAmountOut)
     {
-        address burner = _ownerOf(order.intent.withdraw.accountId);
-        if (burner == address(0)) {
-            revert Errors.Deposit_AccountDoesNotExist();
-        }
+        (Broker storage broker, address burner) =
+            _getBrokerOrRevert(order.intent.withdraw.accountId);
 
-        // AssetPolicy memory policy = assetPolicy[order.intent.withdraw.asset];
-        Broker storage broker = brokers[order.intent.withdraw.accountId];
-
-        // DepositLibs.validateBrokerAssetPolicy(order.intent.withdraw.asset, broker, policy, false);
         _validateBrokerAssetPolicy(order.intent.withdraw.asset, broker, false);
 
         DepositLibs.validateIntent(
@@ -352,7 +326,7 @@ contract Periphery is
         _takeManagementFee();
 
         (uint256 netAssetAmountOut, uint256 netBrokerFee, uint256 netProtocolFee) =
-            _withdraw(burner, order.intent.withdraw, broker.account);
+            _withdraw(burner, depositModule.getVault(), order.intent.withdraw, broker.account);
 
         assetAmountOut = netAssetAmountOut - netBrokerFee - netProtocolFee;
 
@@ -364,26 +338,16 @@ contract Periphery is
         /// deduct the bribe and relay tip from the net asset amount out
         assetAmountOut = assetAmountOut - order.intent.relayerTip - order.intent.bribe;
 
-        /// pay the relayer if required
-        if (order.intent.relayerTip > 0) {
-            ERC20(order.intent.withdraw.asset).safeTransfer(msg.sender, order.intent.relayerTip);
-        }
+        {
+            /// distribute the funds to the user, broker, and protocol
+            ERC20 assetToken = ERC20(order.intent.withdraw.asset);
 
-        if (order.intent.bribe > 0) {
-            ERC20(order.intent.withdraw.asset).safeTransfer(
-                depositModule.fund(), order.intent.bribe
-            );
+            assetToken.pay(msg.sender, order.intent.relayerTip);
+            assetToken.pay(depositModule.fund(), order.intent.bribe);
+            assetToken.pay(protocolFeeRecipient, netProtocolFee);
+            assetToken.pay(burner, netBrokerFee);
+            assetToken.pay(order.intent.withdraw.to, assetAmountOut);
         }
-
-        /// distribute the funds to the user, broker, and protocol
-        _distributeFunds(
-            order.intent.withdraw.asset,
-            order.intent.withdraw.to,
-            burner,
-            assetAmountOut,
-            netBrokerFee,
-            netProtocolFee
-        );
 
         emit Withdraw(
             order.intent.withdraw.accountId,
@@ -404,19 +368,12 @@ contract Periphery is
         zeroOutAccountInfo(order.accountId)
         returns (uint256 assetAmountOut)
     {
-        address burner = _ownerOf(order.accountId);
-        if (burner == address(0)) {
-            revert Errors.Deposit_AccountDoesNotExist();
-        }
+        (Broker storage broker, address burner) = _getBrokerOrRevert(order.accountId);
 
         if (burner != msg.sender) {
             revert Errors.Deposit_OnlyAccountOwner();
         }
 
-        // AssetPolicy memory policy = assetPolicy[order.asset];
-        Broker storage broker = brokers[order.accountId];
-
-        // DepositLibs.validateBrokerAssetPolicy(order.asset, broker, policy, false);
         _validateBrokerAssetPolicy(order.asset, broker, false);
 
         /// @notice The management fee should be charged before the withdrawal is processed
@@ -424,14 +381,17 @@ contract Periphery is
         _takeManagementFee();
 
         (uint256 netAssetAmountOut, uint256 netBrokerFee, uint256 netProtocolFee) =
-            _withdraw(burner, order, broker.account);
+            _withdraw(burner, depositModule.getVault(), order, broker.account);
 
         assetAmountOut = netAssetAmountOut - netBrokerFee - netProtocolFee;
 
-        /// distribute the funds to the user, broker, and protocol
-        _distributeFunds(
-            order.asset, order.to, burner, assetAmountOut, netBrokerFee, netProtocolFee
-        );
+        {
+            /// distribute the funds to the user, broker, and protocol
+            ERC20 assetToken = ERC20(order.asset);
+            assetToken.pay(order.to, assetAmountOut);
+            assetToken.pay(protocolFeeRecipient, netProtocolFee);
+            assetToken.pay(burner, netBrokerFee);
+        }
 
         emit Withdraw(
             order.accountId, order.asset, order.shares, netAssetAmountOut, 0, 0, order.referralCode
@@ -440,23 +400,11 @@ contract Periphery is
 
     function _withdraw(
         address broker,
+        address shareToken,
         WithdrawOrder calldata order,
         BrokerAccountInfo memory account
     ) private returns (uint256, uint256, uint256) {
-        if (order.deadline < block.timestamp) revert Errors.Deposit_OrderExpired();
-
-        uint256 sharesToBurn = order.shares;
-
-        if (sharesToBurn == 0) {
-            revert Errors.Deposit_InsufficientWithdrawal();
-        }
-
-        ERC20 shareToken = ERC20(depositModule.getVault());
-
-        /// if shares to burn is max uint256, then burn all shares owned by broker
-        if (sharesToBurn == type(uint256).max) {
-            sharesToBurn = shareToken.balanceOf(broker);
-        }
+        uint256 sharesToBurn = shareToken.deduceAssetAmount(order.shares, broker);
 
         /// make sure the broker has not exceeded their share burn limit
         if (account.shareMintLimit != type(uint256).max) {
@@ -468,9 +416,7 @@ contract Periphery is
             brokers[order.accountId].account.totalSharesOutstanding -= sharesToBurn;
         }
 
-        IPermit2(permit2).transferFrom(
-            broker, address(this), uint160(sharesToBurn), address(shareToken)
-        );
+        IPermit2(permit2).transferFrom(broker, address(this), uint160(sharesToBurn), shareToken);
 
         /// burn internalVault shares in exchange for liquidity (unit of account) tokens
         (uint256 netAssetAmountOut, uint256 liquidity) =
@@ -490,6 +436,19 @@ contract Periphery is
         return (netAssetAmountOut, netBrokerFee, netProtocolFee);
     }
 
+    function _getBrokerOrRevert(uint256 accountId_)
+        private
+        view
+        returns (Broker storage broker, address brokerAddress)
+    {
+        brokerAddress = _ownerOf(accountId_);
+        if (brokerAddress == address(0)) {
+            revert Errors.Deposit_AccountDoesNotExist();
+        }
+
+        broker = brokers[accountId_];
+    }
+
     function _validateBrokerAssetPolicy(address asset, Broker storage broker, bool isDeposit)
         internal
         view
@@ -503,25 +462,6 @@ contract Periphery is
 
         if (!broker.assetPolicy[asset.brokerAssetPolicyPointer(isDeposit)]) {
             revert Errors.Deposit_AssetUnavailable();
-        }
-    }
-
-    function _distributeFunds(
-        address asset,
-        address user,
-        address broker,
-        uint256 toUser,
-        uint256 toBroker,
-        uint256 toProtocol
-    ) private {
-        ERC20 assetToken = ERC20(asset);
-
-        assetToken.safeTransfer(user, toUser);
-        if (toBroker > 0) {
-            assetToken.safeTransfer(broker, toBroker);
-        }
-        if (toProtocol > 0) {
-            assetToken.safeTransfer(protocolFeeRecipient, toProtocol);
         }
     }
 

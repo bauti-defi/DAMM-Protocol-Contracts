@@ -6,6 +6,8 @@ import {Errors} from "@src/libs/Errors.sol";
 import "@openzeppelin-contracts/utils/cryptography/MessageHashUtils.sol";
 import "@openzeppelin-contracts/utils/cryptography/SignatureChecker.sol";
 import {BrokerAccountInfo, AccountState, AssetPolicy, Broker} from "./Structs.sol";
+import "@solmate/tokens/ERC20.sol";
+import "@solmate/utils/SafeTransferLib.sol";
 
 /// @title Deposit Libraries
 /// @notice Collection of helper functions for deposit and withdrawal validation
@@ -13,6 +15,7 @@ import {BrokerAccountInfo, AccountState, AssetPolicy, Broker} from "./Structs.so
 library DepositLibs {
     using MessageHashUtils for bytes;
     using SignatureChecker for address;
+    using SafeTransferLib for ERC20;
 
     /// @notice Validates a deposit/withdraw intent signature, nonce, and chain ID
     /// @dev Reverts if any validation check fails
@@ -37,6 +40,22 @@ library DepositLibs {
         if (blockId != block.chainid) revert Errors.Deposit_InvalidChain();
     }
 
+    function deduceAssetAmount(address asset_, uint256 amount_, address holder_)
+        internal
+        view
+        returns (uint256 assetAmount)
+    {
+        if (amount_ == type(uint256).max) {
+            assetAmount = ERC20(asset_).balanceOf(holder_);
+        } else {
+            assetAmount = amount_;
+        }
+    }
+
+    function pay(ERC20 token, address recipient, uint256 amount) internal {
+        if (amount > 0) token.safeTransfer(recipient, amount);
+    }
+
     /// @notice Generates a unique pointer for broker asset policies
     /// @dev Used as key in broker.assetPolicy mapping
     /// @param asset The asset address
@@ -48,37 +67,6 @@ library DepositLibs {
         returns (bytes32)
     {
         return keccak256(abi.encode(asset, isDeposit));
-    }
-
-    /// @notice Validates both global and broker-specific asset policies
-    /// @dev Global asset policy must be enabled along with broker permissions
-    /// @param asset The asset to validate
-    /// @param broker The broker account to check
-    /// @param policy The global asset policy
-    /// @param isDeposit Whether this is for a deposit (true) or withdrawal (false)
-    function validateBrokerAssetPolicy(
-        address asset,
-        Broker storage broker,
-        AssetPolicy memory policy,
-        bool isDeposit
-    ) internal view {
-        BrokerAccountInfo memory account = broker.account;
-        if (!isActive(account)) revert Errors.Deposit_AccountNotActive();
-
-        if (isExpired(account) && isDeposit) {
-            revert Errors.Deposit_AccountExpired();
-        }
-
-        if (
-            (!policy.canDeposit && isDeposit) || (!policy.canWithdraw && !isDeposit)
-                || !policy.enabled
-        ) {
-            revert Errors.Deposit_AssetUnavailable();
-        }
-
-        if (!broker.assetPolicy[brokerAssetPolicyPointer(asset, isDeposit)]) {
-            revert Errors.Deposit_AssetUnavailable();
-        }
     }
 
     /// @notice Checks if a broker account is in ACTIVE state
