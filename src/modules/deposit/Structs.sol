@@ -21,7 +21,7 @@ struct DepositOrder {
     uint256 minSharesOut; // Minimum acceptable number of shares to receive
     address recipient; // Address to receive the minted shares
     address asset; // Asset being deposited
-    address depositor; // Address that is depositing the assets
+    address minter; // Address that is minting the shares
     uint16 referralCode; // Optional referral code
 }
 
@@ -34,11 +34,12 @@ struct SignedDepositIntent {
 /// @notice Core parameters for a withdrawal order
 struct WithdrawOrder {
     uint256 accountId; // ID of the broker account
-    address to; // Address to receive the withdrawn assets
-    address asset; // Asset to withdraw into
     uint256 shares; // Number of shares to burn
     uint256 deadline; // Timestamp after which this order expires
     uint256 minAmountOut; // Minimum acceptable amount of asset to receive
+    address to; // Address to receive the withdrawn assets
+    // address redeemer; // Address that is redeeming the shares
+    address asset; // Asset to withdraw into
     uint16 referralCode; // Optional referral code
 }
 

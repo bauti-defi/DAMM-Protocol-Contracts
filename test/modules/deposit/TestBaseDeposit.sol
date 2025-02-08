@@ -327,7 +327,7 @@ abstract contract TestBaseDeposit is TestBaseGnosis, DeployPermit2 {
 
     function depositOrder(
         uint256 accountId,
-        address depositor,
+        address minter,
         address recipient,
         address token,
         uint256 amount
@@ -335,7 +335,7 @@ abstract contract TestBaseDeposit is TestBaseGnosis, DeployPermit2 {
         return DepositOrder({
             accountId: accountId,
             recipient: recipient,
-            depositor: depositor,
+            minter: minter,
             asset: token,
             amount: amount,
             deadline: block.timestamp + 1000,
@@ -346,7 +346,7 @@ abstract contract TestBaseDeposit is TestBaseGnosis, DeployPermit2 {
 
     function unsignedDepositIntent(
         uint256 accountId,
-        address depositor,
+        address minter,
         address recipient,
         address token,
         uint256 amount,
@@ -358,7 +358,7 @@ abstract contract TestBaseDeposit is TestBaseGnosis, DeployPermit2 {
             deposit: DepositOrder({
                 accountId: accountId,
                 recipient: recipient,
-                depositor: depositor,
+                minter: minter,
                 asset: token,
                 amount: amount,
                 deadline: block.timestamp + 1000,
@@ -374,7 +374,7 @@ abstract contract TestBaseDeposit is TestBaseGnosis, DeployPermit2 {
 
     function depositIntent(
         uint256 accountId,
-        address depositor,
+        address minter,
         uint256 depositorPK,
         address recipient,
         address token,
@@ -384,7 +384,7 @@ abstract contract TestBaseDeposit is TestBaseGnosis, DeployPermit2 {
         uint256 nonce
     ) internal view returns (SignedDepositIntent memory) {
         DepositIntent memory intent = DepositIntent({
-            deposit: depositOrder(accountId, depositor, recipient, token, amount),
+            deposit: depositOrder(accountId, minter, recipient, token, amount),
             chaindId: block.chainid,
             relayerTip: relayerTip,
             bribe: bribe,

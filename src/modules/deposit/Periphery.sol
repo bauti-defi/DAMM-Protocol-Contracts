@@ -156,7 +156,7 @@ contract Periphery is
     {
         (Broker storage broker, address minter) = _getBrokerOrRevert(order.intent.deposit.accountId);
 
-        if(order.intent.deposit.depositor != minter) {
+        if (order.intent.deposit.minter != minter) {
             revert Errors.Deposit_OnlyAccountOwner();
         }
 
@@ -165,7 +165,7 @@ contract Periphery is
         DepositLibs.validateIntent(
             abi.encode(order.intent),
             order.signature,
-            order.intent.deposit.depositor,
+            order.intent.deposit.minter,
             order.intent.chaindId,
             broker.account.nonce++,
             order.intent.nonce
@@ -222,7 +222,7 @@ contract Periphery is
     {
         (Broker storage broker, address minter) = _getBrokerOrRevert(order.accountId);
 
-        if (minter != msg.sender || minter != order.depositor) {
+        if (minter != msg.sender || minter != order.minter) {
             revert Errors.Deposit_OnlyAccountOwner();
         }
 
