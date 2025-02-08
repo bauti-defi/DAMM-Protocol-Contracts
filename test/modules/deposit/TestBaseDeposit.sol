@@ -375,7 +375,7 @@ abstract contract TestBaseDeposit is TestBaseGnosis, DeployPermit2 {
     function depositIntent(
         uint256 accountId,
         address minter,
-        uint256 depositorPK,
+        uint256 minterPk,
         address recipient,
         address token,
         uint256 amount,
@@ -392,18 +392,21 @@ abstract contract TestBaseDeposit is TestBaseGnosis, DeployPermit2 {
         });
 
         (uint8 v, bytes32 r, bytes32 s) =
-            vm.sign(depositorPK, abi.encode(intent).toEthSignedMessageHash());
+            vm.sign(minterPk, abi.encode(intent).toEthSignedMessageHash());
 
         return SignedDepositIntent({intent: intent, signature: abi.encodePacked(r, s, v)});
     }
 
-    function withdrawOrder(uint256 accountId, address to, address asset, uint256 shares)
-        internal
-        view
-        returns (WithdrawOrder memory)
-    {
+    function withdrawOrder(
+        uint256 accountId,
+        address burner,
+        address to,
+        address asset,
+        uint256 shares
+    ) internal view returns (WithdrawOrder memory) {
         return WithdrawOrder({
             accountId: accountId,
+            burner: burner,
             to: to,
             asset: asset,
             shares: shares,
@@ -415,6 +418,7 @@ abstract contract TestBaseDeposit is TestBaseGnosis, DeployPermit2 {
 
     function unsignedWithdrawIntent(
         uint256 accountId,
+        address burner,
         address to,
         address asset,
         uint256 shares,
@@ -425,6 +429,7 @@ abstract contract TestBaseDeposit is TestBaseGnosis, DeployPermit2 {
         return WithdrawIntent({
             withdraw: WithdrawOrder({
                 accountId: accountId,
+                burner: burner,
                 to: to,
                 asset: asset,
                 shares: shares,
@@ -441,8 +446,9 @@ abstract contract TestBaseDeposit is TestBaseGnosis, DeployPermit2 {
 
     function signedWithdrawIntent(
         uint256 accountId,
+        address burner,
+        uint256 burnerPk,
         address to,
-        uint256 userPK,
         address asset,
         uint256 shares,
         uint256 relayerTip,
@@ -450,7 +456,7 @@ abstract contract TestBaseDeposit is TestBaseGnosis, DeployPermit2 {
         uint256 nonce
     ) internal view returns (SignedWithdrawIntent memory) {
         WithdrawIntent memory intent = WithdrawIntent({
-            withdraw: withdrawOrder(accountId, to, asset, shares),
+            withdraw: withdrawOrder(accountId, burner, to, asset, shares),
             chaindId: block.chainid,
             relayerTip: relayerTip,
             bribe: bribe,
@@ -458,7 +464,7 @@ abstract contract TestBaseDeposit is TestBaseGnosis, DeployPermit2 {
         });
 
         (uint8 v, bytes32 r, bytes32 s) =
-            vm.sign(userPK, abi.encode(intent).toEthSignedMessageHash());
+            vm.sign(burnerPk, abi.encode(intent).toEthSignedMessageHash());
 
         return SignedWithdrawIntent({intent: intent, signature: abi.encodePacked(r, s, v)});
     }

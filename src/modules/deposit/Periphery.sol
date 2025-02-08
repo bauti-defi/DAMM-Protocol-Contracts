@@ -313,7 +313,7 @@ contract Periphery is
         DepositLibs.validateIntent(
             abi.encode(order.intent),
             order.signature,
-            burner,
+            order.intent.withdraw.burner,
             order.intent.chaindId,
             broker.account.nonce++,
             order.intent.nonce
@@ -368,7 +368,7 @@ contract Periphery is
     {
         (Broker storage broker, address burner) = _getBrokerOrRevert(order.accountId);
 
-        if (burner != msg.sender) {
+        if (burner != msg.sender || burner != order.burner) {
             revert Errors.Deposit_OnlyAccountOwner();
         }
 

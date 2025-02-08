@@ -110,6 +110,7 @@ contract TestDepositPermissions is TestBaseDeposit {
             1,
             alice,
             alicePK,
+            alice,
             address(mockToken1),
             type(uint256).max,
             0,
@@ -145,7 +146,7 @@ contract TestDepositPermissions is TestBaseDeposit {
         periphery.deposit(dOrder);
 
         WithdrawOrder memory wOrder =
-            withdrawOrder(1, alice, address(mockToken1), type(uint256).max);
+            withdrawOrder(1, alice, alice, address(mockToken1), type(uint256).max);
 
         vm.prank(alice);
         vm.expectRevert(Errors.Deposit_AssetUnavailable.selector);
@@ -173,7 +174,8 @@ contract TestDepositPermissions is TestBaseDeposit {
         periphery.intentDeposit(dOrder);
 
         SignedWithdrawIntent memory wOrder = signsignedWithdrawIntent(
-            unsignedWithdrawIntent(1, alice, address(mockToken1), mock1Unit, 0, 0, 0), uint256(123)
+            unsignedWithdrawIntent(1, alice, alice, address(mockToken1), mock1Unit, 0, 0, 0),
+            uint256(123)
         );
 
         vm.prank(relayer);
@@ -234,7 +236,7 @@ contract TestDepositPermissions is TestBaseDeposit {
         periphery.intentDeposit(dOrder);
 
         SignedWithdrawIntent memory wOrder = signedWithdrawIntent(
-            accountId_, alice, alicePK, address(mockToken1), mock1Unit, 0, 0, 0
+            accountId_, alice, alicePK, alice, address(mockToken1), mock1Unit, 0, 0, 0
         );
 
         vm.prank(relayer);
@@ -262,7 +264,7 @@ contract TestDepositPermissions is TestBaseDeposit {
         periphery.intentDeposit(dOrder);
 
         SignedWithdrawIntent memory wOrder =
-            signedWithdrawIntent(1, alice, alicePK, address(mockToken1), mock1Unit, 0, 0, 0);
+            signedWithdrawIntent(1, alice, alicePK, alice, address(mockToken1), mock1Unit, 0, 0, 0);
 
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_AccountNotActive.selector);
@@ -285,8 +287,9 @@ contract TestDepositPermissions is TestBaseDeposit {
         vm.expectRevert(Errors.Deposit_InvalidNonce.selector);
         periphery.intentDeposit(dOrder);
 
-        SignedWithdrawIntent memory wOrder =
-            signedWithdrawIntent(1, alice, alicePK, address(mockToken1), mock1Unit, 0, 0, nonce_);
+        SignedWithdrawIntent memory wOrder = signedWithdrawIntent(
+            1, alice, alicePK, alice, address(mockToken1), mock1Unit, 0, 0, nonce_
+        );
 
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_InvalidNonce.selector);
@@ -316,7 +319,7 @@ contract TestDepositPermissions is TestBaseDeposit {
         vm.warp(0);
 
         SignedWithdrawIntent memory wOrder =
-            signedWithdrawIntent(1, alice, alicePK, address(mockToken1), mock1Unit, 0, 0, 0);
+            signedWithdrawIntent(1, alice, alicePK, alice, address(mockToken1), mock1Unit, 0, 0, 0);
 
         // increase timestamp
         vm.warp(timestamp_);
@@ -346,7 +349,7 @@ contract TestDepositPermissions is TestBaseDeposit {
         periphery.intentDeposit(dOrder);
 
         WithdrawIntent memory wIntent =
-            unsignedWithdrawIntent(1, alice, address(mockToken1), mock1Unit, 0, 0, 0);
+            unsignedWithdrawIntent(1, alice, alice, address(mockToken1), mock1Unit, 0, 0, 0);
 
         wIntent.chaindId = chainId_;
 
@@ -400,8 +403,9 @@ contract TestDepositPermissions is TestBaseDeposit {
 
         assertTrue(periphery.getAccountInfo(1).isExpired());
 
-        SignedWithdrawIntent memory wOrder =
-            signedWithdrawIntent(1, alice, alicePK, address(mockToken1), type(uint256).max, 0, 0, 1);
+        SignedWithdrawIntent memory wOrder = signedWithdrawIntent(
+            1, alice, alicePK, alice, address(mockToken1), type(uint256).max, 0, 0, 1
+        );
 
         vm.prank(relayer);
         periphery.intentWithdraw(wOrder);
@@ -424,7 +428,7 @@ contract TestDepositPermissions is TestBaseDeposit {
         periphery.intentDeposit(dOrder);
 
         SignedWithdrawIntent memory wOrder =
-            signedWithdrawIntent(1, alice, alicePK, asset, mock2Unit, 0, 0, 0);
+            signedWithdrawIntent(1, alice, alicePK, alice, asset, mock2Unit, 0, 0, 0);
 
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_AssetUnavailable.selector);

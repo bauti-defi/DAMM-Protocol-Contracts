@@ -38,7 +38,7 @@ struct WithdrawOrder {
     uint256 deadline; // Timestamp after which this order expires
     uint256 minAmountOut; // Minimum acceptable amount of asset to receive
     address to; // Address to receive the withdrawn assets
-    // address redeemer; // Address that is redeeming the shares
+    address burner; // Address that is burning the shares
     address asset; // Asset to withdraw into
     uint16 referralCode; // Optional referral code
 }
