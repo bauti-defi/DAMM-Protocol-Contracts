@@ -13,7 +13,6 @@ import "@src/libs/Errors.sol";
 import "@src/interfaces/IBrokerNft.sol";
 import {DepositLibs} from "./DepositLibs.sol";
 import {IPermit2} from "@permit2/src/interfaces/IPermit2.sol";
-import "@zodiac/factory/FactoryFriendly.sol";
 
 bytes32 constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 bytes32 constant CONTROLLER_ROLE = keccak256("CONTROLLER_ROLE");
@@ -26,7 +25,6 @@ bytes32 constant CONTROLLER_ROLE = keccak256("CONTROLLER_ROLE");
 ///      - Broker account management (NFTs)
 ///      - Fee collection and distribution
 abstract contract BrokerNft is
-    FactoryFriendly,
     ERC721Upgradeable,
     AccessControlUpgradeable,
     PausableUpgradeable,
@@ -42,9 +40,18 @@ abstract contract BrokerNft is
     /// @dev Counter for brokerage account token IDs
     uint256 internal tokenId = 0;
 
+    /// @dev this modifier ensures that the account info is zeroed out if the broker has no shares outstanding
+    modifier zeroOutAccountInfo(uint256 accountId_) {
+        _;
+        if (brokers[accountId_].account.totalSharesOutstanding == 0) {
+            brokers[accountId_].account.cumulativeSharesMinted = 0;
+            brokers[accountId_].account.cumulativeUnitsDeposited = 0;
+        }
+    }
+
     /// @notice Initializes the Periphery contract
     /// @param initializeParams Encoded parameters for the Periphery contract
-    function setUp(bytes memory initializeParams) public virtual override initializer {
+    function __BrokerNft_init(bytes memory initializeParams) internal onlyInitializing {
         /// @dev vaultName_ Name of the Brokerage NFT
         /// @dev vaultSymbol_ Symbol of the Brokerage NFT
         /// @dev owner_ Address that owns the Periphery
@@ -64,7 +71,6 @@ abstract contract BrokerNft is
             revert Errors.Deposit_InvalidConstructorParam();
         }
 
-        _transferOwnership(owner_);
         __Pausable_init();
         __ReentrancyGuard_init();
         __AccessControl_init();
@@ -73,15 +79,6 @@ abstract contract BrokerNft is
         _grantRole(DEFAULT_ADMIN_ROLE, owner_);
         _grantRole(PAUSER_ROLE, owner_);
         _grantRole(CONTROLLER_ROLE, controller_);
-    }
-
-    /// @dev this modifier ensures that the account info is zeroed out if the broker has no shares outstanding
-    modifier zeroOutAccountInfo(uint256 accountId_) {
-        _;
-        if (brokers[accountId_].account.totalSharesOutstanding == 0) {
-            brokers[accountId_].account.cumulativeSharesMinted = 0;
-            brokers[accountId_].account.cumulativeUnitsDeposited = 0;
-        }
     }
 
     function _getBrokerOrRevert(uint256 accountId_)
@@ -323,12 +320,12 @@ abstract contract BrokerNft is
     }
 
     /// @inheritdoc IBrokerNft
-    function setPauser(address _pauser) external onlyOwner {
+    function setPauser(address _pauser) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _grantRole(PAUSER_ROLE, _pauser);
     }
 
     /// @inheritdoc IBrokerNft
-    function revokePauser(address _pauser) external onlyOwner {
+    function revokePauser(address _pauser) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _revokeRole(PAUSER_ROLE, _pauser);
     }
 
