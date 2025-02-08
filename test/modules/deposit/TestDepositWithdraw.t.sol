@@ -58,7 +58,8 @@ contract TestDepositWithdraw is TestBaseDeposit {
                 protocolEntranceFeeInBps: protocolEntranceFeeInBps,
                 brokerExitFeeInBps: 0,
                 protocolExitFeeInBps: 0,
-                feeRecipient: address(0)
+                feeRecipient: address(0),
+                isPublic: false
             })
         );
         periphery.enableBrokerAssetPolicy(accountId, address(mockToken1), true);
@@ -189,7 +190,8 @@ contract TestDepositWithdraw is TestBaseDeposit {
                 protocolEntranceFeeInBps: 0,
                 brokerExitFeeInBps: brokerExitFeeInBps,
                 protocolExitFeeInBps: protocolExitFeeInBps,
-                feeRecipient: address(0)
+                feeRecipient: address(0),
+                isPublic: false
             })
         );
 
@@ -370,7 +372,8 @@ contract TestDepositWithdraw is TestBaseDeposit {
                 protocolEntranceFeeInBps: 0,
                 brokerExitFeeInBps: 0,
                 protocolExitFeeInBps: 0,
-                feeRecipient: address(0)
+                feeRecipient: address(0),
+                isPublic: false
             })
         );
         periphery.enableBrokerAssetPolicy(accountId, address(mockToken1), true);

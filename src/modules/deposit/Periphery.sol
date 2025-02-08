@@ -156,7 +156,7 @@ contract Periphery is
     {
         (Broker storage broker, address minter) = _getBrokerOrRevert(order.intent.deposit.accountId);
 
-        if (order.intent.deposit.minter != minter) {
+        if (!broker.account.isPublic && order.intent.deposit.minter != minter) {
             revert Errors.Deposit_OnlyAccountOwner();
         }
 
@@ -175,8 +175,9 @@ contract Periphery is
         /// otherwise, the management fee will be charged on the deposit amount
         _takeManagementFee();
 
-        uint256 assetAmountIn =
-            order.intent.deposit.asset.deduceAssetAmount(order.intent.deposit.amount, minter);
+        uint256 assetAmountIn = order.intent.deposit.asset.deduceAssetAmount(
+            order.intent.deposit.amount, order.intent.deposit.minter
+        );
 
         /// transfer the net amount in from the broker to the periphery
         IPermit2(permit2).transferFrom(
@@ -225,7 +226,7 @@ contract Periphery is
     {
         (Broker storage broker, address minter) = _getBrokerOrRevert(order.accountId);
 
-        if (minter != msg.sender || minter != order.minter) {
+        if (!broker.account.isPublic && (minter != msg.sender && minter != order.minter)) {
             revert Errors.Deposit_OnlyAccountOwner();
         }
 
@@ -236,7 +237,7 @@ contract Periphery is
         _validateBrokerAssetPolicy(order.asset, broker, true);
 
         // uint256 assetAmountIn = order.amount;
-        uint256 assetAmountIn = order.asset.deduceAssetAmount(order.amount, minter);
+        uint256 assetAmountIn = order.asset.deduceAssetAmount(order.amount, order.minter);
 
         /// transfer the net amount in from the broker to the periphery
         IPermit2(permit2).transferFrom(
@@ -313,6 +314,10 @@ contract Periphery is
         (Broker storage broker, address burner) =
             _getBrokerOrRevert(order.intent.withdraw.accountId);
 
+        if (!broker.account.isPublic && order.intent.withdraw.burner != burner) {
+            revert Errors.Deposit_OnlyAccountOwner();
+        }
+
         _validateBrokerAssetPolicy(order.intent.withdraw.asset, broker, false);
 
         DepositLibs.validateIntent(
@@ -352,7 +357,7 @@ contract Periphery is
             assetToken.pay(msg.sender, order.intent.relayerTip);
             assetToken.pay(depositModule.fund(), order.intent.bribe);
             assetToken.pay(protocolFeeRecipient, netProtocolFee);
-            assetToken.pay(burner, netBrokerFee);
+            assetToken.pay(broker.account.feeRecipient, netBrokerFee);
             assetToken.pay(order.intent.withdraw.to, assetAmountOut);
         }
 
@@ -377,7 +382,7 @@ contract Periphery is
     {
         (Broker storage broker, address burner) = _getBrokerOrRevert(order.accountId);
 
-        if (burner != msg.sender || burner != order.burner) {
+        if (!broker.account.isPublic && (burner != msg.sender && burner != order.burner)) {
             revert Errors.Deposit_OnlyAccountOwner();
         }
 
@@ -397,7 +402,7 @@ contract Periphery is
             ERC20 assetToken = ERC20(order.asset);
             assetToken.pay(order.to, assetAmountOut);
             assetToken.pay(protocolFeeRecipient, netProtocolFee);
-            assetToken.pay(burner, netBrokerFee);
+            assetToken.pay(broker.account.feeRecipient, netBrokerFee);
         }
 
         emit Withdraw(
@@ -708,6 +713,7 @@ contract Periphery is
 
         brokers[nextTokenId].account = BrokerAccountInfo({
             transferable: params_.transferable,
+            isPublic: params_.isPublic,
             state: AccountState.ACTIVE,
             expirationTimestamp: block.timestamp + params_.ttl,
             nonce: 0,

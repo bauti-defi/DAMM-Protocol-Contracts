@@ -81,9 +81,6 @@ struct AssetPolicy {
 /// @notice Information about a broker's account
 /// @dev Tracks fees, limits, and accounting information
 struct BrokerAccountInfo {
-    bool transferable; // Whether the broker NFT can be transferred
-    AccountState state; // Current state of the account
-    address feeRecipient; // Address to receive broker's fees
     uint256 expirationTimestamp; // When the account expires
     uint256 shareMintLimit; // Maximum shares that can be minted
     uint256 cumulativeSharesMinted; // Total shares minted over account lifetime
@@ -96,6 +93,10 @@ struct BrokerAccountInfo {
     uint256 brokerExitFeeInBps; // Broker's exit fee (basis points)
     uint256 protocolExitFeeInBps; // Protocol's exit fee (basis points)
     uint256 nonce; // Current nonce for replay protection
+    bool transferable; // Whether the broker NFT can be transferred
+    bool isPublic; // Whether the broker account can be used by anyone
+    AccountState state; // Current state of the account
+    address feeRecipient; // Address to receive broker's fees
 }
 
 /// @notice A broker's complete account information
@@ -118,4 +119,5 @@ struct CreateAccountParams {
     address feeRecipient; // Address to receive broker's fees
     address user; // Owner of the broker account
     bool transferable; // Whether the broker NFT can be transferred
+    bool isPublic; // Whether the broker account can be used by anyone
 }

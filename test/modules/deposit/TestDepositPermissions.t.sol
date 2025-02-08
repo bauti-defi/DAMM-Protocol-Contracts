@@ -48,7 +48,7 @@ contract TestDepositPermissions is TestBaseDeposit {
 
     function test_only_controller_can_enable_broker_asset_policy(address attacker)
         public
-        openAccount(alice, 10000, false)
+        openAccount(alice, 10000, false, false)
     {
         vm.assume(attacker != address(fund));
 
@@ -82,7 +82,7 @@ contract TestDepositPermissions is TestBaseDeposit {
 
     function test_broker_can_only_deposit_withdraw_intent_enabled_assets()
         public
-        openAccount(alice, 10000, false)
+        openAccount(alice, 10000, false, false)
         approvePermit2(alice)
     {
         SignedDepositIntent memory dOrder = depositIntent(
@@ -130,7 +130,7 @@ contract TestDepositPermissions is TestBaseDeposit {
 
     function test_broker_can_only_deposit_withdraw_enabled_assets()
         public
-        openAccount(alice, 10000, false)
+        openAccount(alice, 10000, false, false)
         approvePermit2(alice)
     {
         DepositOrder memory dOrder =
@@ -160,7 +160,7 @@ contract TestDepositPermissions is TestBaseDeposit {
 
     function test_only_account_signature_is_valid()
         public
-        openAccount(alice, 10000, false)
+        openAccount(alice, 10000, false, false)
         enableBrokerAssetPolicy(address(fund), 1, address(mockToken1), true)
         enableBrokerAssetPolicy(address(fund), 1, address(mockToken1), false)
     {
@@ -205,9 +205,8 @@ contract TestDepositPermissions is TestBaseDeposit {
 
     function test_net_deposit_limit_cannot_be_exceeded(uint256 limit_)
         public
-        openAccount(alice, 10000, false)
+        openAccount(alice, 10000, false, false)
         enableBrokerAssetPolicy(address(fund), 1, address(mockToken1), true)
-        enableBrokerAssetPolicy(address(fund), 1, address(mockToken1), false)
         approvePermit2(alice)
     {
         vm.assume(limit_ > 0);
@@ -246,7 +245,7 @@ contract TestDepositPermissions is TestBaseDeposit {
 
     function test_only_active_account_can_deposit_withdraw()
         public
-        openAccount(alice, 100000, false)
+        openAccount(alice, 100000, false, false)
     {
         {
             _enableBrokerAssetPolicy(address(fund), 1, address(mockToken1), true);
@@ -273,7 +272,7 @@ contract TestDepositPermissions is TestBaseDeposit {
 
     function test_order_must_have_valid_nonce(uint256 nonce_)
         public
-        openAccount(alice, 1000000, false)
+        openAccount(alice, 1000000, false, false)
     {
         vm.assume(nonce_ > 1);
 
@@ -298,9 +297,7 @@ contract TestDepositPermissions is TestBaseDeposit {
 
     function test_order_must_be_within_deadline(uint256 timestamp_)
         public
-        openAccount(alice, 100000000 * 2, false)
-        enableBrokerAssetPolicy(address(fund), 1, address(mockToken1), true)
-        enableBrokerAssetPolicy(address(fund), 1, address(mockToken1), false)
+        openAccount(alice, 100000000 * 2, false, false)
     {
         vm.assume(timestamp_ > 10000);
         vm.assume(timestamp_ < 100000000 * 2);
@@ -331,7 +328,7 @@ contract TestDepositPermissions is TestBaseDeposit {
 
     function test_order_chain_id_must_match(uint256 chainId_)
         public
-        openAccount(alice, 1000000, false)
+        openAccount(alice, 1000000, false, false)
         enableBrokerAssetPolicy(address(fund), 1, address(mockToken1), true)
         enableBrokerAssetPolicy(address(fund), 1, address(mockToken1), false)
     {
@@ -362,9 +359,8 @@ contract TestDepositPermissions is TestBaseDeposit {
 
     function test_only_non_expired_account_can_deposit(uint256 timestamp)
         public
-        openAccount(alice, 1, false)
+        openAccount(alice, 1, false, false)
         enableBrokerAssetPolicy(address(fund), 1, address(mockToken1), true)
-        enableBrokerAssetPolicy(address(fund), 1, address(mockToken1), false)
         approvePermit2(alice)
     {
         vm.assume(timestamp > 1);
@@ -385,7 +381,7 @@ contract TestDepositPermissions is TestBaseDeposit {
 
     function test_expired_account_can_withdraw()
         public
-        openAccount(alice, 1000, false)
+        openAccount(alice, 1000, false, false)
         enableBrokerAssetPolicy(address(fund), 1, address(mockToken1), true)
         enableBrokerAssetPolicy(address(fund), 1, address(mockToken1), false)
         approvePermit2(alice)
@@ -415,7 +411,7 @@ contract TestDepositPermissions is TestBaseDeposit {
 
     function test_only_allowed_assets_can_be_deposited_or_withdrawn(address asset)
         public
-        openAccount(alice, 1000000, false)
+        openAccount(alice, 1000000, false, false)
     {
         vm.assume(asset != address(mockToken1));
         vm.assume(asset != address(mockToken2));
@@ -437,7 +433,7 @@ contract TestDepositPermissions is TestBaseDeposit {
 
     function test_only_minter_role_can_pause_unpause_account(address attacker)
         public
-        openAccount(alice, 1000000, false)
+        openAccount(alice, 1000000, false, false)
     {
         vm.assume(attacker != address(fund));
 
@@ -470,7 +466,7 @@ contract TestDepositPermissions is TestBaseDeposit {
 
     function test_only_minter_role_can_close_account(address attacker)
         public
-        openAccount(alice, 1000000, false)
+        openAccount(alice, 1000000, false, false)
     {
         vm.assume(attacker != address(fund));
 
@@ -540,7 +536,7 @@ contract TestDepositPermissions is TestBaseDeposit {
 
     function test_cannot_transfer_souldbound_broker_account(address attacker)
         public
-        openAccount(alice, 1000000, false)
+        openAccount(alice, 1000000, false, false)
     {
         vm.prank(attacker);
         vm.expectRevert(Errors.Deposit_AccountNotTransferable.selector);
@@ -561,7 +557,7 @@ contract TestDepositPermissions is TestBaseDeposit {
 
     function test_can_transfer_non_soulbound_broker_account()
         public
-        openAccount(alice, 2 days, true)
+        openAccount(alice, 2 days, true, false)
     {
         address receiver = makeAddr("receiver");
 
@@ -632,7 +628,7 @@ contract TestDepositPermissions is TestBaseDeposit {
         vm.assume(attacker != broker);
         vm.assume(newRecipient != address(0));
 
-        _openAccount(broker, 2 days, false);
+        _openAccount(broker, 2 days, false, false);
 
         vm.prank(attacker);
         vm.expectRevert(Errors.Deposit_AccountDoesNotExist.selector);

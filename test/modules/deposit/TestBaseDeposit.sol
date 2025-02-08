@@ -279,18 +279,21 @@ abstract contract TestBaseDeposit is TestBaseGnosis, DeployPermit2 {
         _;
     }
 
-    modifier openAccount(address user_, uint256 ttl_, bool transferable_) {
-        _openAccount(user_, ttl_, transferable_);
+    modifier openAccount(address user_, uint256 ttl_, bool transferable_, bool isPublic) {
+        _openAccount(user_, ttl_, transferable_, isPublic);
 
         _;
     }
 
-    function _openAccount(address user_, uint256 ttl_, bool transferable_) internal {
+    function _openAccount(address user_, uint256 ttl_, bool transferable_, bool isPublic)
+        internal
+    {
         vm.startPrank(address(fund));
         periphery.openAccount(
             CreateAccountParams({
                 transferable: transferable_,
                 user: user_,
+                isPublic: isPublic,
                 ttl: ttl_,
                 shareMintLimit: type(uint256).max,
                 brokerPerformanceFeeInBps: 0,
