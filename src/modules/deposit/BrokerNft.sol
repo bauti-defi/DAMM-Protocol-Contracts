@@ -25,6 +25,7 @@ import {IPermit2} from "@permit2/src/interfaces/IPermit2.sol";
 import "@zodiac/factory/FactoryFriendly.sol";
 import "@src/interfaces/IBrokerNft.sol";
 import "@src/interfaces/IBrokerNft.sol";
+
 bytes32 constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 bytes32 constant CONTROLLER_ROLE = keccak256("CONTROLLER_ROLE");
 bytes32 constant MINTER_ROLE = keccak256("MINTER_ROLE");
@@ -74,9 +75,7 @@ contract BrokerNft is
             address owner_,
             address minter_,
             address controller_
-        ) = abi.decode(
-            initializeParams, (string, string, address, address, address)
-        );
+        ) = abi.decode(initializeParams, (string, string, address, address, address));
         if (owner_ == address(0)) {
             revert Errors.Deposit_InvalidConstructorParam();
         }

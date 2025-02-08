@@ -325,14 +325,17 @@ abstract contract TestBaseDeposit is TestBaseGnosis, DeployPermit2 {
         _;
     }
 
-    function depositOrder(uint256 accountId, address user, address token, uint256 amount)
-        internal
-        view
-        returns (DepositOrder memory)
-    {
+    function depositOrder(
+        uint256 accountId,
+        address depositor,
+        address recipient,
+        address token,
+        uint256 amount
+    ) internal view returns (DepositOrder memory) {
         return DepositOrder({
             accountId: accountId,
-            recipient: user,
+            recipient: recipient,
+            depositor: depositor,
             asset: token,
             amount: amount,
             deadline: block.timestamp + 1000,
@@ -343,7 +346,8 @@ abstract contract TestBaseDeposit is TestBaseGnosis, DeployPermit2 {
 
     function unsignedDepositIntent(
         uint256 accountId,
-        address user,
+        address depositor,
+        address recipient,
         address token,
         uint256 amount,
         uint256 nonce,
@@ -353,7 +357,8 @@ abstract contract TestBaseDeposit is TestBaseGnosis, DeployPermit2 {
         return DepositIntent({
             deposit: DepositOrder({
                 accountId: accountId,
-                recipient: user,
+                recipient: recipient,
+                depositor: depositor,
                 asset: token,
                 amount: amount,
                 deadline: block.timestamp + 1000,
@@ -369,8 +374,9 @@ abstract contract TestBaseDeposit is TestBaseGnosis, DeployPermit2 {
 
     function depositIntent(
         uint256 accountId,
-        address user,
-        uint256 userPK,
+        address depositor,
+        uint256 depositorPK,
+        address recipient,
         address token,
         uint256 amount,
         uint256 relayerTip,
@@ -378,7 +384,7 @@ abstract contract TestBaseDeposit is TestBaseGnosis, DeployPermit2 {
         uint256 nonce
     ) internal view returns (SignedDepositIntent memory) {
         DepositIntent memory intent = DepositIntent({
-            deposit: depositOrder(accountId, user, token, amount),
+            deposit: depositOrder(accountId, depositor, recipient, token, amount),
             chaindId: block.chainid,
             relayerTip: relayerTip,
             bribe: bribe,
@@ -386,7 +392,7 @@ abstract contract TestBaseDeposit is TestBaseGnosis, DeployPermit2 {
         });
 
         (uint8 v, bytes32 r, bytes32 s) =
-            vm.sign(userPK, abi.encode(intent).toEthSignedMessageHash());
+            vm.sign(depositorPK, abi.encode(intent).toEthSignedMessageHash());
 
         return SignedDepositIntent({intent: intent, signature: abi.encodePacked(r, s, v)});
     }

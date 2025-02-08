@@ -16,11 +16,12 @@ struct DepositIntent {
 /// @dev Used both directly and as part of DepositIntent
 struct DepositOrder {
     uint256 accountId; // ID of the broker account
-    address recipient; // Address to receive the minted shares
-    address asset; // Asset being deposited
     uint256 amount; // Amount of asset to deposit
     uint256 deadline; // Timestamp after which this order expires
     uint256 minSharesOut; // Minimum acceptable number of shares to receive
+    address recipient; // Address to receive the minted shares
+    address asset; // Asset being deposited
+    address depositor; // Address that is depositing the assets
     uint16 referralCode; // Optional referral code
 }
 

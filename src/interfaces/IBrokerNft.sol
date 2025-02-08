@@ -26,7 +26,7 @@ interface IBrokerNft {
     event AccountPaused(uint256 accountId);
 
     event AccountUnpaused(uint256 accountId);
-    
+
     /// @notice The next token ID that will be used for a new brokerage account
     function peekNextTokenId() external returns (uint256);
 

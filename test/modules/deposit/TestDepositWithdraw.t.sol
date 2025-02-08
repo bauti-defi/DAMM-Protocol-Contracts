@@ -89,8 +89,9 @@ contract TestDepositWithdraw is TestBaseDeposit {
             sharesOut = periphery.intentDeposit(
                 depositIntent(
                     1,
-                    receiver,
+                    alice,
                     alicePK,
+                    receiver,
                     address(mockToken1),
                     type(uint256).max,
                     10,
@@ -103,8 +104,9 @@ contract TestDepositWithdraw is TestBaseDeposit {
         } else {
             vm.startPrank(alice);
             IPermit2(permit2).permit(alice, permitSingle, signature);
-            sharesOut =
-                periphery.deposit(depositOrder(1, receiver, address(mockToken1), type(uint256).max));
+            sharesOut = periphery.deposit(
+                depositOrder(1, alice, receiver, address(mockToken1), type(uint256).max)
+            );
             vm.stopPrank();
         }
 
@@ -217,6 +219,7 @@ contract TestDepositWithdraw is TestBaseDeposit {
                     1,
                     alice,
                     alicePK,
+                    alice,
                     address(mockToken1),
                     type(uint256).max,
                     0,
@@ -227,7 +230,7 @@ contract TestDepositWithdraw is TestBaseDeposit {
         } else {
             vm.startPrank(alice);
             IPermit2(permit2).permit(alice, permitSingle, signature);
-            periphery.deposit(depositOrder(1, alice, address(mockToken1), type(uint256).max));
+            periphery.deposit(depositOrder(1, alice, alice, address(mockToken1), type(uint256).max));
             vm.stopPrank();
         }
 
@@ -404,7 +407,7 @@ contract TestDepositWithdraw is TestBaseDeposit {
         }
 
         vm.prank(alice);
-        periphery.deposit(depositOrder(1, alice, address(mockToken1), type(uint256).max));
+        periphery.deposit(depositOrder(1, alice, alice, address(mockToken1), type(uint256).max));
         assertEq(
             depositModule.internalVault().balanceOf(alice),
             depositModule.internalVault().totalSupply()
@@ -434,7 +437,7 @@ contract TestDepositWithdraw is TestBaseDeposit {
         mockToken1.mint(alice, 50 ether);
 
         vm.prank(alice);
-        periphery.deposit(depositOrder(1, alice, address(mockToken1), type(uint256).max));
+        periphery.deposit(depositOrder(1, alice, alice, address(mockToken1), type(uint256).max));
         assertEq(
             depositModule.internalVault().balanceOf(alice),
             depositModule.internalVault().totalSupply() - managementFee1
@@ -452,7 +455,7 @@ contract TestDepositWithdraw is TestBaseDeposit {
         mockToken1.mint(alice, 50 ether);
 
         vm.prank(alice);
-        periphery.deposit(depositOrder(1, alice, address(mockToken1), type(uint256).max));
+        periphery.deposit(depositOrder(1, alice, alice, address(mockToken1), type(uint256).max));
 
         assertApproxEqRel(
             depositModule.internalVault().balanceOf(alice),
