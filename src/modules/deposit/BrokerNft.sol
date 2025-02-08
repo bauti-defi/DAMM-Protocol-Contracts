@@ -2,11 +2,6 @@
 
 pragma solidity ^0.8.0;
 
-import "@solmate/tokens/ERC20.sol";
-import "@solmate/utils/SafeTransferLib.sol";
-import "@openzeppelin-contracts/utils/math/SignedMath.sol";
-import "@openzeppelin-contracts/utils/math/SafeCast.sol";
-import "@solady/utils/FixedPointMathLib.sol";
 import "@src/libs/Constants.sol";
 
 import "@openzeppelin/contracts-upgradeable/token/ERC721/ERC721Upgradeable.sol";
@@ -15,20 +10,13 @@ import "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 
 import "@src/libs/Errors.sol";
-import "@zodiac/interfaces/IAvatar.sol";
 import "@src/interfaces/IBrokerNft.sol";
-import "./UnitOfAccount.sol";
-import {FundShareVault} from "./FundShareVault.sol";
 import {DepositLibs} from "./DepositLibs.sol";
-import {SafeLib} from "@src/libs/SafeLib.sol";
 import {IPermit2} from "@permit2/src/interfaces/IPermit2.sol";
 import "@zodiac/factory/FactoryFriendly.sol";
-import "@src/interfaces/IBrokerNft.sol";
-import "@src/interfaces/IBrokerNft.sol";
 
 bytes32 constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 bytes32 constant CONTROLLER_ROLE = keccak256("CONTROLLER_ROLE");
-bytes32 constant MINTER_ROLE = keccak256("MINTER_ROLE");
 
 /// @title Periphery
 /// @notice Manages deposits, withdrawals, and brokerage accounts for a Fund
@@ -37,7 +25,7 @@ bytes32 constant MINTER_ROLE = keccak256("MINTER_ROLE");
 ///      - Asset deposits/withdrawals through the DepositModule
 ///      - Broker account management (NFTs)
 ///      - Fee collection and distribution
-contract BrokerNft is
+abstract contract BrokerNft is
     FactoryFriendly,
     ERC721Upgradeable,
     AccessControlUpgradeable,
@@ -47,22 +35,16 @@ contract BrokerNft is
 {
     using DepositLibs for BrokerAccountInfo;
     using DepositLibs for address;
-    using DepositLibs for ERC20;
-    using SafeTransferLib for ERC20;
-    using SafeLib for IAvatar;
-    using SafeCast for uint256;
-    using SignedMath for int256;
-    using FixedPointMathLib for uint256;
 
     /// @dev Maps token IDs to their brokerage account information
-    mapping(uint256 tokenId => Broker broker) private brokers;
+    mapping(uint256 tokenId => Broker broker) internal brokers;
 
     /// @dev Counter for brokerage account token IDs
-    uint256 private tokenId = 0;
+    uint256 internal tokenId = 0;
 
     /// @notice Initializes the Periphery contract
     /// @param initializeParams Encoded parameters for the Periphery contract
-    function setUp(bytes memory initializeParams) public override initializer {
+    function setUp(bytes memory initializeParams) public virtual override initializer {
         /// @dev vaultName_ Name of the Brokerage NFT
         /// @dev vaultSymbol_ Symbol of the Brokerage NFT
         /// @dev owner_ Address that owns the Periphery
@@ -73,13 +55,12 @@ contract BrokerNft is
             string memory brokerNftName_,
             string memory brokerNftSymbol_,
             address owner_,
-            address minter_,
             address controller_
-        ) = abi.decode(initializeParams, (string, string, address, address, address));
+        ) = abi.decode(initializeParams, (string, string, address, address));
         if (owner_ == address(0)) {
             revert Errors.Deposit_InvalidConstructorParam();
         }
-        if (minter_ == address(0)) {
+        if (controller_ == address(0)) {
             revert Errors.Deposit_InvalidConstructorParam();
         }
 
@@ -91,7 +72,6 @@ contract BrokerNft is
 
         _grantRole(DEFAULT_ADMIN_ROLE, owner_);
         _grantRole(PAUSER_ROLE, owner_);
-        _grantRole(MINTER_ROLE, minter_);
         _grantRole(CONTROLLER_ROLE, controller_);
     }
 
@@ -218,7 +198,7 @@ contract BrokerNft is
         public
         whenNotPaused
         nonReentrant
-        onlyRole(MINTER_ROLE)
+        onlyRole(CONTROLLER_ROLE)
         returns (uint256 nextTokenId)
     {
         if (params_.user == address(0)) {
@@ -278,7 +258,7 @@ contract BrokerNft is
     }
 
     /// @inheritdoc IBrokerNft
-    function closeAccount(uint256 accountId_) public onlyRole(MINTER_ROLE) {
+    function closeAccount(uint256 accountId_) public onlyRole(CONTROLLER_ROLE) {
         if (!brokers[accountId_].account.canBeClosed()) {
             revert Errors.Deposit_AccountCannotBeClosed();
         }
@@ -288,7 +268,7 @@ contract BrokerNft is
     }
 
     /// @inheritdoc IBrokerNft
-    function pauseAccount(uint256 accountId_) public onlyRole(MINTER_ROLE) {
+    function pauseAccount(uint256 accountId_) public onlyRole(CONTROLLER_ROLE) {
         if (!brokers[accountId_].account.isActive()) {
             revert Errors.Deposit_AccountNotActive();
         }
@@ -299,7 +279,7 @@ contract BrokerNft is
     }
 
     /// @inheritdoc IBrokerNft
-    function unpauseAccount(uint256 accountId_) public whenNotPaused onlyRole(MINTER_ROLE) {
+    function unpauseAccount(uint256 accountId_) public whenNotPaused onlyRole(CONTROLLER_ROLE) {
         if (!brokers[accountId_].account.isPaused()) {
             revert Errors.Deposit_AccountNotPaused();
         }
@@ -343,12 +323,12 @@ contract BrokerNft is
     }
 
     /// @inheritdoc IBrokerNft
-    function setPauser(address _pauser) external onlyRole(CONTROLLER_ROLE) {
+    function setPauser(address _pauser) external onlyOwner {
         _grantRole(PAUSER_ROLE, _pauser);
     }
 
     /// @inheritdoc IBrokerNft
-    function revokePauser(address _pauser) external onlyRole(CONTROLLER_ROLE) {
+    function revokePauser(address _pauser) external onlyOwner {
         _revokeRole(PAUSER_ROLE, _pauser);
     }
 

@@ -180,7 +180,10 @@ contract Periphery is
 
         /// transfer the net amount in from the broker to the periphery
         IPermit2(permit2).transferFrom(
-            minter, address(this), uint160(assetAmountIn), order.intent.deposit.asset
+            order.intent.deposit.minter,
+            address(this),
+            uint160(assetAmountIn),
+            order.intent.deposit.asset
         );
 
         ERC20 assetToken = ERC20(order.intent.deposit.asset);
@@ -236,7 +239,9 @@ contract Periphery is
         uint256 assetAmountIn = order.asset.deduceAssetAmount(order.amount, minter);
 
         /// transfer the net amount in from the broker to the periphery
-        IPermit2(permit2).transferFrom(minter, address(this), uint160(assetAmountIn), order.asset);
+        IPermit2(permit2).transferFrom(
+            order.minter, address(this), uint160(assetAmountIn), order.asset
+        );
 
         sharesOut = _deposit(
             broker, broker.account, order.asset, assetAmountIn, order.recipient, order.minSharesOut
@@ -323,8 +328,12 @@ contract Periphery is
         /// otherwise, the management fee will be charged on the withdrawal amount
         _takeManagementFee();
 
-        (uint256 netAssetAmountOut, uint256 netBrokerFee, uint256 netProtocolFee) =
-            _withdraw(burner, depositModule.getVault(), order.intent.withdraw, broker.account);
+        (uint256 netAssetAmountOut, uint256 netBrokerFee, uint256 netProtocolFee) = _withdraw(
+            order.intent.withdraw.burner,
+            depositModule.getVault(),
+            order.intent.withdraw,
+            broker.account
+        );
 
         assetAmountOut = netAssetAmountOut - netBrokerFee - netProtocolFee;
 
@@ -379,7 +388,7 @@ contract Periphery is
         _takeManagementFee();
 
         (uint256 netAssetAmountOut, uint256 netBrokerFee, uint256 netProtocolFee) =
-            _withdraw(burner, depositModule.getVault(), order, broker.account);
+            _withdraw(order.burner, depositModule.getVault(), order, broker.account);
 
         assetAmountOut = netAssetAmountOut - netBrokerFee - netProtocolFee;
 
