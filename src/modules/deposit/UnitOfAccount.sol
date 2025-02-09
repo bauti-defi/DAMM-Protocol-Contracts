@@ -10,8 +10,8 @@ import "@src/libs/Errors.sol";
 /// @notice An ERC20 token representing a standardized unit of value across different deposit assets
 /// @dev Only the periphery contract can mint/burn tokens, which it does in response to deposits/withdrawals
 contract UnitOfAccount is ERC20, Ownable {
-    /// @notice The periphery contract address that has exclusive minting/burning rights
-    address public immutable periphery;
+    /// @notice The deposit module contract address that has exclusive minting/burning rights
+    address public immutable controller;
 
     /// @notice Creates a new Unit of Account token
     /// @param _name The name of the token
@@ -21,7 +21,7 @@ contract UnitOfAccount is ERC20, Ownable {
         ERC20(_name, _symbol, _decimals)
         Ownable(msg.sender)
     {
-        periphery = msg.sender;
+        controller = msg.sender;
     }
 
     /// @notice Mints new tokens to a specified address

@@ -6,7 +6,7 @@ pragma solidity ^0.8.0;
 /// @dev Contains the deposit order details along with incentives for execution
 struct DepositIntent {
     DepositOrder deposit; // The core deposit order parameters
-    uint256 chaindId; // Chain ID for replay protection
+    uint256 chainId; // Chain ID for replay protection
     uint256 relayerTip; // Amount paid to relayer for executing the intent (in deposit asset)
     uint256 bribe; // Amount paid to fund to cover potential rebalancing costs when accepting deposits
     uint256 nonce; // Nonce for replay protection
@@ -16,11 +16,12 @@ struct DepositIntent {
 /// @dev Used both directly and as part of DepositIntent
 struct DepositOrder {
     uint256 accountId; // ID of the broker account
-    address recipient; // Address to receive the minted shares
-    address asset; // Asset being deposited
     uint256 amount; // Amount of asset to deposit
     uint256 deadline; // Timestamp after which this order expires
     uint256 minSharesOut; // Minimum acceptable number of shares to receive
+    address recipient; // Address to receive the minted shares
+    address asset; // Asset being deposited
+    address minter; // Address that is minting the shares
     uint16 referralCode; // Optional referral code
 }
 
@@ -33,11 +34,12 @@ struct SignedDepositIntent {
 /// @notice Core parameters for a withdrawal order
 struct WithdrawOrder {
     uint256 accountId; // ID of the broker account
-    address to; // Address to receive the withdrawn assets
-    address asset; // Asset to withdraw into
     uint256 shares; // Number of shares to burn
     uint256 deadline; // Timestamp after which this order expires
     uint256 minAmountOut; // Minimum acceptable amount of asset to receive
+    address to; // Address to receive the withdrawn assets
+    address burner; // Address that is burning the shares
+    address asset; // Asset to withdraw into
     uint16 referralCode; // Optional referral code
 }
 
@@ -45,7 +47,7 @@ struct WithdrawOrder {
 /// @dev Contains the withdrawal order details along with incentives for execution
 struct WithdrawIntent {
     WithdrawOrder withdraw; // The core withdrawal order parameters
-    uint256 chaindId; // Chain ID for replay protection
+    uint256 chainId; // Chain ID for replay protection
     uint256 relayerTip; // Amount paid to relayer for executing the intent (in withdrawal asset)
     uint256 bribe; // Amount paid to fund to cover potential rebalancing costs when accepting withdrawals
     uint256 nonce; // Nonce for replay protection
@@ -79,9 +81,6 @@ struct AssetPolicy {
 /// @notice Information about a broker's account
 /// @dev Tracks fees, limits, and accounting information
 struct BrokerAccountInfo {
-    bool transferable; // Whether the broker NFT can be transferred
-    AccountState state; // Current state of the account
-    address feeRecipient; // Address to receive broker's fees
     uint256 expirationTimestamp; // When the account expires
     uint256 shareMintLimit; // Maximum shares that can be minted
     uint256 cumulativeSharesMinted; // Total shares minted over account lifetime
@@ -94,6 +93,10 @@ struct BrokerAccountInfo {
     uint256 brokerExitFeeInBps; // Broker's exit fee (basis points)
     uint256 protocolExitFeeInBps; // Protocol's exit fee (basis points)
     uint256 nonce; // Current nonce for replay protection
+    bool transferable; // Whether the broker NFT can be transferred
+    bool isPublic; // Whether the broker account can be used by anyone
+    AccountState state; // Current state of the account
+    address feeRecipient; // Address to receive broker's fees
 }
 
 /// @notice A broker's complete account information
@@ -116,4 +119,5 @@ struct CreateAccountParams {
     address feeRecipient; // Address to receive broker's fees
     address user; // Owner of the broker account
     bool transferable; // Whether the broker NFT can be transferred
+    bool isPublic; // Whether the broker account can be used by anyone
 }

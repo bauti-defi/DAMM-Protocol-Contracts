@@ -2,7 +2,7 @@
 
 pragma solidity ^0.8.0;
 
-import {ISafe} from "@src/interfaces/ISafe.sol";
+import {IAvatar} from "@zodiac/interfaces/IAvatar.sol";
 import {Enum} from "@safe-contracts/common/Enum.sol";
 import {Errors} from "@src/libs/Errors.sol";
 
@@ -19,7 +19,7 @@ library SafeLib {
     /// @param operation Operation type (Call or DelegateCall)
     /// @return bytes The return data from the transaction
     function executeAndReturnDataOrRevert(
-        ISafe safe,
+        IAvatar safe,
         address target,
         uint256 value,
         bytes memory data,
@@ -45,9 +45,12 @@ library SafeLib {
     /// @param asset_ The token address to transfer (or native token address)
     /// @param to_ The recipient address
     /// @param amount_ The amount to transfer
-    function transferAssetFromSafeOrRevert(ISafe safe, address asset_, address to_, uint256 amount_)
-        internal
-    {
+    function transferAssetFromSafeOrRevert(
+        IAvatar safe,
+        address asset_,
+        address to_,
+        uint256 amount_
+    ) internal {
         /// call fund to transfer asset out
         bytes memory returnData = executeAndReturnDataOrRevert(
             safe,
