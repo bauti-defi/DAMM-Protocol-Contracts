@@ -223,7 +223,7 @@ contract DepositModule is
         internalVault.mintUnbacked(sharesToMint, recipient);
     }
 
-    function _validateAssetPolicy(AssetPolicy memory policy, bool isDeposit) private view {
+    function _validateAssetPolicy(AssetPolicy memory policy, bool isDeposit) private pure {
         if (
             (!policy.canDeposit && isDeposit) || (!policy.canWithdraw && !isDeposit)
                 || !policy.enabled

@@ -6,7 +6,7 @@ pragma solidity ^0.8.0;
 /// @dev Contains the deposit order details along with incentives for execution
 struct DepositIntent {
     DepositOrder deposit; // The core deposit order parameters
-    uint256 chaindId; // Chain ID for replay protection
+    uint256 chainId; // Chain ID for replay protection
     uint256 relayerTip; // Amount paid to relayer for executing the intent (in deposit asset)
     uint256 bribe; // Amount paid to fund to cover potential rebalancing costs when accepting deposits
     uint256 nonce; // Nonce for replay protection
@@ -47,7 +47,7 @@ struct WithdrawOrder {
 /// @dev Contains the withdrawal order details along with incentives for execution
 struct WithdrawIntent {
     WithdrawOrder withdraw; // The core withdrawal order parameters
-    uint256 chaindId; // Chain ID for replay protection
+    uint256 chainId; // Chain ID for replay protection
     uint256 relayerTip; // Amount paid to relayer for executing the intent (in withdrawal asset)
     uint256 bribe; // Amount paid to fund to cover potential rebalancing costs when accepting withdrawals
     uint256 nonce; // Nonce for replay protection

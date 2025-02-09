@@ -217,12 +217,13 @@ contract TestDepositPermissions is TestBaseDeposit {
 
         mockToken1.mint(alice, limit_ + 1);
 
+        SignedDepositIntent memory dOrder =
+            depositIntent(1, alice, alicePK, alice, address(mockToken1), type(uint256).max, 0, 0, 0);
+
         vm.prank(address(fund));
         vm.expectRevert(Errors.Deposit_NetDepositLimitExceeded.selector);
         // deposit max amount
-        periphery.intentDeposit(
-            depositIntent(1, alice, alicePK, alice, address(mockToken1), type(uint256).max, 0, 0, 0)
-        );
+        periphery.intentDeposit(dOrder);
     }
 
     function test_only_enabled_account_can_deposit_withdraw(uint256 accountId_) public {
@@ -337,7 +338,7 @@ contract TestDepositPermissions is TestBaseDeposit {
         DepositIntent memory dIntent =
             unsignedDepositIntent(1, alice, alice, address(mockToken1), mock1Unit, 0, 0, 0);
 
-        dIntent.chaindId = chainId_;
+        dIntent.chainId = chainId_;
 
         SignedDepositIntent memory dOrder = signdepositIntent(dIntent, alicePK);
 
@@ -348,7 +349,7 @@ contract TestDepositPermissions is TestBaseDeposit {
         WithdrawIntent memory wIntent =
             unsignedWithdrawIntent(1, alice, alice, address(mockToken1), mock1Unit, 0, 0, 0);
 
-        wIntent.chaindId = chainId_;
+        wIntent.chainId = chainId_;
 
         SignedWithdrawIntent memory wOrder = signsignedWithdrawIntent(wIntent, alicePK);
 

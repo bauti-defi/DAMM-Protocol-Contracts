@@ -25,6 +25,7 @@ import {IPermit2} from "@permit2/src/interfaces/IPermit2.sol";
 import "@zodiac/factory/FactoryFriendly.sol";
 import "@src/interfaces/IPeriphery.sol";
 import "@src/interfaces/IDepositModule.sol";
+import "@openzeppelin-contracts/utils/cryptography/EIP712.sol";
 
 bytes32 constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 bytes32 constant CONTROLLER_ROLE = keccak256("CONTROLLER_ROLE");
@@ -38,6 +39,7 @@ bytes32 constant MINTER_ROLE = keccak256("MINTER_ROLE");
 ///      - Broker account management (NFTs)
 ///      - Fee collection and distribution
 contract Periphery is
+    EIP712,
     FactoryFriendly,
     ERC721Upgradeable,
     AccessControlUpgradeable,
@@ -48,7 +50,10 @@ contract Periphery is
     using DepositLibs for BrokerAccountInfo;
     using DepositLibs for address;
     using DepositLibs for ERC20;
+    using DepositLibs for DepositIntent;
+    using DepositLibs for WithdrawIntent;
     using SafeTransferLib for ERC20;
+
     using SafeLib for IAvatar;
     using SafeCast for uint256;
     using SignedMath for int256;
@@ -75,7 +80,7 @@ contract Periphery is
 
     /// @dev Constructor for the Periphery contract
     /// @param permit2_ The address of the permit2 contract
-    constructor(address permit2_) {
+    constructor(address permit2_, string memory version_) EIP712("DAMM Periphery", version_) {
         permit2 = permit2_;
     }
 
@@ -163,10 +168,10 @@ contract Periphery is
         _validateBrokerAssetPolicy(order.intent.deposit.asset, broker, true);
 
         DepositLibs.validateIntent(
-            abi.encode(order.intent),
+            _hashTypedDataV4(order.intent.hashDepositIntent()),
             order.signature,
             order.intent.deposit.minter,
-            order.intent.chaindId,
+            order.intent.chainId,
             broker.account.nonce++,
             order.intent.nonce
         );
@@ -321,10 +326,10 @@ contract Periphery is
         _validateBrokerAssetPolicy(order.intent.withdraw.asset, broker, false);
 
         DepositLibs.validateIntent(
-            abi.encode(order.intent),
+            _hashTypedDataV4(order.intent.hashWithdrawIntent()),
             order.signature,
             order.intent.withdraw.burner,
-            order.intent.chaindId,
+            order.intent.chainId,
             broker.account.nonce++,
             order.intent.nonce
         );
@@ -821,5 +826,9 @@ contract Periphery is
         returns (bool)
     {
         return interfaceId == type(IPeriphery).interfaceId || super.supportsInterface(interfaceId);
+    }
+
+    function domainSeparatorV4() public view returns (bytes32) {
+        return _domainSeparatorV4();
     }
 }

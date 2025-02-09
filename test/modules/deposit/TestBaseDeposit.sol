@@ -8,8 +8,8 @@ import {Periphery} from "@src/modules/deposit/Periphery.sol";
 import {BalanceOfOracle} from "@src/oracles/BalanceOfOracle.sol";
 import {MockERC20} from "@test/mocks/MockERC20.sol";
 import {MockPriceOracle} from "@test/mocks/MockPriceOracle.sol";
-import {MessageHashUtils} from "@openzeppelin-contracts/utils/cryptography/MessageHashUtils.sol";
 import {SignedMath} from "@openzeppelin-contracts/utils/math/SignedMath.sol";
+import {MessageHashUtils} from "@openzeppelin-contracts/utils/cryptography/MessageHashUtils.sol";
 import {console2} from "@forge-std/Test.sol";
 import "@src/libs/Constants.sol";
 import "@src/modules/deposit/Structs.sol";
@@ -29,6 +29,8 @@ uint256 constant MINIMUM_WITHDRAWAL = 1000;
 
 abstract contract TestBaseDeposit is TestBaseGnosis, DeployPermit2 {
     using MessageHashUtils for bytes;
+    using DepositLibs for DepositIntent;
+    using DepositLibs for WithdrawIntent;
     using SignedMath for int256;
 
     bytes32 internal constant PERMIT_TYPEHASH = keccak256(
@@ -126,7 +128,7 @@ abstract contract TestBaseDeposit is TestBaseGnosis, DeployPermit2 {
 
         assertTrue(fund.isModuleEnabled(address(depositModule)), "DepositModule not module");
 
-        peripheryMastercopy = address(new Periphery(permit2));
+        peripheryMastercopy = address(new Periphery(permit2, "1"));
 
         bytes memory initializer = abi.encodeWithSelector(
             Periphery.setUp.selector,
@@ -220,6 +222,7 @@ abstract contract TestBaseDeposit is TestBaseGnosis, DeployPermit2 {
         uint256 sigDeadline
     )
         internal
+        view
         returns (IAllowanceTransfer.PermitSingle memory permitSingle, bytes memory signature)
     {
         permitSingle = IAllowanceTransfer.PermitSingle({
@@ -328,6 +331,10 @@ abstract contract TestBaseDeposit is TestBaseGnosis, DeployPermit2 {
         _;
     }
 
+    function peripheryHashTypedDataV4(bytes32 structHash) internal view returns (bytes32) {
+        return MessageHashUtils.toTypedDataHash(periphery.domainSeparatorV4(), structHash);
+    }
+
     function depositOrder(
         uint256 accountId,
         address minter,
@@ -368,7 +375,7 @@ abstract contract TestBaseDeposit is TestBaseGnosis, DeployPermit2 {
                 minSharesOut: 0,
                 referralCode: 0
             }),
-            chaindId: block.chainid,
+            chainId: block.chainid,
             relayerTip: relayerTip,
             bribe: bribe,
             nonce: nonce
@@ -388,14 +395,14 @@ abstract contract TestBaseDeposit is TestBaseGnosis, DeployPermit2 {
     ) internal view returns (SignedDepositIntent memory) {
         DepositIntent memory intent = DepositIntent({
             deposit: depositOrder(accountId, minter, recipient, token, amount),
-            chaindId: block.chainid,
+            chainId: block.chainid,
             relayerTip: relayerTip,
             bribe: bribe,
             nonce: nonce
         });
 
         (uint8 v, bytes32 r, bytes32 s) =
-            vm.sign(minterPk, abi.encode(intent).toEthSignedMessageHash());
+            vm.sign(minterPk, peripheryHashTypedDataV4(intent.hashDepositIntent()));
 
         return SignedDepositIntent({intent: intent, signature: abi.encodePacked(r, s, v)});
     }
@@ -440,7 +447,7 @@ abstract contract TestBaseDeposit is TestBaseGnosis, DeployPermit2 {
                 minAmountOut: 0,
                 referralCode: 0
             }),
-            chaindId: block.chainid,
+            chainId: block.chainid,
             relayerTip: relayerTip,
             bribe: bribe,
             nonce: nonce
@@ -460,36 +467,36 @@ abstract contract TestBaseDeposit is TestBaseGnosis, DeployPermit2 {
     ) internal view returns (SignedWithdrawIntent memory) {
         WithdrawIntent memory intent = WithdrawIntent({
             withdraw: withdrawOrder(accountId, burner, to, asset, shares),
-            chaindId: block.chainid,
+            chainId: block.chainid,
             relayerTip: relayerTip,
             bribe: bribe,
             nonce: nonce
         });
 
         (uint8 v, bytes32 r, bytes32 s) =
-            vm.sign(burnerPk, abi.encode(intent).toEthSignedMessageHash());
+            vm.sign(burnerPk, peripheryHashTypedDataV4(intent.hashWithdrawIntent()));
 
         return SignedWithdrawIntent({intent: intent, signature: abi.encodePacked(r, s, v)});
     }
 
     function signdepositIntent(DepositIntent memory intent, uint256 userPK)
         internal
-        pure
+        view
         returns (SignedDepositIntent memory)
     {
         (uint8 v, bytes32 r, bytes32 s) =
-            vm.sign(userPK, abi.encode(intent).toEthSignedMessageHash());
+            vm.sign(userPK, peripheryHashTypedDataV4(intent.hashDepositIntent()));
 
         return SignedDepositIntent({intent: intent, signature: abi.encodePacked(r, s, v)});
     }
 
     function signsignedWithdrawIntent(WithdrawIntent memory intent, uint256 userPK)
         internal
-        pure
+        view
         returns (SignedWithdrawIntent memory)
     {
         (uint8 v, bytes32 r, bytes32 s) =
-            vm.sign(userPK, abi.encode(intent).toEthSignedMessageHash());
+            vm.sign(userPK, peripheryHashTypedDataV4(intent.hashWithdrawIntent()));
 
         return SignedWithdrawIntent({intent: intent, signature: abi.encodePacked(r, s, v)});
     }
