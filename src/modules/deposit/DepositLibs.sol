@@ -40,16 +40,23 @@ library DepositLibs {
         "WithdrawIntent(WithdrawOrder withdraw,uint256 chainId,uint256 relayerTip,uint256 bribe,uint256 nonce)WithdrawOrder(uint256 accountId,uint256 shares,uint256 deadline,uint256 minAmountOut,address to,address burner,address asset,uint16 referralCode)"
     );
 
+    /// @notice Hashes a deposit order for signature verification
+    /// @dev Uses EIP-712 typed data hashing
+    /// @param order The deposit order to hash
+    /// @return The EIP-712 compliant hash of the deposit order
     function hashDepositOrder(DepositOrder memory order) internal pure returns (bytes32) {
         return keccak256(abi.encode(_DEPOSIT_ORDER_TYPEHASH, order));
     }
 
+    /// @notice Hashes a deposit intent for signature verification
+    /// @dev Combines deposit order hash with additional intent parameters
+    /// @param intent The deposit intent to hash
+    /// @return The EIP-712 compliant hash of the deposit intent
     function hashDepositIntent(DepositIntent memory intent) internal pure returns (bytes32) {
-        bytes32 depositOrderHash = hashDepositOrder(intent.deposit);
         return keccak256(
             abi.encode(
                 _DEPOSIT_INTENT_TYPEHASH,
-                depositOrderHash,
+                hashDepositOrder(intent.deposit),
                 intent.chainId,
                 intent.relayerTip,
                 intent.bribe,
@@ -58,16 +65,23 @@ library DepositLibs {
         );
     }
 
+    /// @notice Hashes a withdrawal order for signature verification
+    /// @dev Uses EIP-712 typed data hashing
+    /// @param order The withdrawal order to hash
+    /// @return The EIP-712 compliant hash of the withdrawal order
     function hashWithdrawOrder(WithdrawOrder memory order) internal pure returns (bytes32) {
         return keccak256(abi.encode(_WITHDRAW_ORDER_TYPEHASH, order));
     }
 
+    /// @notice Hashes a withdrawal intent for signature verification
+    /// @dev Combines withdrawal order hash with additional intent parameters
+    /// @param intent The withdrawal intent to hash
+    /// @return The EIP-712 compliant hash of the withdrawal intent
     function hashWithdrawIntent(WithdrawIntent memory intent) internal pure returns (bytes32) {
-        bytes32 withdrawOrderHash = hashWithdrawOrder(intent.withdraw);
         return keccak256(
             abi.encode(
                 _WITHDRAW_INTENT_TYPEHASH,
-                withdrawOrderHash,
+                hashWithdrawOrder(intent.withdraw),
                 intent.chainId,
                 intent.relayerTip,
                 intent.bribe,
@@ -99,6 +113,12 @@ library DepositLibs {
         if (blockId != block.chainid) revert Errors.Deposit_InvalidChain();
     }
 
+    /// @notice Determines the actual asset amount to use for a transaction
+    /// @dev If amount is max uint256, uses the holder's full balance
+    /// @param asset_ The token address
+    /// @param amount_ The requested amount (max uint256 means use full balance)
+    /// @param holder_ The address holding the tokens
+    /// @return assetAmount The actual amount to use
     function deduceAssetAmount(address asset_, uint256 amount_, address holder_)
         internal
         view
@@ -111,6 +131,11 @@ library DepositLibs {
         }
     }
 
+    /// @notice Transfers tokens if amount is greater than zero
+    /// @dev Uses SafeTransferLib for safe token transfers
+    /// @param token The ERC20 token to transfer
+    /// @param recipient The recipient of the tokens
+    /// @param amount The amount to transfer
     function pay(ERC20 token, address recipient, uint256 amount) internal {
         if (amount > 0) token.safeTransfer(recipient, amount);
     }
