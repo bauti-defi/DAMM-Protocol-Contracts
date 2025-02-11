@@ -740,7 +740,8 @@ contract Periphery is
             block.timestamp + params_.ttl,
             params_.shareMintLimit,
             feeRecipient,
-            params_.transferable
+            params_.transferable,
+            params_.isPublic
         );
     }
 

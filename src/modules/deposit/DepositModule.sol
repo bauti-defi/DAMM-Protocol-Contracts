@@ -31,6 +31,7 @@ bytes32 constant CONTROLLER_ROLE = keccak256("CONTROLLER_ROLE");
 ///      - Asset deposits/withdrawals through the Fund
 ///      - Unit of account token minting/burning
 ///      - ERC4626 vault share accounting
+///      - Global asset policies for deposits and withdrawals
 contract DepositModule is
     Module,
     AccessControlUpgradeable,
@@ -174,6 +175,7 @@ contract DepositModule is
         }
     }
 
+    /// @inheritdoc IDepositModule
     function withdraw(address asset, uint256 sharesToBurn, uint256 minAmountOut, address recipient)
         public
         whenNotPaused

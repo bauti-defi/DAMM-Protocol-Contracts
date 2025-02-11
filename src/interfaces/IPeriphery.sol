@@ -16,7 +16,8 @@ interface IPeriphery {
         uint256 expirationTimestamp,
         uint256 shareMintLimit,
         address feeRecipient,
-        bool transferable
+        bool transferable,
+        bool isPublic
     );
 
     event PeripherySetup(

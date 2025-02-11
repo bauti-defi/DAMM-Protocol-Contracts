@@ -2,14 +2,14 @@
 
 pragma solidity ^0.8.0;
 
-/// @title IPeriphery
-/// @notice Interface for the Periphery contract which manages deposits, withdrawals, and brokerage accounts for a Fund
-/// @dev Each Periphery is paired with exactly one Fund and manages its own ERC721 tokens representing brokerage accounts
 import "@euler-price-oracle/interfaces/IPriceOracle.sol";
 import "@src/modules/deposit/Structs.sol";
 import {UnitOfAccount} from "@src/modules/deposit/UnitOfAccount.sol";
 import {FundShareVault} from "@src/modules/deposit/FundShareVault.sol";
 
+/// @title IDepositModule
+/// @notice Interface for the DepositModule contract which manages deposits, withdrawals, and global asset policies for a Fund
+/// @dev Each DepositModule is paired with exactly one Fund
 interface IDepositModule {
     event DepositModuleSetup(
         address indexed initiator, address indexed owner, address indexed avatar, address target
@@ -21,7 +21,7 @@ interface IDepositModule {
 
     event NetDepositLimitUpdated(uint256 oldLimit, uint256 newLimit);
 
-    /// @notice The Fund contract this Periphery is associated with
+    /// @notice The Fund this DepositModule is associated with
     function fund() external returns (address);
 
     /// @notice The oracle used for price quotes
