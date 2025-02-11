@@ -4,6 +4,7 @@ pragma solidity ^0.8.0;
 import {TestBaseDeposit} from "./TestBaseDeposit.sol";
 import {AssetPolicy} from "@src/modules/deposit/Structs.sol";
 import {IDepositModule} from "@src/interfaces/IDepositModule.sol";
+import {Errors} from "@src/libs/Errors.sol";
 import "@src/libs/Constants.sol";
 
 contract TestDepositModule is TestBaseDeposit {
@@ -28,14 +29,57 @@ contract TestDepositModule is TestBaseDeposit {
         );
         mockToken1.mint(alice, amount);
 
-        vm.startPrank(alice);
-        depositModule.deposit(address(mockToken1), amount, 0, alice);
-        vm.stopPrank();
+        vm.prank(alice);
+        (uint256 sharesOut, uint256 liquidity) =
+            depositModule.deposit(address(mockToken1), amount, 0, alice);
 
         assertEq(mockToken1.balanceOf(address(fund)), amount);
         assertEq(mockToken1.balanceOf(address(alice)), 0);
         assertEq(internalVault.totalAssets(), amount);
         assertEq(internalVault.totalSupply(), internalVault.balanceOf(alice));
+        assertEq(sharesOut, internalVault.balanceOf(alice));
+        assertEq(internalVault.totalAssets(), liquidity);
+    }
+
+    function test_cannot_deposit_amount_that_is_below_minimum_deposit(uint256 amount)
+        public
+        withRole(alice, CONTROLLER_ROLE)
+        maxApproveDepositModule(alice, address(mockToken1))
+    {
+        amount = bound(
+            amount, 1, depositModule.getGlobalAssetPolicy(address(mockToken1)).minimumDeposit - 1
+        );
+
+        vm.startPrank(alice);
+        vm.expectRevert(Errors.Deposit_InsufficientDeposit.selector);
+        depositModule.deposit(address(mockToken1), amount, 0, alice);
+        vm.stopPrank();
+    }
+
+    function test_cannot_deposit_zero_amount() public withRole(alice, CONTROLLER_ROLE) {
+        vm.startPrank(alice);
+        vm.expectRevert(Errors.Deposit_InsufficientDeposit.selector);
+        depositModule.deposit(address(mockToken1), 0, 0, alice);
+        vm.stopPrank();
+    }
+
+    function test_deposit_slippage_limit_is_exceeded(uint256 amount)
+        public
+        withRole(alice, CONTROLLER_ROLE)
+        maxApproveDepositModule(alice, address(mockToken1))
+    {
+        amount = bound(
+            amount,
+            depositModule.getGlobalAssetPolicy(address(mockToken1)).minimumDeposit + 1,
+            type(uint192).max
+        );
+
+        mockToken1.mint(alice, amount);
+
+        vm.startPrank(alice);
+        vm.expectRevert(Errors.Deposit_SlippageLimitExceeded.selector);
+        depositModule.deposit(address(mockToken1), amount, amount * 10e2, alice);
+        vm.stopPrank();
     }
 
     function test_withdraw(uint256 amount)
@@ -54,14 +98,71 @@ contract TestDepositModule is TestBaseDeposit {
         vm.prank(alice);
         depositModule.deposit(address(mockToken1), amount, 0, alice);
 
+        uint256 currentLiquidity = internalVault.totalAssets();
+
         vm.startPrank(alice);
-        depositModule.withdraw(address(mockToken1), internalVault.balanceOf(alice), 0, alice);
+        (uint256 assetAmountOut, uint256 liquidity) =
+            depositModule.withdraw(address(mockToken1), internalVault.balanceOf(alice), 0, alice);
         vm.stopPrank();
 
         assertEq(mockToken1.balanceOf(alice), amount);
+        assertEq(assetAmountOut, amount);
         assertEq(mockToken1.balanceOf(address(fund)), 0);
         assertEq(internalVault.totalAssets(), 0);
         assertEq(internalVault.totalSupply(), 0);
+        assertEq(liquidity, currentLiquidity);
+    }
+
+    function test_cannot_withdraw_amount_that_is_below_minimum_withdrawal(uint256 amount)
+        public
+        withRole(alice, CONTROLLER_ROLE)
+        maxApproveDepositModule(alice, address(mockToken1))
+        maxApproveDepositModule(alice, address(internalVault))
+    {
+        mockToken1.mint(alice, type(uint160).max);
+
+        vm.prank(alice);
+        depositModule.deposit(address(mockToken1), type(uint160).max, 0, alice);
+
+        amount = bound(
+            amount, 1, depositModule.getGlobalAssetPolicy(address(mockToken1)).minimumWithdrawal - 1
+        );
+
+        vm.startPrank(alice);
+        vm.expectRevert(Errors.Deposit_InsufficientWithdrawal.selector);
+        depositModule.withdraw(address(mockToken1), amount, 0, alice);
+        vm.stopPrank();
+    }
+
+    function test_cannot_withdraw_zero_amount() public withRole(alice, CONTROLLER_ROLE) {
+        vm.startPrank(alice);
+        vm.expectRevert(Errors.Deposit_InsufficientWithdrawal.selector);
+        depositModule.withdraw(address(mockToken1), 0, 0, alice);
+        vm.stopPrank();
+    }
+
+    function test_withdraw_slippage_limit_is_exceeded(uint256 amount)
+        public
+        withRole(alice, CONTROLLER_ROLE)
+        maxApproveDepositModule(alice, address(mockToken1))
+        maxApproveDepositModule(alice, address(internalVault))
+    {
+        amount = bound(
+            amount,
+            depositModule.getGlobalAssetPolicy(address(mockToken1)).minimumWithdrawal + 1,
+            type(uint192).max
+        );
+
+        mockToken1.mint(alice, amount);
+
+        vm.prank(alice);
+        (uint256 sharesOut, uint256 liquidity) =
+            depositModule.deposit(address(mockToken1), amount, 0, alice);
+
+        vm.startPrank(alice);
+        vm.expectRevert(Errors.Deposit_SlippageLimitExceeded.selector);
+        depositModule.withdraw(address(mockToken1), sharesOut, amount + 1, alice);
+        vm.stopPrank();
     }
 
     function test_dilute(uint256 amount) public withRole(alice, CONTROLLER_ROLE) {

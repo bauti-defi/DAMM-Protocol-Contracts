@@ -12,6 +12,7 @@ import {DepositLibs} from "@src/modules/deposit/DepositLibs.sol";
 import {TestBaseDeposit} from "./TestBaseDeposit.sol";
 import {IPermit2} from "@permit2/src/interfaces/IPermit2.sol";
 import "@src/libs/Constants.sol";
+import "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 
 contract TestDepositModulePermissions is TestBaseDeposit {
     using MessageHashUtils for bytes;
@@ -177,5 +178,23 @@ contract TestDepositModulePermissions is TestBaseDeposit {
         depositModule.setPauser(alice);
 
         assertTrue(depositModule.hasRole(PAUSER_ROLE, alice));
+    }
+
+    function test_can_only_deposit_when_not_paused() public {
+        vm.prank(address(fund));
+        depositModule.pause();
+
+        vm.prank(alice);
+        vm.expectRevert(PausableUpgradeable.EnforcedPause.selector);
+        depositModule.deposit(address(mockToken1), type(uint256).max, 0, alice);
+    }
+
+    function test_can_only_withdraw_when_not_paused() public {
+        vm.prank(address(fund));
+        depositModule.pause();
+
+        vm.prank(alice);
+        vm.expectRevert(PausableUpgradeable.EnforcedPause.selector);
+        depositModule.withdraw(address(mockToken1), type(uint256).max, 0, alice);
     }
 }
