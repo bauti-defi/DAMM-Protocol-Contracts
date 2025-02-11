@@ -2,31 +2,23 @@
 pragma solidity ^0.8.0;
 
 import {EulerRouter} from "@euler-price-oracle/EulerRouter.sol";
-import {
-    Periphery,
-    CONTROLLER_ROLE,
-    MINTER_ROLE,
-    PAUSER_ROLE,
-    IAccessControl,
-    IERC721Errors
-} from "@src/modules/deposit/Periphery.sol";
+import {Periphery, IAccessControl, IERC721Errors} from "@src/modules/deposit/Periphery.sol";
 import "@src/modules/deposit/Structs.sol";
 import {MockERC20} from "@test/mocks/MockERC20.sol";
 import {MockPriceOracle} from "@test/mocks/MockPriceOracle.sol";
 import "@openzeppelin-contracts/utils/cryptography/MessageHashUtils.sol";
 import "@src/libs/Errors.sol";
-import {BP_DIVISOR} from "@src/libs/Constants.sol";
 import {DepositLibs} from "@src/modules/deposit/DepositLibs.sol";
-import {TestBaseDeposit} from "./TestBaseDeposit.sol";
+import {TestBasePeriphery} from "./TestBasePeriphery.sol";
 import {IPermit2} from "@permit2/src/interfaces/IPermit2.sol";
-import {FUND_ROLE} from "@src/modules/deposit/DepositModule.sol";
+import "@src/libs/Constants.sol";
 
-contract TestDepositPermissions is TestBaseDeposit {
+contract TestDepositPermissions is TestBasePeriphery {
     using MessageHashUtils for bytes;
     using DepositLibs for BrokerAccountInfo;
 
-    function setUp() public override(TestBaseDeposit) {
-        TestBaseDeposit.setUp();
+    function setUp() public override(TestBasePeriphery) {
+        TestBasePeriphery.setUp();
 
         mockToken1.mint(alice, 100_000_000 * mock1Unit);
 

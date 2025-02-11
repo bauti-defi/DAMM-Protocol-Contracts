@@ -21,10 +21,6 @@ import {SafeLib} from "@src/libs/SafeLib.sol";
 import {Module} from "@zodiac/core/Module.sol";
 import "@src/interfaces/IDepositModule.sol";
 
-bytes32 constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
-bytes32 constant FUND_ROLE = keccak256("FUND_ROLE");
-bytes32 constant CONTROLLER_ROLE = keccak256("CONTROLLER_ROLE");
-
 /// @title DepositModule
 /// @notice Manages deposits and withdrawals from a Fund
 /// @dev The module handles:

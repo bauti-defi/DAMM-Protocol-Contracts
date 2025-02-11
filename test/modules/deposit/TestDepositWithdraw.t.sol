@@ -4,7 +4,7 @@ pragma solidity ^0.8.0;
 import "@src/modules/deposit/Structs.sol";
 import "@openzeppelin-contracts/utils/math/SignedMath.sol";
 import "@src/libs/Constants.sol";
-import {TestBaseDeposit} from "./TestBaseDeposit.sol";
+import {TestBasePeriphery} from "./TestBasePeriphery.sol";
 import {Errors} from "@src/libs/Errors.sol";
 import {MessageHashUtils} from "@openzeppelin-contracts/utils/cryptography/MessageHashUtils.sol";
 import "@permit2/src/interfaces/IAllowanceTransfer.sol";
@@ -15,11 +15,11 @@ uint256 constant MAX_NET_PERFORMANCE_FEE_IN_BPS = 7_000;
 uint256 constant MAX_NET_ENTRANCE_FEE_IN_BPS = 5_000;
 uint256 constant MAX_NET_MANAGEMENT_FEE_IN_BPS = 5_000;
 
-contract TestDepositWithdraw is TestBaseDeposit {
+contract TestDepositWithdraw is TestBasePeriphery {
     using SignedMath for int256;
 
-    function setUp() public override(TestBaseDeposit) {
-        TestBaseDeposit.setUp();
+    function setUp() public override(TestBasePeriphery) {
+        TestBasePeriphery.setUp();
 
         vm.prank(address(fund));
         balanceOfOracle.addBalanceToValuate(address(mockToken1), address(fund));

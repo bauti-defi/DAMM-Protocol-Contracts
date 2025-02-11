@@ -27,10 +27,6 @@ import "@src/interfaces/IPeriphery.sol";
 import "@src/interfaces/IDepositModule.sol";
 import "@openzeppelin-contracts/utils/cryptography/EIP712.sol";
 
-bytes32 constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
-bytes32 constant CONTROLLER_ROLE = keccak256("CONTROLLER_ROLE");
-bytes32 constant MINTER_ROLE = keccak256("MINTER_ROLE");
-
 /// @title Periphery
 /// @notice Manages deposits, withdrawals, and brokerage accounts for a Fund
 /// @dev Each Periphery is paired with exactly one Fund and manages ERC721 tokens representing brokerage accounts.
