@@ -15,6 +15,8 @@ import "@src/libs/Constants.sol";
 import "@src/modules/deposit/Structs.sol";
 import {ModuleProxyFactory} from "@zodiac/factory/ModuleProxyFactory.sol";
 import "@src/modules/deposit/DepositModule.sol";
+import {IERC20} from "@openzeppelin-contracts/token/ERC20/IERC20.sol";
+import {IERC4626} from "@openzeppelin-contracts/interfaces/IERC4626.sol";
 
 uint8 constant VALUATION_DECIMALS = 18;
 uint256 constant VAULT_DECIMAL_OFFSET = 1;
@@ -23,8 +25,6 @@ uint256 constant MINIMUM_WITHDRAWAL = 1000;
 
 abstract contract TestBaseDeposit is TestBaseGnosis {
     using MessageHashUtils for bytes;
-    using DepositLibs for DepositIntent;
-    using DepositLibs for WithdrawIntent;
     using SignedMath for int256;
 
     address internal fundAdmin;
@@ -35,6 +35,8 @@ abstract contract TestBaseDeposit is TestBaseGnosis {
     address internal depositModuleMastercopy;
     MockERC20 internal mockToken1;
     MockERC20 internal mockToken2;
+
+    IERC4626 internal internalVault;
 
     BalanceOfOracle internal balanceOfOracle;
 
@@ -106,6 +108,8 @@ abstract contract TestBaseDeposit is TestBaseGnosis {
 
         assertTrue(fund.isModuleEnabled(address(depositModule)), "DepositModule not module");
 
+        internalVault = IERC4626(address(depositModule.internalVault()));
+
         /// @notice this much match the vault implementation
         oneUnitOfAccount =
             1 * 10 ** (depositModule.unitOfAccount().decimals() + VAULT_DECIMAL_OFFSET);
@@ -159,5 +163,19 @@ abstract contract TestBaseDeposit is TestBaseGnosis {
         vm.startPrank(address(fund));
         oracleRouter.govSetResolvedVault(depositModule.getVault(), true);
         vm.stopPrank();
+    }
+
+    modifier withRole(address user, bytes32 role) {
+        vm.startPrank(address(fund));
+        depositModule.grantRole(role, user);
+        vm.stopPrank();
+        _;
+    }
+
+    modifier maxApproveDepositModule(address user, address token) {
+        vm.startPrank(user);
+        IERC20(token).approve(address(depositModule), type(uint256).max);
+        vm.stopPrank();
+        _;
     }
 }

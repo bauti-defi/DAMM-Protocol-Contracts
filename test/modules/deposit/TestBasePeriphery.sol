@@ -23,11 +23,6 @@ import {IERC20Permit} from "@openzeppelin-contracts/token/ERC20/extensions/IERC2
 import {TestBaseDeposit} from "./TestBaseDeposit.sol";
 import {DepositLibs} from "@src/modules/deposit/DepositLibs.sol";
 
-uint8 constant VALUATION_DECIMALS = 18;
-uint256 constant VAULT_DECIMAL_OFFSET = 1;
-uint256 constant MINIMUM_DEPOSIT = 1000;
-uint256 constant MINIMUM_WITHDRAWAL = 1000;
-
 abstract contract TestBasePeriphery is TestBaseDeposit, DeployPermit2 {
     using MessageHashUtils for bytes;
     using DepositLibs for DepositIntent;
