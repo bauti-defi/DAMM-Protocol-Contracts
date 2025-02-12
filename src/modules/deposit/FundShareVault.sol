@@ -13,17 +13,27 @@ contract FundShareVault is ERC4626, ERC20Permit, Ownable {
     /// @notice The deposit module contract address that has exclusive operation rights
     address public immutable controller;
 
+    /// @notice The decimal offset to mitigate share inflation attacks
+    uint8 public immutable decimalsOffset;
+
     /// @notice Creates a new Fund Share Vault
     /// @param _unitOfAccount The underlying unit of account token
     /// @param _name The name of the vault shares token
     /// @param _symbol The symbol of the vault shares token
-    constructor(address _unitOfAccount, string memory _name, string memory _symbol)
+    /// @param _decimalsOffset The decimal offset to mitigate share inflation attacks
+    constructor(
+        address _unitOfAccount,
+        string memory _name,
+        string memory _symbol,
+        uint8 _decimalsOffset
+    )
         ERC4626(IERC20(_unitOfAccount))
         ERC20(_name, _symbol)
         ERC20Permit(_name)
         Ownable(msg.sender)
     {
         controller = msg.sender;
+        decimalsOffset = _decimalsOffset;
     }
 
     /// @notice Deposits assets into the vault
@@ -100,8 +110,8 @@ contract FundShareVault is ERC4626, ERC20Permit, Ownable {
 
     /// @notice Returns the decimal offset used to mitigate share inflation attacks
     /// @dev Overrides the ERC4626 _decimalsOffset function
-    /// @return offset The decimal offset (1)
-    function _decimalsOffset() internal pure override returns (uint8) {
-        return 1;
+    /// @return offset The decimal offset
+    function _decimalsOffset() internal view override returns (uint8) {
+        return decimalsOffset;
     }
 }

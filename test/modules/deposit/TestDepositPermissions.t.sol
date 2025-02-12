@@ -428,10 +428,11 @@ contract TestDepositPermissions is TestBasePeriphery {
         periphery.intentWithdraw(wOrder);
     }
 
-    function test_only_minter_role_can_pause_unpause_account(address attacker)
+    function test_only_manager_role_or_fund_can_pause_unpause_account(address attacker, bool asFund)
         public
         openAccount(alice, 1000000, false, false)
     {
+        vm.assume(attacker != accountManager);
         vm.assume(attacker != address(fund));
 
         vm.prank(attacker);
@@ -454,22 +455,25 @@ contract TestDepositPermissions is TestBasePeriphery {
         );
         periphery.unpauseAccount(1);
 
-        vm.prank(address(fund));
+        address pauser = asFund ? address(fund) : accountManager;
+
+        vm.prank(pauser);
         periphery.pauseAccount(1);
 
         assertTrue(periphery.getAccountInfo(1).state == AccountState.PAUSED);
 
-        vm.prank(address(fund));
+        vm.prank(pauser);
         periphery.unpauseAccount(1);
 
         assertTrue(periphery.getAccountInfo(1).state == AccountState.ACTIVE);
     }
 
-    function test_only_account_manager_can_close_account(address attacker)
+    function test_only_account_manager_or_fund_can_close_account(address attacker, bool asFund)
         public
         openAccount(alice, 1000000, false, false)
     {
         vm.assume(attacker != accountManager);
+        vm.assume(attacker != address(fund));
 
         vm.prank(attacker);
         vm.expectRevert(
@@ -481,7 +485,9 @@ contract TestDepositPermissions is TestBasePeriphery {
         );
         periphery.closeAccount(1);
 
-        vm.prank(address(fund));
+        address closer = asFund ? address(fund) : accountManager;
+
+        vm.prank(closer);
         periphery.closeAccount(1);
 
         assertTrue(periphery.getAccountInfo(1).state == AccountState.CLOSED);
@@ -489,16 +495,22 @@ contract TestDepositPermissions is TestBasePeriphery {
         periphery.ownerOf(1);
     }
 
-    function test_only_pauser_role_can_pause_unpause_module(address attacker, address pauser)
-        public
-    {
+    function test_only_pauser_role_or_fund_can_pause_unpause_module(
+        address attacker,
+        address pauser,
+        bool asFund
+    ) public {
         vm.assume(attacker != address(fund));
         vm.assume(pauser != address(fund));
         vm.assume(pauser != address(0));
         vm.assume(pauser != attacker);
 
-        vm.prank(address(fund));
-        periphery.grantRole(PAUSER_ROLE, pauser);
+        address pauser = asFund ? address(fund) : accountManager;
+
+        if (!asFund) {
+            vm.prank(address(fund));
+            periphery.grantRole(PAUSER_ROLE, pauser);
+        }
 
         vm.prank(attacker);
         vm.expectRevert(
@@ -508,7 +520,7 @@ contract TestDepositPermissions is TestBasePeriphery {
         );
         periphery.pause();
 
-        vm.prank(address(fund));
+        vm.prank(pauser);
         periphery.pause();
 
         assertTrue(periphery.paused());
@@ -521,7 +533,7 @@ contract TestDepositPermissions is TestBasePeriphery {
         );
         periphery.unpause();
 
-        vm.prank(address(fund));
+        vm.prank(pauser);
         periphery.unpause();
 
         assertFalse(periphery.paused());

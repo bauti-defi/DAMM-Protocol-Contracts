@@ -542,6 +542,8 @@ contract Periphery is
 
             /// mint the management fee to the fee recipient
             depositModule.dilute(managementFeeInShares, protocolFeeRecipient);
+
+            emit ManagementFeeTaken(managementFeeInShares);
         }
     }
 
@@ -669,7 +671,11 @@ contract Periphery is
     }
 
     /// @notice restricting the transfer makes this a soulbound token
-    function transferFrom(address from_, address to_, uint256 tokenId_) public override {
+    function transferFrom(address from_, address to_, uint256 tokenId_)
+        public
+        override
+        whenNotPaused
+    {
         if (!brokers[tokenId_].account.transferable) revert Errors.Deposit_AccountNotTransferable();
 
         super.transferFrom(from_, to_, tokenId_);

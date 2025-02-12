@@ -21,7 +21,7 @@ contract TestPeripheryDepositWithdraw is TestBasePeriphery {
         vm.stopPrank();
     }
 
-    function test_deposit(uint256 amount)
+    function test_deposit(uint256 amount, bool depositAll)
         public
         openAccount(alice, 10000, false, false)
         maxApproveAllPermit2(alice)
@@ -37,8 +37,15 @@ contract TestPeripheryDepositWithdraw is TestBasePeriphery {
         mockToken1.mint(alice, amount);
 
         vm.startPrank(alice);
-        uint256 sharesOut =
-            periphery.deposit(depositOrder(accountId, alice, alice, address(mockToken1), amount));
+        uint256 sharesOut = periphery.deposit(
+            depositOrder(
+                accountId,
+                alice,
+                alice,
+                address(mockToken1),
+                depositAll ? type(uint256).max : amount
+            )
+        );
         vm.stopPrank();
 
         assertEq(mockToken1.balanceOf(address(fund)), amount);
@@ -49,7 +56,7 @@ contract TestPeripheryDepositWithdraw is TestBasePeriphery {
         assertEq(internalVault.totalAssets(), amount);
     }
 
-    function test_withdraw(uint256 depositAmount)
+    function test_withdraw(uint256 depositAmount, bool withdrawAll)
         public
         openAccount(alice, 10000, false, false)
         maxApproveAllPermit2(alice)
@@ -73,7 +80,13 @@ contract TestPeripheryDepositWithdraw is TestBasePeriphery {
 
         vm.startPrank(alice);
         uint256 withdrawAmount = periphery.withdraw(
-            withdrawOrder(accountId, alice, alice, address(mockToken1), sharesOut)
+            withdrawOrder(
+                accountId,
+                alice,
+                alice,
+                address(mockToken1),
+                withdrawAll ? type(uint256).max : sharesOut
+            )
         );
         vm.stopPrank();
 

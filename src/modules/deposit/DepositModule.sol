@@ -65,15 +65,17 @@ contract DepositModule is
         /// @dev vaultName_ Name of the ERC4626 vault
         /// @dev vaultSymbol_ Symbol of the ERC4626 vault
         /// @dev decimals_ Decimals for the unit of account token
+        /// @dev vaultDecimalsOffset_ Decimals for the ERC4626 vault
         /// @dev fund_ Address of the Fund contract
         /// @dev oracleRouter_ Address of the oracle router for quotes
         (
             string memory vaultName_,
             string memory vaultSymbol_,
             uint8 decimals_,
+            uint8 vaultDecimalsOffset_,
             address fund_,
             address oracleRouter_
-        ) = abi.decode(initializeParams, (string, string, uint8, address, address));
+        ) = abi.decode(initializeParams, (string, string, uint8, uint8, address, address));
 
         if (fund_ == address(0)) {
             revert Errors.Deposit_InvalidConstructorParam();
@@ -98,7 +100,9 @@ contract DepositModule is
         oracleRouter = IPriceOracle(oracleRouter_);
         netDepositLimit = type(uint256).max;
         unitOfAccount = new UnitOfAccount("Liquidity", "UNIT", decimals_);
-        internalVault = new FundShareVault(address(unitOfAccount), vaultName_, vaultSymbol_);
+        internalVault = new FundShareVault(
+            address(unitOfAccount), vaultName_, vaultSymbol_, vaultDecimalsOffset_
+        );
 
         /// @notice approve the internalVault to transfer liquidity to the deposit module
         unitOfAccount.approve(address(internalVault), type(uint256).max);

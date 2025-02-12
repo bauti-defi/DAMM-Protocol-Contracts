@@ -58,6 +58,8 @@ interface IPeriphery {
         uint256 netBrokerFee
     );
 
+    event ManagementFeeTaken(uint256 sharesOut);
+
     /// @notice The address that receives protocol fees
     function protocolFeeRecipient() external returns (address);
 

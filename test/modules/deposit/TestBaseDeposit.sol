@@ -89,7 +89,7 @@ abstract contract TestBaseDeposit is TestBaseGnosis {
 
         bytes memory depositModuleInitializer = abi.encodeWithSelector(
             DepositModule.setUp.selector,
-            abi.encode("DepositModule", "DM", 18, address(fund), address(oracleRouter))
+            abi.encode("DepositModule", "DM", 18, 0, address(fund), address(oracleRouter))
         );
 
         depositModule = DepositModule(
