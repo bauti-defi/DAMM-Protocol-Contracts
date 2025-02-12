@@ -38,16 +38,18 @@ contract TestDepositPermissions is TestBasePeriphery {
         vm.stopPrank();
     }
 
-    function test_only_controller_can_enable_broker_asset_policy(address attacker)
+    function test_only_account_manager_can_enable_broker_asset_policy(address attacker)
         public
         openAccount(alice, 10000, false, false)
     {
-        vm.assume(attacker != address(fund));
+        vm.assume(attacker != accountManager);
 
         vm.prank(attacker);
         vm.expectRevert(
             abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector, attacker, CONTROLLER_ROLE
+                IAccessControl.AccessControlUnauthorizedAccount.selector,
+                attacker,
+                ACCOUNT_MANAGER_ROLE
             )
         );
         periphery.enableBrokerAssetPolicy(1, address(mockToken1), true);
@@ -55,7 +57,9 @@ contract TestDepositPermissions is TestBasePeriphery {
         vm.prank(attacker);
         vm.expectRevert(
             abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector, attacker, CONTROLLER_ROLE
+                IAccessControl.AccessControlUnauthorizedAccount.selector,
+                attacker,
+                ACCOUNT_MANAGER_ROLE
             )
         );
         periphery.enableBrokerAssetPolicy(1, address(mockToken1), false);
@@ -75,7 +79,7 @@ contract TestDepositPermissions is TestBasePeriphery {
     function test_broker_can_only_deposit_withdraw_intent_enabled_assets()
         public
         openAccount(alice, 10000, false, false)
-        approvePermit2(alice)
+        maxApproveAllPermit2(alice)
     {
         SignedDepositIntent memory dOrder = depositIntent(
             1,
@@ -123,7 +127,7 @@ contract TestDepositPermissions is TestBasePeriphery {
     function test_broker_can_only_deposit_withdraw_enabled_assets()
         public
         openAccount(alice, 10000, false, false)
-        approvePermit2(alice)
+        maxApproveAllPermit2(alice)
     {
         DepositOrder memory dOrder =
             depositOrder(1, alice, alice, address(mockToken1), type(uint256).max);
@@ -199,7 +203,7 @@ contract TestDepositPermissions is TestBasePeriphery {
         public
         openAccount(alice, 10000, false, false)
         enableBrokerAssetPolicy(address(fund), 1, address(mockToken1), true)
-        approvePermit2(alice)
+        maxApproveAllPermit2(alice)
     {
         vm.assume(limit_ > 0);
         vm.assume(limit_ < type(uint160).max / 10 ** 8);
@@ -354,7 +358,7 @@ contract TestDepositPermissions is TestBasePeriphery {
         public
         openAccount(alice, 1, false, false)
         enableBrokerAssetPolicy(address(fund), 1, address(mockToken1), true)
-        approvePermit2(alice)
+        maxApproveAllPermit2(alice)
     {
         vm.assume(timestamp > 1);
         vm.assume(timestamp < 100000000 * 2);
@@ -377,7 +381,7 @@ contract TestDepositPermissions is TestBasePeriphery {
         openAccount(alice, 1000, false, false)
         enableBrokerAssetPolicy(address(fund), 1, address(mockToken1), true)
         enableBrokerAssetPolicy(address(fund), 1, address(mockToken1), false)
-        approvePermit2(alice)
+        maxApproveAllPermit2(alice)
     {
         SignedDepositIntent memory dOrder =
             depositIntent(1, alice, alicePK, alice, address(mockToken1), mock1Unit, 0, 0, 0);
@@ -433,7 +437,9 @@ contract TestDepositPermissions is TestBasePeriphery {
         vm.prank(attacker);
         vm.expectRevert(
             abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector, attacker, MINTER_ROLE
+                IAccessControl.AccessControlUnauthorizedAccount.selector,
+                attacker,
+                ACCOUNT_MANAGER_ROLE
             )
         );
         periphery.pauseAccount(1);
@@ -441,7 +447,9 @@ contract TestDepositPermissions is TestBasePeriphery {
         vm.prank(attacker);
         vm.expectRevert(
             abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector, attacker, MINTER_ROLE
+                IAccessControl.AccessControlUnauthorizedAccount.selector,
+                attacker,
+                ACCOUNT_MANAGER_ROLE
             )
         );
         periphery.unpauseAccount(1);
@@ -457,16 +465,18 @@ contract TestDepositPermissions is TestBasePeriphery {
         assertTrue(periphery.getAccountInfo(1).state == AccountState.ACTIVE);
     }
 
-    function test_only_minter_role_can_close_account(address attacker)
+    function test_only_account_manager_can_close_account(address attacker)
         public
         openAccount(alice, 1000000, false, false)
     {
-        vm.assume(attacker != address(fund));
+        vm.assume(attacker != accountManager);
 
         vm.prank(attacker);
         vm.expectRevert(
             abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector, attacker, MINTER_ROLE
+                IAccessControl.AccessControlUnauthorizedAccount.selector,
+                attacker,
+                ACCOUNT_MANAGER_ROLE
             )
         );
         periphery.closeAccount(1);

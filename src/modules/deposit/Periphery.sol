@@ -121,7 +121,7 @@ contract Periphery is
 
         _grantRole(DEFAULT_ADMIN_ROLE, owner_);
         _grantRole(PAUSER_ROLE, owner_);
-        _grantRole(MINTER_ROLE, minter_);
+        _grantRole(ACCOUNT_MANAGER_ROLE, minter_);
         _grantRole(CONTROLLER_ROLE, controller_);
 
         depositModule = IDepositModule(depositModule_);
@@ -180,6 +180,10 @@ contract Periphery is
             order.intent.deposit.amount, order.intent.deposit.minter
         );
 
+        if (assetAmountIn < order.intent.bribe + order.intent.relayerTip) {
+            revert Errors.Deposit_InsufficientAmount();
+        }
+
         /// transfer the net amount in from the broker to the periphery
         IPermit2(permit2).transferFrom(
             order.intent.deposit.minter,
@@ -200,20 +204,11 @@ contract Periphery is
         sharesOut = _deposit(
             broker,
             broker.account,
+            order.intent.deposit.accountId,
             order.intent.deposit.asset,
             assetAmountIn,
             order.intent.deposit.recipient,
             order.intent.deposit.minSharesOut
-        );
-
-        emit Deposit(
-            order.intent.deposit.accountId,
-            order.intent.deposit.asset,
-            order.intent.deposit.amount,
-            sharesOut,
-            order.intent.relayerTip,
-            order.intent.bribe,
-            order.intent.deposit.referralCode
         );
     }
 
@@ -246,17 +241,20 @@ contract Periphery is
         );
 
         sharesOut = _deposit(
-            broker, broker.account, order.asset, assetAmountIn, order.recipient, order.minSharesOut
-        );
-
-        emit Deposit(
-            order.accountId, order.asset, assetAmountIn, sharesOut, 0, 0, order.referralCode
+            broker,
+            broker.account,
+            order.accountId,
+            order.asset,
+            assetAmountIn,
+            order.recipient,
+            order.minSharesOut
         );
     }
 
     function _deposit(
         Broker storage broker,
         BrokerAccountInfo memory accountInfo,
+        uint256 accountId,
         address asset,
         uint256 assetAmountIn,
         address recipient,
@@ -280,26 +278,21 @@ contract Periphery is
         /// update the broker's cumulative shares minted
         broker.account.cumulativeSharesMinted += sharesOut;
 
+        uint256 netBrokerFee =
+            sharesOut.fullMulDivUp(accountInfo.brokerEntranceFeeInBps, BP_DIVISOR);
+        uint256 netProtocolFee =
+            sharesOut.fullMulDivUp(accountInfo.protocolEntranceFeeInBps, BP_DIVISOR);
+
+        sharesOut -= netBrokerFee + netProtocolFee;
+
         ERC20 shareToken = ERC20(depositModule.getVault());
 
-        /// take the broker entrance fees
-        if (accountInfo.brokerEntranceFeeInBps > 0) {
-            shareToken.safeTransfer(
-                accountInfo.feeRecipient,
-                sharesOut.fullMulDivUp(accountInfo.brokerEntranceFeeInBps, BP_DIVISOR)
-            );
-        }
+        /// transfer assets to the broker, protocol, and recipient
+        shareToken.pay(accountInfo.feeRecipient, netBrokerFee);
+        shareToken.pay(protocolFeeRecipient, netProtocolFee);
+        shareToken.pay(recipient, sharesOut);
 
-        /// take the protocol entrance fees
-        if (accountInfo.protocolEntranceFeeInBps > 0) {
-            shareToken.safeTransfer(
-                protocolFeeRecipient,
-                sharesOut.fullMulDivUp(accountInfo.protocolEntranceFeeInBps, BP_DIVISOR)
-            );
-        }
-
-        /// forward the remaining shares to the recipient
-        shareToken.safeTransfer(recipient, shareToken.balanceOf(address(this)));
+        emit Deposit(accountId, recipient, sharesOut, netBrokerFee, netProtocolFee);
 
         return sharesOut;
     }
@@ -310,7 +303,7 @@ contract Periphery is
         nonReentrant
         checkOrderDeadline(order.intent.withdraw.deadline)
         zeroOutAccountInfo(order.intent.withdraw.accountId)
-        returns (uint256 assetAmountOut)
+        returns (uint256)
     {
         (Broker storage broker, address burner) =
             _getBrokerOrRevert(order.intent.withdraw.accountId);
@@ -334,14 +327,8 @@ contract Periphery is
         /// otherwise, the management fee will be charged on the withdrawal amount
         _takeManagementFee();
 
-        (uint256 netAssetAmountOut, uint256 netBrokerFee, uint256 netProtocolFee) = _withdraw(
-            order.intent.withdraw.burner,
-            depositModule.getVault(),
-            order.intent.withdraw,
-            broker.account
-        );
-
-        assetAmountOut = netAssetAmountOut - netBrokerFee - netProtocolFee;
+        (uint256 assetAmountOut, uint256 netBrokerFee, uint256 netProtocolFee) =
+            _withdraw(order.intent.withdraw.burner, order.intent.withdraw, broker.account);
 
         /// check that we can pay the bribe and relay tip with the net asset amount out
         if (assetAmountOut < order.intent.bribe + order.intent.relayerTip) {
@@ -364,13 +351,13 @@ contract Periphery is
 
         emit Withdraw(
             order.intent.withdraw.accountId,
-            order.intent.withdraw.asset,
-            order.intent.withdraw.shares,
-            netAssetAmountOut,
-            order.intent.relayerTip,
-            order.intent.bribe,
-            order.intent.withdraw.referralCode
+            order.intent.withdraw.to,
+            assetAmountOut,
+            netProtocolFee,
+            netBrokerFee
         );
+
+        return assetAmountOut;
     }
 
     function withdraw(WithdrawOrder calldata order)
@@ -379,7 +366,7 @@ contract Periphery is
         nonReentrant
         checkOrderDeadline(order.deadline)
         zeroOutAccountInfo(order.accountId)
-        returns (uint256 assetAmountOut)
+        returns (uint256)
     {
         (Broker storage broker, address burner) = _getBrokerOrRevert(order.accountId);
 
@@ -393,10 +380,8 @@ contract Periphery is
         /// otherwise, the management fee will be charged on the withdrawal amount
         _takeManagementFee();
 
-        (uint256 netAssetAmountOut, uint256 netBrokerFee, uint256 netProtocolFee) =
-            _withdraw(order.burner, depositModule.getVault(), order, broker.account);
-
-        assetAmountOut = netAssetAmountOut - netBrokerFee - netProtocolFee;
+        (uint256 assetAmountOut, uint256 netBrokerFee, uint256 netProtocolFee) =
+            _withdraw(order.burner, order, broker.account);
 
         {
             /// distribute the funds to the user, broker, and protocol
@@ -406,18 +391,25 @@ contract Periphery is
             assetToken.pay(broker.account.feeRecipient, netBrokerFee);
         }
 
-        emit Withdraw(
-            order.accountId, order.asset, order.shares, netAssetAmountOut, 0, 0, order.referralCode
-        );
+        emit Withdraw(order.accountId, order.to, assetAmountOut, netProtocolFee, netBrokerFee);
+
+        return assetAmountOut;
     }
 
+    /// @notice Internal function to process a withdrawal and calculate fees
+    /// @param burner The address burning shares to withdraw assets
+    /// @param order The withdrawal order details
+    /// @param account The broker account information
+    /// @return assetAmountOut The amount of assets to send to the withdrawer
+    /// @return netBrokerFee The amount of assets to send to the broker as fees
+    /// @return netProtocolFee The amount of assets to send to the protocol as fees
     function _withdraw(
-        address broker,
-        address shareToken,
+        address burner,
         WithdrawOrder calldata order,
         BrokerAccountInfo memory account
     ) private returns (uint256, uint256, uint256) {
-        uint256 sharesToBurn = shareToken.deduceAssetAmount(order.shares, broker);
+        address shareToken = depositModule.getVault();
+        uint256 sharesToBurn = shareToken.deduceAssetAmount(order.shares, burner);
 
         /// make sure the broker has not exceeded their share burn limit
         if (account.shareMintLimit != type(uint256).max) {
@@ -429,7 +421,7 @@ contract Periphery is
             brokers[order.accountId].account.totalSharesOutstanding -= sharesToBurn;
         }
 
-        IPermit2(permit2).transferFrom(broker, address(this), uint160(sharesToBurn), shareToken);
+        IPermit2(permit2).transferFrom(burner, address(this), uint160(sharesToBurn), shareToken);
 
         /// burn internalVault shares in exchange for liquidity (unit of account) tokens
         (uint256 netAssetAmountOut, uint256 liquidity) =
@@ -446,7 +438,7 @@ contract Periphery is
         uint256 netProtocolFee =
             netProtocolFeeInLiquidity.divWadUp(liquidity).mulWadUp(netAssetAmountOut);
 
-        return (netAssetAmountOut, netBrokerFee, netProtocolFee);
+        return (netAssetAmountOut - netBrokerFee - netProtocolFee, netBrokerFee, netProtocolFee);
     }
 
     function _getBrokerOrRevert(uint256 accountId_)
@@ -569,7 +561,11 @@ contract Periphery is
     }
 
     /// @inheritdoc IPeriphery
-    function setProtocolFeeRecipient(address recipient_) external onlyRole(CONTROLLER_ROLE) {
+    function setProtocolFeeRecipient(address recipient_)
+        external
+        whenNotPaused
+        onlyRole(CONTROLLER_ROLE)
+    {
         if (recipient_ == address(0)) {
             revert Errors.Deposit_InvalidProtocolFeeRecipient();
         }
@@ -583,7 +579,7 @@ contract Periphery is
     }
 
     /// @inheritdoc IPeriphery
-    function setBrokerFeeRecipient(uint256 accountId_, address recipient_) external {
+    function setBrokerFeeRecipient(uint256 accountId_, address recipient_) external whenNotPaused {
         address broker = _ownerOf(accountId_);
         if (broker == address(0)) {
             revert Errors.Deposit_AccountDoesNotExist();
@@ -603,7 +599,11 @@ contract Periphery is
     }
 
     /// @inheritdoc IPeriphery
-    function setManagementFeeRateInBps(uint256 rateInBps_) external onlyRole(CONTROLLER_ROLE) {
+    function setManagementFeeRateInBps(uint256 rateInBps_)
+        external
+        whenNotPaused
+        onlyRole(CONTROLLER_ROLE)
+    {
         if (rateInBps_ > BP_DIVISOR) {
             revert Errors.Deposit_InvalidManagementFeeRate();
         }
@@ -624,7 +624,7 @@ contract Periphery is
     function enableBrokerAssetPolicy(uint256 accountId_, address asset_, bool isDeposit_)
         external
         whenNotPaused
-        onlyRole(CONTROLLER_ROLE)
+        onlyRole(ACCOUNT_MANAGER_ROLE)
     {
         Broker storage broker = brokers[accountId_];
 
@@ -643,7 +643,7 @@ contract Periphery is
     /// @inheritdoc IPeriphery
     function disableBrokerAssetPolicy(uint256 accountId_, address asset_, bool isDeposit_)
         external
-        onlyRole(CONTROLLER_ROLE)
+        onlyRole(ACCOUNT_MANAGER_ROLE)
     {
         Broker storage broker = brokers[accountId_];
 
@@ -680,7 +680,7 @@ contract Periphery is
         public
         whenNotPaused
         nonReentrant
-        onlyRole(MINTER_ROLE)
+        onlyRole(ACCOUNT_MANAGER_ROLE)
         returns (uint256 nextTokenId)
     {
         if (params_.user == address(0)) {
@@ -733,16 +733,16 @@ contract Periphery is
 
         emit AccountOpened(
             nextTokenId,
+            params_.user,
             block.timestamp + params_.ttl,
             params_.shareMintLimit,
-            feeRecipient,
             params_.transferable,
             params_.isPublic
         );
     }
 
     /// @inheritdoc IPeriphery
-    function closeAccount(uint256 accountId_) public onlyRole(MINTER_ROLE) {
+    function closeAccount(uint256 accountId_) public onlyRole(ACCOUNT_MANAGER_ROLE) {
         if (!brokers[accountId_].account.canBeClosed()) {
             revert Errors.Deposit_AccountCannotBeClosed();
         }
@@ -752,7 +752,7 @@ contract Periphery is
     }
 
     /// @inheritdoc IPeriphery
-    function pauseAccount(uint256 accountId_) public onlyRole(MINTER_ROLE) {
+    function pauseAccount(uint256 accountId_) public onlyRole(ACCOUNT_MANAGER_ROLE) {
         if (!brokers[accountId_].account.isActive()) {
             revert Errors.Deposit_AccountNotActive();
         }
@@ -763,7 +763,11 @@ contract Periphery is
     }
 
     /// @inheritdoc IPeriphery
-    function unpauseAccount(uint256 accountId_) public whenNotPaused onlyRole(MINTER_ROLE) {
+    function unpauseAccount(uint256 accountId_)
+        public
+        whenNotPaused
+        onlyRole(ACCOUNT_MANAGER_ROLE)
+    {
         if (!brokers[accountId_].account.isPaused()) {
             revert Errors.Deposit_AccountNotPaused();
         }
@@ -782,7 +786,7 @@ contract Periphery is
     }
 
     /// @inheritdoc IPeriphery
-    function increaseAccountNonce(uint256 accountId_, uint256 increment_) external whenNotPaused {
+    function increaseAccountNonce(uint256 accountId_, uint256 increment_) external {
         if (_ownerOf(accountId_) != msg.sender) revert Errors.Deposit_OnlyAccountOwner();
         if (brokers[accountId_].account.isActive()) {
             revert Errors.Deposit_AccountNotActive();

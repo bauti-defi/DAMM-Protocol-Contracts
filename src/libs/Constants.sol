@@ -13,7 +13,7 @@ uint256 constant BP_DIVISOR = 10_000;
 bytes32 constant FUND_ROLE = keccak256("FUND_ROLE");
 bytes32 constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 bytes32 constant CONTROLLER_ROLE = keccak256("CONTROLLER_ROLE");
-bytes32 constant MINTER_ROLE = keccak256("MINTER_ROLE");
+bytes32 constant ACCOUNT_MANAGER_ROLE = keccak256("ACCOUNT_MANAGER_ROLE");
 
 // safe operations
 uint8 constant CALL = 0;

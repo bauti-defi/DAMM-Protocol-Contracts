@@ -38,6 +38,7 @@ abstract contract TestBasePeriphery is TestBaseDeposit, DeployPermit2 {
     address relayer;
     address feeRecipient;
     uint256 internal feeRecipientPK;
+    address accountManager;
 
     address permit2;
 
@@ -47,6 +48,8 @@ abstract contract TestBasePeriphery is TestBaseDeposit, DeployPermit2 {
         (feeRecipient, feeRecipientPK) = makeAddrAndKey("FeeRecipient");
 
         relayer = makeAddr("Relayer");
+
+        accountManager = makeAddr("AccountManager");
         // deploy periphery using module factory
         ModuleProxyFactory factory = new ModuleProxyFactory();
         permit2 = address(deployPermit2());
@@ -78,6 +81,7 @@ abstract contract TestBasePeriphery is TestBaseDeposit, DeployPermit2 {
         periphery.grantApproval(address(mockToken1));
         periphery.grantApproval(address(mockToken2));
         periphery.grantApproval(address(depositModule.getVault()));
+        periphery.grantRole(ACCOUNT_MANAGER_ROLE, address(accountManager));
         depositModule.grantRole(CONTROLLER_ROLE, address(periphery));
         vm.stopPrank();
     }
@@ -184,17 +188,17 @@ abstract contract TestBasePeriphery is TestBaseDeposit, DeployPermit2 {
         vm.startPrank(user);
         mockToken1.approve(address(periphery), type(uint256).max);
         mockToken2.approve(address(periphery), type(uint256).max);
-        depositModule.internalVault().approve(address(periphery), type(uint256).max);
+        internalVault.approve(address(periphery), type(uint256).max);
         vm.stopPrank();
 
         _;
     }
 
-    modifier approvePermit2(address user) {
+    modifier maxApproveAllPermit2(address user) {
         vm.startPrank(user);
         mockToken1.approve(permit2, type(uint256).max);
         mockToken2.approve(permit2, type(uint256).max);
-        depositModule.internalVault().approve(permit2, type(uint256).max);
+        internalVault.approve(permit2, type(uint256).max);
         vm.stopPrank();
 
         _;

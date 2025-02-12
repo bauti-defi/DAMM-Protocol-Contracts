@@ -15,6 +15,17 @@ interface IDepositModule {
         address indexed initiator, address indexed owner, address indexed avatar, address target
     );
 
+    event Withdraw(
+        address indexed recipient,
+        address asset,
+        address burner,
+        uint256 sharesIn,
+        uint256 liquidityBurnt,
+        uint256 assetAmountOut
+    );
+
+    event ShareDilution(address indexed recipient, address diluter, uint256 sharesOut);
+
     event GlobalAssetPolicyEnabled(address asset, AssetPolicy policy);
 
     event GlobalAssetPolicyDisabled(address asset);

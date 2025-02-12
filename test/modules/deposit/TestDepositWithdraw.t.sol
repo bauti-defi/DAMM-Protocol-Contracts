@@ -34,7 +34,7 @@ contract TestDepositWithdraw is TestBasePeriphery {
 
     function test_deposit_with_entrance_fees(TestEntranceFeeParams memory params)
         public
-        approvePermit2(alice)
+        maxApproveAllPermit2(alice)
     {
         vm.assume(params.depositAmount > 10);
 
@@ -155,7 +155,7 @@ contract TestDepositWithdraw is TestBasePeriphery {
 
     function test_deposit_withdraw_all_with_exit_fees(TestExitFeeParams memory params)
         public
-        approvePermit2(alice)
+        maxApproveAllPermit2(alice)
     {
         vm.assume(params.depositAmount > 10);
 
@@ -344,7 +344,7 @@ contract TestDepositWithdraw is TestBasePeriphery {
         uint256 timeDelta1,
         uint256 timeDelta2,
         uint256 timeDelta3
-    ) public approvePermit2(alice) {
+    ) public maxApproveAllPermit2(alice) {
         vm.assume(managementFeeRateInBps < MAX_NET_MANAGEMENT_FEE_IN_BPS);
         vm.assume(timeDelta1 > 0);
         vm.assume(timeDelta1 < 10 * 365 days);

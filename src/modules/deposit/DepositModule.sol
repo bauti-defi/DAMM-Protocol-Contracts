@@ -209,6 +209,8 @@ contract DepositModule is
         }
 
         IAvatar(fund).transferAssetFromSafeOrRevert(asset, recipient, assetAmountOut);
+
+        emit Withdraw(recipient, asset, msg.sender, sharesToBurn, liquidity, assetAmountOut);
     }
 
     /// @inheritdoc IDepositModule
@@ -219,6 +221,8 @@ contract DepositModule is
         onlyRole(CONTROLLER_ROLE)
     {
         internalVault.mintUnbacked(sharesToMint, recipient);
+
+        emit ShareDilution(recipient, msg.sender, sharesToMint);
     }
 
     function _validateAssetPolicy(AssetPolicy memory policy, bool isDeposit) private pure {

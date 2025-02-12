@@ -13,9 +13,9 @@ import {FundShareVault} from "@src/modules/deposit/FundShareVault.sol";
 interface IPeriphery {
     event AccountOpened(
         uint256 indexed accountId,
+        address user,
         uint256 expirationTimestamp,
         uint256 shareMintLimit,
-        address feeRecipient,
         bool transferable,
         bool isPublic
     );
@@ -40,22 +40,22 @@ interface IPeriphery {
 
     event Deposit(
         uint256 indexed accountId,
-        address asset,
-        uint256 assetAmountIn,
+        address indexed recipient,
         uint256 sharesOut,
-        uint256 relayerFee,
-        uint256 bribe,
-        uint16 referralCode
+        /// @dev denominated in shares
+        uint256 netProtocolFee,
+        /// @dev denominated in shares
+        uint256 netBrokerFee
     );
 
     event Withdraw(
         uint256 indexed accountId,
-        address asset,
-        uint256 sharesIn,
-        uint256 netAssetAmountOut,
-        uint256 relayerFee,
-        uint256 bribe,
-        uint16 referralCode
+        address indexed recipient,
+        uint256 assetAmountOut,
+        /// @dev denominated in asset
+        uint256 netProtocolFee,
+        /// @dev denominated in asset
+        uint256 netBrokerFee
     );
 
     /// @notice The address that receives protocol fees
