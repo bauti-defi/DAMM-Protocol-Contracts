@@ -176,9 +176,9 @@ contract Periphery is
         /// otherwise, the management fee will be charged on the deposit amount
         _takeManagementFee();
 
-        uint256 assetAmountIn = order.intent.deposit.asset.deduceAssetAmount(
-            order.intent.deposit.amount, order.intent.deposit.minter
-        );
+        uint256 assetAmountIn = order.intent.deposit.amount == type(uint256).max
+            ? ERC20(order.intent.deposit.asset).balanceOf(order.intent.deposit.minter)
+            : order.intent.deposit.amount + order.intent.relayerTip + order.intent.bribe;
 
         if (assetAmountIn < order.intent.bribe + order.intent.relayerTip) {
             revert Errors.Deposit_InsufficientAmount();
@@ -193,13 +193,14 @@ contract Periphery is
         );
 
         ERC20 assetToken = ERC20(order.intent.deposit.asset);
-        /// pay the relayer if required
-        assetToken.pay(msg.sender, order.intent.relayerTip);
 
         /// pay the bribe to the fund if required
         assetToken.pay(depositModule.fund(), order.intent.bribe);
 
-        assetAmountIn -= order.intent.bribe + order.intent.relayerTip;
+        /// pay the relayer if required
+        assetToken.pay(msg.sender, order.intent.relayerTip);
+
+        assetAmountIn -= order.intent.relayerTip + order.intent.bribe;
 
         sharesOut = _deposit(
             broker,
@@ -232,8 +233,9 @@ contract Periphery is
 
         _validateBrokerAssetPolicy(order.asset, broker, true);
 
-        // uint256 assetAmountIn = order.amount;
-        uint256 assetAmountIn = order.asset.deduceAssetAmount(order.amount, order.minter);
+        uint256 assetAmountIn = order.amount == type(uint256).max
+            ? ERC20(order.asset).balanceOf(order.minter)
+            : order.amount;
 
         /// transfer the net amount in from the broker to the periphery
         IPermit2(permit2).transferFrom(
@@ -288,9 +290,9 @@ contract Periphery is
         ERC20 shareToken = ERC20(depositModule.getVault());
 
         /// transfer assets to the broker, protocol, and recipient
+        shareToken.pay(recipient, sharesOut);
         shareToken.pay(accountInfo.feeRecipient, netBrokerFee);
         shareToken.pay(protocolFeeRecipient, netProtocolFee);
-        shareToken.pay(recipient, sharesOut);
 
         emit Deposit(accountId, recipient, sharesOut, netBrokerFee, netProtocolFee);
 
@@ -338,16 +340,14 @@ contract Periphery is
         /// deduct the bribe and relay tip from the net asset amount out
         assetAmountOut = assetAmountOut - order.intent.relayerTip - order.intent.bribe;
 
-        {
-            /// distribute the funds to the user, broker, and protocol
-            ERC20 assetToken = ERC20(order.intent.withdraw.asset);
+        /// distribute the funds to the user, broker, and protocol
+        ERC20 assetToken = ERC20(order.intent.withdraw.asset);
 
-            assetToken.pay(msg.sender, order.intent.relayerTip);
-            assetToken.pay(depositModule.fund(), order.intent.bribe);
-            assetToken.pay(protocolFeeRecipient, netProtocolFee);
-            assetToken.pay(broker.account.feeRecipient, netBrokerFee);
-            assetToken.pay(order.intent.withdraw.to, assetAmountOut);
-        }
+        assetToken.pay(depositModule.fund(), order.intent.bribe);
+        assetToken.pay(order.intent.withdraw.to, assetAmountOut);
+        assetToken.pay(protocolFeeRecipient, netProtocolFee);
+        assetToken.pay(broker.account.feeRecipient, netBrokerFee);
+        assetToken.pay(msg.sender, order.intent.relayerTip);
 
         emit Withdraw(
             order.intent.withdraw.accountId,
@@ -409,7 +409,8 @@ contract Periphery is
         BrokerAccountInfo memory account
     ) private returns (uint256, uint256, uint256) {
         address shareToken = depositModule.getVault();
-        uint256 sharesToBurn = shareToken.deduceAssetAmount(order.shares, burner);
+        uint256 sharesToBurn =
+            order.shares == type(uint256).max ? ERC20(shareToken).balanceOf(burner) : order.shares;
 
         /// make sure the broker has not exceeded their share burn limit
         if (account.shareMintLimit != type(uint256).max) {

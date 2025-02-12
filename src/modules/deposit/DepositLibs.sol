@@ -113,24 +113,6 @@ library DepositLibs {
         if (blockId != block.chainid) revert Errors.Deposit_InvalidChain();
     }
 
-    /// @notice Determines the actual asset amount to use for a transaction
-    /// @dev If amount is max uint256, uses the holder's full balance
-    /// @param asset_ The token address
-    /// @param amount_ The requested amount (max uint256 means use full balance)
-    /// @param holder_ The address holding the tokens
-    /// @return assetAmount The actual amount to use
-    function deduceAssetAmount(address asset_, uint256 amount_, address holder_)
-        internal
-        view
-        returns (uint256 assetAmount)
-    {
-        if (amount_ == type(uint256).max) {
-            assetAmount = ERC20(asset_).balanceOf(holder_);
-        } else {
-            assetAmount = amount_;
-        }
-    }
-
     /// @notice Transfers tokens if amount is greater than zero
     /// @dev Uses SafeTransferLib for safe token transfers
     /// @param token The ERC20 token to transfer

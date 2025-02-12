@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CC-BY-NC-4.0
 pragma solidity ^0.8.0;
 
-import {TestBasePeriphery} from "./TestBasePeriphery.sol";
+import {TestBasePeriphery, SignedDepositIntent} from "./TestBasePeriphery.sol";
 import {IPermit2} from "@permit2/src/interfaces/IPermit2.sol";
 
 contract TestPeripheryDepositWithdraw is TestBasePeriphery {
@@ -21,7 +21,7 @@ contract TestPeripheryDepositWithdraw is TestBasePeriphery {
         vm.stopPrank();
     }
 
-    function test_deposit(uint256 amount, bool depositAll)
+    function test_deposit(uint256 amount, bool all)
         public
         openAccount(alice, 10000, false, false)
         maxApproveAllPermit2(alice)
@@ -29,7 +29,7 @@ contract TestPeripheryDepositWithdraw is TestBasePeriphery {
         amount = bound(
             amount,
             depositModule.getGlobalAssetPolicy(address(mockToken1)).minimumDeposit,
-            type(uint160).max
+            type(uint160).max - 1
         );
         uint256 accountId = periphery.peekNextTokenId() - 1;
         _enableBrokerAssetPolicy(accountManager, accountId, address(mockToken1), true);
@@ -39,11 +39,7 @@ contract TestPeripheryDepositWithdraw is TestBasePeriphery {
         vm.startPrank(alice);
         uint256 sharesOut = periphery.deposit(
             depositOrder(
-                accountId,
-                alice,
-                alice,
-                address(mockToken1),
-                depositAll ? type(uint256).max : amount
+                accountId, alice, alice, address(mockToken1), all ? type(uint256).max : amount
             )
         );
         vm.stopPrank();
@@ -64,7 +60,7 @@ contract TestPeripheryDepositWithdraw is TestBasePeriphery {
         depositAmount = bound(
             depositAmount,
             depositModule.getGlobalAssetPolicy(address(mockToken1)).minimumDeposit,
-            type(uint160).max
+            type(uint160).max - 1
         );
         uint256 accountId = periphery.peekNextTokenId() - 1;
         _enableBrokerAssetPolicy(accountManager, accountId, address(mockToken1), true);
@@ -96,5 +92,125 @@ contract TestPeripheryDepositWithdraw is TestBasePeriphery {
         assertEq(internalVault.balanceOf(address(alice)), 0);
         assertEq(internalVault.totalSupply(), 0);
         assertEq(internalVault.totalAssets(), 0);
+    }
+
+    struct TestDepositIntentFuzz {
+        uint256 amount;
+        bool all;
+        uint256 bribe;
+        uint256 relayerTip;
+    }
+
+    function boundIntentParams(TestDepositIntentFuzz memory fuzz)
+        private
+        returns (TestDepositIntentFuzz memory)
+    {
+        fuzz.amount = bound(
+            fuzz.amount,
+            depositModule.getGlobalAssetPolicy(address(mockToken1)).minimumDeposit,
+            type(uint144).max
+        );
+
+        fuzz.bribe = bound(fuzz.bribe, 0, fuzz.amount / 6);
+        fuzz.relayerTip = bound(fuzz.relayerTip, 0, fuzz.amount / 6);
+
+        return fuzz;
+    }
+
+    function test_deposit_intent(TestDepositIntentFuzz memory fuzz)
+        public
+        openAccount(alice, 10000, false, false)
+        maxApproveAllPermit2(alice)
+    {
+        fuzz = boundIntentParams(fuzz);
+
+        uint256 accountId = periphery.peekNextTokenId() - 1;
+        _enableBrokerAssetPolicy(accountManager, accountId, address(mockToken1), true);
+
+        mockToken1.mint(alice, fuzz.amount + fuzz.bribe + fuzz.relayerTip);
+
+        SignedDepositIntent memory intent = depositIntent(
+            accountId,
+            alice,
+            alicePK,
+            alice,
+            address(mockToken1),
+            fuzz.all ? type(uint256).max : fuzz.amount,
+            fuzz.relayerTip,
+            fuzz.bribe,
+            periphery.getAccountNonce(accountId)
+        );
+
+        vm.startPrank(relayer);
+        uint256 sharesOut = periphery.intentDeposit(intent);
+        vm.stopPrank();
+        assertEq(
+            mockToken1.balanceOf(address(fund)), fuzz.amount + fuzz.bribe, "fund token balance"
+        );
+        assertEq(mockToken1.balanceOf(address(periphery)), 0, "periphery token balance");
+        assertEq(mockToken1.balanceOf(address(relayer)), fuzz.relayerTip, "relayer token balance");
+        assertEq(mockToken1.balanceOf(address(alice)), 0, "alice token balance");
+        assertEq(internalVault.balanceOf(address(alice)), sharesOut, "alice internal vault balance");
+        assertEq(internalVault.balanceOf(address(periphery)), 0, "periphery internal vault balance");
+        assertEq(internalVault.totalSupply(), sharesOut, "internal vault total supply");
+        assertEq(
+            internalVault.totalAssets(), fuzz.amount + fuzz.bribe, "internal vault total assets"
+        );
+    }
+
+    function deepStack_intentWithdraw(
+        TestDepositIntentFuzz memory fuzz,
+        uint256 accountId,
+        uint256 sharesOut
+    ) private returns (uint256 assetOut) {
+        vm.startPrank(relayer);
+        assetOut = periphery.intentWithdraw(
+            signedWithdrawIntent(
+                accountId,
+                alice,
+                alicePK,
+                alice,
+                address(mockToken1),
+                fuzz.all ? type(uint256).max : sharesOut,
+                fuzz.relayerTip,
+                fuzz.bribe,
+                periphery.getAccountNonce(accountId)
+            )
+        );
+        vm.stopPrank();
+    }
+
+    function test_withdraw_intent(TestDepositIntentFuzz memory fuzz)
+        public
+        openAccount(alice, 10000, false, false)
+        maxApproveAllPermit2(alice)
+    {
+        fuzz = boundIntentParams(fuzz);
+
+        uint256 accountId = periphery.peekNextTokenId() - 1;
+        _enableBrokerAssetPolicy(accountManager, accountId, address(mockToken1), true);
+        _enableBrokerAssetPolicy(accountManager, accountId, address(mockToken1), false);
+
+        mockToken1.mint(alice, fuzz.amount);
+
+        vm.prank(alice);
+        uint256 sharesOut = periphery.deposit(
+            depositOrder(accountId, alice, alice, address(mockToken1), type(uint256).max)
+        );
+
+        // clear balances
+        mockToken1.burn(alice, mockToken1.balanceOf(alice));
+        mockToken1.burn(relayer, mockToken1.balanceOf(relayer));
+
+        uint256 assetOut = deepStack_intentWithdraw(fuzz, accountId, sharesOut);
+
+        assertEq(mockToken1.balanceOf(address(fund)), fuzz.bribe, "fund token balance");
+        assertEq(mockToken1.balanceOf(relayer), fuzz.relayerTip, "fund token balance");
+        assertEq(mockToken1.balanceOf(address(periphery)), 0, "periphery token balance");
+        assertEq(mockToken1.balanceOf(alice) - assetOut, 0, "alice token balance");
+        assertEq(internalVault.balanceOf(address(alice)), 0, "alice internal vault balance");
+        assertEq(internalVault.balanceOf(address(periphery)), 0, "periphery internal vault balance");
+        assertEq(internalVault.totalSupply(), 0, "internal vault total supply");
+        assertEq(internalVault.totalAssets(), 0, "internal vault total assets");
     }
 }

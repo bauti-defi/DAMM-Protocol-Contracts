@@ -110,17 +110,18 @@ abstract contract TestBaseDeposit is TestBaseGnosis {
 
         internalVault = IERC4626(address(depositModule.internalVault()));
 
+        uint8 unitOfAccountDecimals = depositModule.unitOfAccount().decimals();
+
         /// @notice this much match the vault implementation
-        oneUnitOfAccount =
-            1 * 10 ** (depositModule.unitOfAccount().decimals() + VAULT_DECIMAL_OFFSET);
+        oneUnitOfAccount = 1 * 10 ** unitOfAccountDecimals;
 
         // lets enable assets on the fund
         vm.startPrank(address(fund));
         depositModule.enableGlobalAssetPolicy(
             address(mockToken1),
             AssetPolicy({
-                minimumDeposit: MINIMUM_DEPOSIT,
-                minimumWithdrawal: MINIMUM_WITHDRAWAL,
+                minimumDeposit: 10 ** (mockToken1.decimals() / 3),
+                minimumWithdrawal: 10 ** (mockToken1.decimals() / 3),
                 canDeposit: true,
                 canWithdraw: true,
                 enabled: true
@@ -130,8 +131,8 @@ abstract contract TestBaseDeposit is TestBaseGnosis {
         depositModule.enableGlobalAssetPolicy(
             address(mockToken2),
             AssetPolicy({
-                minimumDeposit: MINIMUM_DEPOSIT,
-                minimumWithdrawal: MINIMUM_WITHDRAWAL,
+                minimumDeposit: 10 ** (mockToken2.decimals() / 3),
+                minimumWithdrawal: 10 ** (mockToken2.decimals() / 3),
                 canDeposit: true,
                 canWithdraw: true,
                 enabled: true
@@ -147,14 +148,14 @@ abstract contract TestBaseDeposit is TestBaseGnosis {
         oracleRouter.govSetConfig(address(fund), unitOfAccount, address(balanceOfOracle));
 
         MockPriceOracle mockPriceOracle = new MockPriceOracle(
-            address(mockToken1), unitOfAccount, 1 * 10 ** VALUATION_DECIMALS, VALUATION_DECIMALS
+            address(mockToken1), unitOfAccount, oneUnitOfAccount, VALUATION_DECIMALS
         );
         vm.label(address(mockPriceOracle), "MockPriceOracle1");
         vm.prank(address(fund));
         oracleRouter.govSetConfig(address(mockToken1), unitOfAccount, address(mockPriceOracle));
 
         mockPriceOracle = new MockPriceOracle(
-            address(mockToken2), unitOfAccount, 2 * 10 ** VALUATION_DECIMALS, VALUATION_DECIMALS
+            address(mockToken2), unitOfAccount, 2 * oneUnitOfAccount, VALUATION_DECIMALS
         );
         vm.label(address(mockPriceOracle), "MockPriceOracle2");
         vm.prank(address(fund));
