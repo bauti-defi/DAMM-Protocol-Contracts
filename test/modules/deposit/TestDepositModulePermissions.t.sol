@@ -47,7 +47,7 @@ contract TestDepositModulePermissions is TestBaseDeposit {
 
     function test_net_deposit_limit_cannot_be_exceeded(uint256 limit_)
         public
-        withRole(alice, CONTROLLER_ROLE)
+        withRole(alice, DEPOSITOR_ROLE)
         maxApproveDepositModule(alice, address(mockToken1))
     {
         vm.assume(
@@ -69,7 +69,7 @@ contract TestDepositModulePermissions is TestBaseDeposit {
 
     function test_deposit_reverts_when_shares_minted_is_zero()
         public
-        withRole(alice, CONTROLLER_ROLE)
+        withRole(alice, DEPOSITOR_ROLE)
         maxApproveDepositModule(alice, address(mockToken1))
     {
         uint256 smallAmount =
@@ -95,7 +95,8 @@ contract TestDepositModulePermissions is TestBaseDeposit {
 
     function test_only_allowed_assets_can_be_deposited_or_withdrawn(address asset)
         public
-        withRole(alice, CONTROLLER_ROLE)
+        withRole(alice, DEPOSITOR_ROLE)
+        withRole(alice, WITHDRAWER_ROLE)
     {
         vm.assume(asset != address(mockToken1));
         vm.assume(asset != address(mockToken2));
@@ -109,37 +110,37 @@ contract TestDepositModulePermissions is TestBaseDeposit {
         depositModule.withdraw(asset, type(uint256).max, 0, alice);
     }
 
-    function test_only_controller_role_can_deposit() public {
-        assertFalse(depositModule.hasRole(CONTROLLER_ROLE, alice));
+    function test_only_depositor_role_can_deposit() public {
+        assertFalse(depositModule.hasRole(DEPOSITOR_ROLE, alice));
 
         vm.prank(alice);
         vm.expectRevert(
             abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector, alice, CONTROLLER_ROLE
+                IAccessControl.AccessControlUnauthorizedAccount.selector, alice, DEPOSITOR_ROLE
             )
         );
         depositModule.deposit(address(mockToken1), type(uint256).max, 0, alice);
     }
 
-    function test_only_controller_role_can_withdraw() public {
-        assertFalse(depositModule.hasRole(CONTROLLER_ROLE, alice));
+    function test_only_withdrawer_role_can_withdraw() public {
+        assertFalse(depositModule.hasRole(WITHDRAWER_ROLE, alice));
 
         vm.prank(alice);
         vm.expectRevert(
             abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector, alice, CONTROLLER_ROLE
+                IAccessControl.AccessControlUnauthorizedAccount.selector, alice, WITHDRAWER_ROLE
             )
         );
         depositModule.withdraw(address(mockToken1), type(uint256).max, 0, alice);
     }
 
-    function test_only_controller_role_can_dilute_shares() public {
-        assertFalse(depositModule.hasRole(CONTROLLER_ROLE, alice));
+    function test_only_diluter_role_can_dilute_shares() public {
+        assertFalse(depositModule.hasRole(DILUTER_ROLE, alice));
 
         vm.prank(alice);
         vm.expectRevert(
             abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector, alice, CONTROLLER_ROLE
+                IAccessControl.AccessControlUnauthorizedAccount.selector, alice, DILUTER_ROLE
             )
         );
         depositModule.dilute(type(uint256).max, alice);

@@ -84,7 +84,9 @@ abstract contract TestBasePeriphery is TestBaseDeposit, DeployPermit2 {
         periphery.grantApproval(address(mockToken2));
         periphery.grantApproval(address(depositModule.getVault()));
         periphery.grantRole(ACCOUNT_MANAGER_ROLE, address(accountManager));
-        depositModule.grantRole(CONTROLLER_ROLE, address(periphery));
+        depositModule.grantRole(DEPOSITOR_ROLE, address(periphery));
+        depositModule.grantRole(WITHDRAWER_ROLE, address(periphery));
+        depositModule.grantRole(DILUTER_ROLE, address(periphery));
         vm.stopPrank();
     }
 

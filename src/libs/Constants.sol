@@ -14,6 +14,9 @@ bytes32 constant FUND_ROLE = keccak256("FUND_ROLE");
 bytes32 constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 bytes32 constant CONTROLLER_ROLE = keccak256("CONTROLLER_ROLE");
 bytes32 constant ACCOUNT_MANAGER_ROLE = keccak256("ACCOUNT_MANAGER_ROLE");
+bytes32 constant DEPOSITOR_ROLE = keccak256("DEPOSITOR_ROLE");
+bytes32 constant WITHDRAWER_ROLE = keccak256("WITHDRAWER_ROLE");
+bytes32 constant DILUTER_ROLE = keccak256("DILUTER_ROLE");
 
 // safe operations
 uint8 constant CALL = 0;

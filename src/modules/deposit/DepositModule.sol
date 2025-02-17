@@ -126,7 +126,7 @@ contract DepositModule is
     function deposit(address asset, uint256 assetAmountIn, uint256 minSharesOut, address recipient)
         public
         whenNotPaused
-        onlyRole(CONTROLLER_ROLE)
+        onlyRole(DEPOSITOR_ROLE)
         nonReentrant
         rebalanceVault
         returns (uint256 sharesOut, uint256 liquidity)
@@ -179,7 +179,7 @@ contract DepositModule is
     function withdraw(address asset, uint256 sharesToBurn, uint256 minAmountOut, address recipient)
         public
         whenNotPaused
-        onlyRole(CONTROLLER_ROLE)
+        onlyRole(WITHDRAWER_ROLE)
         nonReentrant
         rebalanceVault
         returns (uint256 assetAmountOut, uint256 liquidity)
@@ -222,7 +222,7 @@ contract DepositModule is
         external
         whenNotPaused
         nonReentrant
-        onlyRole(CONTROLLER_ROLE)
+        onlyRole(DILUTER_ROLE)
     {
         internalVault.mintUnbacked(sharesToMint, recipient);
 
