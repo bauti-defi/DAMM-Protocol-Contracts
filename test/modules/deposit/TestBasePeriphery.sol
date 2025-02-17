@@ -54,6 +54,8 @@ abstract contract TestBasePeriphery is TestBaseDeposit, DeployPermit2 {
         ModuleProxyFactory factory = new ModuleProxyFactory();
         permit2 = address(deployPermit2());
 
+        vm.label(permit2, "Permit2");
+
         peripheryMastercopy = address(new Periphery(permit2, "1"));
 
         bytes memory initializer = abi.encodeWithSelector(
@@ -163,9 +165,10 @@ abstract contract TestBasePeriphery is TestBaseDeposit, DeployPermit2 {
 
     function _openAccount(address user_, uint256 ttl_, bool transferable_, bool isPublic)
         internal
+        returns (uint256 accountId)
     {
         vm.startPrank(address(fund));
-        periphery.openAccount(
+        accountId = periphery.openAccount(
             CreateAccountParams({
                 transferable: transferable_,
                 user: user_,
@@ -195,13 +198,26 @@ abstract contract TestBasePeriphery is TestBaseDeposit, DeployPermit2 {
     }
 
     modifier maxApproveAllPermit2(address user) {
+        _maxApproveAllPermit2(user);
+        _;
+    }
+
+    function _maxApproveAllPermit2(address user) internal {
         vm.startPrank(user);
         mockToken1.approve(permit2, type(uint256).max);
         mockToken2.approve(permit2, type(uint256).max);
         internalVault.approve(permit2, type(uint256).max);
-        vm.stopPrank();
 
-        _;
+        IPermit2(permit2).approve(
+            address(internalVault), address(periphery), type(uint160).max, type(uint48).max
+        );
+        IPermit2(permit2).approve(
+            address(mockToken1), address(periphery), type(uint160).max, type(uint48).max
+        );
+        IPermit2(permit2).approve(
+            address(mockToken2), address(periphery), type(uint160).max, type(uint48).max
+        );
+        vm.stopPrank();
     }
 
     function peripheryHashTypedDataV4(bytes32 structHash) internal view returns (bytes32) {
@@ -255,7 +271,7 @@ abstract contract TestBasePeriphery is TestBaseDeposit, DeployPermit2 {
         });
     }
 
-    function depositIntent(
+    function signedDepositIntent(
         uint256 accountId,
         address minter,
         uint256 minterPk,
@@ -352,7 +368,7 @@ abstract contract TestBasePeriphery is TestBaseDeposit, DeployPermit2 {
         return SignedWithdrawIntent({intent: intent, signature: abi.encodePacked(r, s, v)});
     }
 
-    function signdepositIntent(DepositIntent memory intent, uint256 userPK)
+    function sign_depositIntent(DepositIntent memory intent, uint256 userPK)
         internal
         view
         returns (SignedDepositIntent memory)
@@ -363,7 +379,7 @@ abstract contract TestBasePeriphery is TestBaseDeposit, DeployPermit2 {
         return SignedDepositIntent({intent: intent, signature: abi.encodePacked(r, s, v)});
     }
 
-    function signsignedWithdrawIntent(WithdrawIntent memory intent, uint256 userPK)
+    function sign_withdrawIntent(WithdrawIntent memory intent, uint256 userPK)
         internal
         view
         returns (SignedWithdrawIntent memory)

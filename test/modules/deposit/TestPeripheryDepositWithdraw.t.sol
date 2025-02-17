@@ -11,15 +11,6 @@ contract TestPeripheryDepositWithdraw is TestBasePeriphery {
 
         vm.prank(address(fund));
         balanceOfOracle.addBalanceToValuate(address(mockToken1), address(fund));
-
-        vm.startPrank(alice);
-        IPermit2(permit2).approve(
-            address(internalVault), address(periphery), type(uint160).max, type(uint48).max
-        );
-        IPermit2(permit2).approve(
-            address(mockToken1), address(periphery), type(uint160).max, type(uint48).max
-        );
-        vm.stopPrank();
     }
 
     function test_deposit(uint256 amount, bool all)
@@ -117,7 +108,7 @@ contract TestPeripheryDepositWithdraw is TestBasePeriphery {
         returns (TestDepositIntentFuzz memory)
     {
         vm.assume(
-            fuzz.amount > depositModule.getGlobalAssetPolicy(address(mockToken1)).minimumDeposit
+            fuzz.amount > depositModule.getGlobalAssetPolicy(address(mockToken1)).minimumDeposit + 1
         );
         vm.assume(fuzz.amount < type(uint144).max);
 
@@ -139,7 +130,7 @@ contract TestPeripheryDepositWithdraw is TestBasePeriphery {
 
         mockToken1.mint(alice, fuzz.amount + fuzz.bribe + fuzz.relayerTip);
 
-        SignedDepositIntent memory intent = depositIntent(
+        SignedDepositIntent memory intent = signedDepositIntent(
             accountId,
             alice,
             alicePK,

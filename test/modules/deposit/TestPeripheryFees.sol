@@ -26,15 +26,6 @@ contract TestPeripheryFees is TestBasePeriphery {
 
         vm.prank(address(fund));
         balanceOfOracle.addBalanceToValuate(address(mockToken1), address(fund));
-
-        vm.startPrank(alice);
-        IPermit2(permit2).approve(
-            address(internalVault), address(periphery), type(uint160).max, type(uint48).max
-        );
-        IPermit2(permit2).approve(
-            address(mockToken1), address(periphery), type(uint160).max, type(uint48).max
-        );
-        vm.stopPrank();
     }
 
     struct TestEntranceFeeParams {

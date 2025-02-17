@@ -24,18 +24,6 @@ contract TestPeripheryPermissions is TestBasePeriphery {
 
         vm.prank(address(fund));
         balanceOfOracle.addBalanceToValuate(address(mockToken1), address(fund));
-
-        vm.startPrank(alice);
-        IPermit2(permit2).approve(
-            address(depositModule.internalVault()),
-            address(periphery),
-            type(uint160).max,
-            type(uint48).max
-        );
-        IPermit2(permit2).approve(
-            address(mockToken1), address(periphery), type(uint160).max, type(uint48).max
-        );
-        vm.stopPrank();
     }
 
     function test_only_account_manager_can_enable_broker_asset_policy(address attacker)
@@ -82,7 +70,7 @@ contract TestPeripheryPermissions is TestBasePeriphery {
         openAccount(alice, 10000, false, false)
         maxApproveAllPermit2(alice)
     {
-        SignedDepositIntent memory dOrder = depositIntent(
+        SignedDepositIntent memory dOrder = signedDepositIntent(
             1,
             alice,
             alicePK,
@@ -161,7 +149,7 @@ contract TestPeripheryPermissions is TestBasePeriphery {
         enableBrokerAssetPolicy(address(fund), 1, address(mockToken1), true)
         enableBrokerAssetPolicy(address(fund), 1, address(mockToken1), false)
     {
-        SignedDepositIntent memory dOrder = signdepositIntent(
+        SignedDepositIntent memory dOrder = sign_depositIntent(
             unsignedDepositIntent(1, alice, alice, address(mockToken1), mock1Unit, 0, 0, 0),
             uint256(123)
         );
@@ -170,7 +158,7 @@ contract TestPeripheryPermissions is TestBasePeriphery {
         vm.expectRevert(Errors.Deposit_InvalidSignature.selector);
         periphery.intentDeposit(dOrder);
 
-        SignedWithdrawIntent memory wOrder = signsignedWithdrawIntent(
+        SignedWithdrawIntent memory wOrder = sign_withdrawIntent(
             unsignedWithdrawIntent(1, alice, alice, address(mockToken1), mock1Unit, 0, 0, 0),
             uint256(123)
         );
@@ -181,7 +169,7 @@ contract TestPeripheryPermissions is TestBasePeriphery {
     }
 
     function test_only_enabled_account_can_deposit_withdraw(uint256 accountId_) public {
-        SignedDepositIntent memory dOrder = depositIntent(
+        SignedDepositIntent memory dOrder = signedDepositIntent(
             accountId_, alice, alicePK, alice, address(mockToken1), mock1Unit, 0, 0, 0
         );
 
@@ -211,7 +199,7 @@ contract TestPeripheryPermissions is TestBasePeriphery {
         }
 
         SignedDepositIntent memory dOrder =
-            depositIntent(1, alice, alicePK, alice, address(mockToken1), mock1Unit, 0, 0, 0);
+            signedDepositIntent(1, alice, alicePK, alice, address(mockToken1), mock1Unit, 0, 0, 0);
 
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_AccountNotActive.selector);
@@ -234,8 +222,9 @@ contract TestPeripheryPermissions is TestBasePeriphery {
         _enableBrokerAssetPolicy(address(fund), 1, address(mockToken1), true);
         _enableBrokerAssetPolicy(address(fund), 1, address(mockToken1), false);
 
-        SignedDepositIntent memory dOrder =
-            depositIntent(1, alice, alicePK, alice, address(mockToken1), mock1Unit, 0, 0, nonce_);
+        SignedDepositIntent memory dOrder = signedDepositIntent(
+            1, alice, alicePK, alice, address(mockToken1), mock1Unit, 0, 0, nonce_
+        );
 
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_InvalidNonce.selector);
@@ -258,7 +247,7 @@ contract TestPeripheryPermissions is TestBasePeriphery {
         vm.assume(timestamp_ < 100000000 * 2);
 
         SignedDepositIntent memory dOrder =
-            depositIntent(1, alice, alicePK, alice, address(mockToken1), mock1Unit, 0, 0, 0);
+            signedDepositIntent(1, alice, alicePK, alice, address(mockToken1), mock1Unit, 0, 0, 0);
 
         // increase timestamp
         vm.warp(timestamp_);
@@ -294,7 +283,7 @@ contract TestPeripheryPermissions is TestBasePeriphery {
 
         dIntent.chainId = chainId_;
 
-        SignedDepositIntent memory dOrder = signdepositIntent(dIntent, alicePK);
+        SignedDepositIntent memory dOrder = sign_depositIntent(dIntent, alicePK);
 
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_InvalidChain.selector);
@@ -305,7 +294,7 @@ contract TestPeripheryPermissions is TestBasePeriphery {
 
         wIntent.chainId = chainId_;
 
-        SignedWithdrawIntent memory wOrder = signsignedWithdrawIntent(wIntent, alicePK);
+        SignedWithdrawIntent memory wOrder = sign_withdrawIntent(wIntent, alicePK);
 
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_InvalidChain.selector);
@@ -327,7 +316,7 @@ contract TestPeripheryPermissions is TestBasePeriphery {
         vm.warp(timestamp);
 
         SignedDepositIntent memory dOrder =
-            depositIntent(1, alice, alicePK, alice, address(mockToken1), mock1Unit, 0, 0, 0);
+            signedDepositIntent(1, alice, alicePK, alice, address(mockToken1), mock1Unit, 0, 0, 0);
 
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_AccountExpired.selector);
@@ -341,8 +330,9 @@ contract TestPeripheryPermissions is TestBasePeriphery {
         enableBrokerAssetPolicy(address(fund), 1, address(mockToken1), false)
         maxApproveAllPermit2(alice)
     {
-        SignedDepositIntent memory dOrder =
-            depositIntent(1, alice, alicePK, alice, address(mockToken1), type(uint256).max, 0, 0, 0);
+        SignedDepositIntent memory dOrder = signedDepositIntent(
+            1, alice, alicePK, alice, address(mockToken1), type(uint256).max, 0, 0, 0
+        );
 
         vm.prank(relayer);
         periphery.intentDeposit(dOrder);
@@ -372,7 +362,7 @@ contract TestPeripheryPermissions is TestBasePeriphery {
         vm.assume(asset != address(mockToken2));
 
         SignedDepositIntent memory dOrder =
-            depositIntent(1, alice, alicePK, alice, asset, mock2Unit, 0, 0, 0);
+            signedDepositIntent(1, alice, alicePK, alice, asset, mock2Unit, 0, 0, 0);
 
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_AssetUnavailable.selector);
