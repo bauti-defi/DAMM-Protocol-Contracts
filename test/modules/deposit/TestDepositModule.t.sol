@@ -33,12 +33,12 @@ contract TestDepositModule is TestBaseDeposit {
         (uint256 sharesOut, uint256 liquidity) =
             depositModule.deposit(address(mockToken1), amount, 0, alice);
 
-        assertEq(mockToken1.balanceOf(address(fund)), amount);
-        assertEq(mockToken1.balanceOf(address(alice)), 0);
-        assertEq(internalVault.totalAssets(), amount);
-        assertEq(internalVault.totalSupply(), internalVault.balanceOf(alice));
-        assertEq(sharesOut, internalVault.balanceOf(alice));
-        assertEq(internalVault.totalAssets(), liquidity);
+        assertEq(mockToken1.balanceOf(address(fund)), amount, "fund balance wrong");
+        assertEq(mockToken1.balanceOf(address(alice)), 0, "alice balance wrong");
+        assertEq(internalVault.totalAssets(), amount, "total assets wrong");
+        assertEq(internalVault.totalSupply(), internalVault.balanceOf(alice), "total supply wrong");
+        assertEq(sharesOut, internalVault.balanceOf(alice), "shares out wrong");
+        assertEq(internalVault.totalAssets(), liquidity, "liquidity wrong");
     }
 
     function test_cannot_deposit_amount_that_is_below_minimum_deposit(uint256 amount)
@@ -88,11 +88,13 @@ contract TestDepositModule is TestBaseDeposit {
         maxApproveDepositModule(alice, address(mockToken1))
         maxApproveDepositModule(alice, address(internalVault))
     {
-        amount = bound(
-            amount,
-            depositModule.getGlobalAssetPolicy(address(mockToken1)).minimumWithdrawal + 1,
-            type(uint192).max
+        vm.assume(
+            amount > depositModule.getGlobalAssetPolicy(address(mockToken1)).minimumDeposit + 1
         );
+        vm.assume(
+            amount > depositModule.getGlobalAssetPolicy(address(mockToken1)).minimumWithdrawal + 1
+        );
+        vm.assume(amount < type(uint192).max);
         mockToken1.mint(alice, amount);
 
         vm.prank(alice);
@@ -105,15 +107,17 @@ contract TestDepositModule is TestBaseDeposit {
             depositModule.withdraw(address(mockToken1), internalVault.balanceOf(alice), 0, alice);
         vm.stopPrank();
 
-        assertEq(mockToken1.balanceOf(alice), amount);
-        assertEq(assetAmountOut, amount);
-        assertEq(mockToken1.balanceOf(address(fund)), 0);
-        assertEq(internalVault.totalAssets(), 0);
-        assertEq(internalVault.totalSupply(), 0);
-        assertEq(liquidity, currentLiquidity);
+        assertApproxEqAbs(mockToken1.balanceOf(alice), amount, precisionLoss, "alice balance wrong");
+        assertApproxEqAbs(assetAmountOut, amount, precisionLoss, "asset amount out wrong");
+        assertApproxEqAbs(
+            mockToken1.balanceOf(address(fund)), 0, precisionLoss, "fund balance wrong"
+        );
+        assertEq(internalVault.totalAssets(), 0, "total assets wrong");
+        assertEq(internalVault.totalSupply(), 0, "total supply wrong");
+        assertEq(liquidity, currentLiquidity, "liquidity wrong");
     }
 
-    function test_cannot_withdraw_amount_that_is_below_minimum_withdrawal(uint256 amount)
+    function test_cannot_withdraw_amount_that_is_below_minimum_withdrawal()
         public
         withRole(alice, CONTROLLER_ROLE)
         maxApproveDepositModule(alice, address(mockToken1))
@@ -124,13 +128,9 @@ contract TestDepositModule is TestBaseDeposit {
         vm.prank(alice);
         depositModule.deposit(address(mockToken1), type(uint160).max, 0, alice);
 
-        amount = bound(
-            amount, 1, depositModule.getGlobalAssetPolicy(address(mockToken1)).minimumWithdrawal - 1
-        );
-
         vm.startPrank(alice);
         vm.expectRevert(Errors.Deposit_InsufficientWithdrawal.selector);
-        depositModule.withdraw(address(mockToken1), amount, 0, alice);
+        depositModule.withdraw(address(mockToken1), 1, 0, alice);
         vm.stopPrank();
     }
 
@@ -147,11 +147,10 @@ contract TestDepositModule is TestBaseDeposit {
         maxApproveDepositModule(alice, address(mockToken1))
         maxApproveDepositModule(alice, address(internalVault))
     {
-        amount = bound(
-            amount,
-            depositModule.getGlobalAssetPolicy(address(mockToken1)).minimumWithdrawal + 1,
-            type(uint192).max
+        vm.assume(
+            amount > depositModule.getGlobalAssetPolicy(address(mockToken1)).minimumDeposit + 1
         );
+        vm.assume(amount < type(uint192).max);
 
         mockToken1.mint(alice, amount);
 
@@ -277,7 +276,7 @@ contract TestDepositModule is TestBaseDeposit {
         assertFalse(depositModule.hasRole(PAUSER_ROLE, alice));
     }
 
-    function test_supports_interface() public {
+    function test_supports_interface() public view {
         assertTrue(depositModule.supportsInterface(type(IDepositModule).interfaceId));
     }
 }

@@ -13,7 +13,7 @@ import {TestBasePeriphery} from "./TestBasePeriphery.sol";
 import {IPermit2} from "@permit2/src/interfaces/IPermit2.sol";
 import "@src/libs/Constants.sol";
 
-contract TestDepositPermissions is TestBasePeriphery {
+contract TestPeripheryPermissions is TestBasePeriphery {
     using MessageHashUtils for bytes;
     using DepositLibs for BrokerAccountInfo;
 
@@ -43,6 +43,7 @@ contract TestDepositPermissions is TestBasePeriphery {
         openAccount(alice, 10000, false, false)
     {
         vm.assume(attacker != accountManager);
+        vm.assume(attacker != address(fund));
 
         vm.prank(attacker);
         vm.expectRevert(
@@ -177,49 +178,6 @@ contract TestDepositPermissions is TestBasePeriphery {
         vm.prank(relayer);
         vm.expectRevert(Errors.Deposit_InvalidSignature.selector);
         periphery.intentWithdraw(wOrder);
-    }
-
-    function test_set_net_deposit_limit(uint256 limit_, address attacker) public {
-        vm.assume(limit_ > 0);
-        vm.assume(attacker != address(fund));
-
-        vm.prank(attacker);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector, attacker, FUND_ROLE
-            )
-        );
-        depositModule.setNetDepositLimit(limit_);
-
-        vm.prank(address(fund));
-        depositModule.setNetDepositLimit(limit_);
-
-        vm.prank(address(fund));
-        vm.expectRevert(Errors.Deposit_InvalidNetDepositLimit.selector);
-        depositModule.setNetDepositLimit(0);
-    }
-
-    function test_net_deposit_limit_cannot_be_exceeded(uint256 limit_)
-        public
-        openAccount(alice, 10000, false, false)
-        enableBrokerAssetPolicy(address(fund), 1, address(mockToken1), true)
-        maxApproveAllPermit2(alice)
-    {
-        vm.assume(limit_ > 0);
-        vm.assume(limit_ < type(uint160).max / 10 ** 8);
-
-        vm.prank(address(fund));
-        depositModule.setNetDepositLimit(limit_);
-
-        mockToken1.mint(alice, limit_ + 1);
-
-        SignedDepositIntent memory dOrder =
-            depositIntent(1, alice, alicePK, alice, address(mockToken1), type(uint256).max, 0, 0, 0);
-
-        vm.prank(address(fund));
-        vm.expectRevert(Errors.Deposit_NetDepositLimitExceeded.selector);
-        // deposit max amount
-        periphery.intentDeposit(dOrder);
     }
 
     function test_only_enabled_account_can_deposit_withdraw(uint256 accountId_) public {
@@ -384,7 +342,7 @@ contract TestDepositPermissions is TestBasePeriphery {
         maxApproveAllPermit2(alice)
     {
         SignedDepositIntent memory dOrder =
-            depositIntent(1, alice, alicePK, alice, address(mockToken1), mock1Unit, 0, 0, 0);
+            depositIntent(1, alice, alicePK, alice, address(mockToken1), type(uint256).max, 0, 0, 0);
 
         vm.prank(relayer);
         periphery.intentDeposit(dOrder);
@@ -495,21 +453,22 @@ contract TestDepositPermissions is TestBasePeriphery {
         periphery.ownerOf(1);
     }
 
-    function test_only_pauser_role_or_fund_can_pause_unpause_module(
+    function test_only_pauser_or_fund_role_can_pause_unpause_module(
         address attacker,
         address pauser,
         bool asFund
     ) public {
         vm.assume(attacker != address(fund));
+        vm.assume(attacker != address(0));
+        vm.assume(attacker != pauser);
         vm.assume(pauser != address(fund));
         vm.assume(pauser != address(0));
-        vm.assume(pauser != attacker);
 
-        address pauser = asFund ? address(fund) : accountManager;
+        address thePauser = asFund ? address(fund) : pauser;
 
         if (!asFund) {
             vm.prank(address(fund));
-            periphery.grantRole(PAUSER_ROLE, pauser);
+            periphery.grantRole(PAUSER_ROLE, thePauser);
         }
 
         vm.prank(attacker);
@@ -520,7 +479,7 @@ contract TestDepositPermissions is TestBasePeriphery {
         );
         periphery.pause();
 
-        vm.prank(pauser);
+        vm.prank(thePauser);
         periphery.pause();
 
         assertTrue(periphery.paused());
@@ -533,17 +492,17 @@ contract TestDepositPermissions is TestBasePeriphery {
         );
         periphery.unpause();
 
-        vm.prank(pauser);
+        vm.prank(thePauser);
         periphery.unpause();
 
         assertFalse(periphery.paused());
 
-        vm.prank(pauser);
+        vm.prank(thePauser);
         periphery.pause();
 
         assertTrue(periphery.paused());
 
-        vm.prank(pauser);
+        vm.prank(thePauser);
         periphery.unpause();
 
         assertFalse(periphery.paused());

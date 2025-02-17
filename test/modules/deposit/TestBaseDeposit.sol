@@ -49,6 +49,8 @@ abstract contract TestBaseDeposit is TestBaseGnosis {
     uint256 mock2Unit;
     uint256 oneUnitOfAccount;
 
+    uint256 internal precisionLoss;
+
     function setUp() public virtual override(TestBaseGnosis) {
         TestBaseGnosis.setUp();
 
@@ -74,10 +76,10 @@ abstract contract TestBaseDeposit is TestBaseGnosis {
         oracleRouter = new EulerRouter(address(1), address(fund));
         vm.label(address(oracleRouter), "OracleRouter");
 
-        mockToken1 = new MockERC20(18);
+        mockToken1 = new MockERC20(VALUATION_DECIMALS);
         vm.label(address(mockToken1), "MockToken1");
 
-        mockToken2 = new MockERC20(6);
+        mockToken2 = new MockERC20(VALUATION_DECIMALS);
         vm.label(address(mockToken2), "MockToken2");
 
         mock1Unit = 1 * 10 ** mockToken1.decimals();
@@ -89,7 +91,9 @@ abstract contract TestBaseDeposit is TestBaseGnosis {
 
         bytes memory depositModuleInitializer = abi.encodeWithSelector(
             DepositModule.setUp.selector,
-            abi.encode("DepositModule", "DM", 18, 0, address(fund), address(oracleRouter))
+            abi.encode(
+                "DepositModule", "DM", VALUATION_DECIMALS, 0, address(fund), address(oracleRouter)
+            )
         );
 
         depositModule = DepositModule(
@@ -112,6 +116,8 @@ abstract contract TestBaseDeposit is TestBaseGnosis {
 
         uint8 unitOfAccountDecimals = depositModule.unitOfAccount().decimals();
 
+        precisionLoss = 10 ** (VALUATION_DECIMALS - unitOfAccountDecimals);
+
         /// @notice this much match the vault implementation
         oneUnitOfAccount = 1 * 10 ** unitOfAccountDecimals;
 
@@ -120,8 +126,8 @@ abstract contract TestBaseDeposit is TestBaseGnosis {
         depositModule.enableGlobalAssetPolicy(
             address(mockToken1),
             AssetPolicy({
-                minimumDeposit: 10 ** (mockToken1.decimals() / 3),
-                minimumWithdrawal: 10 ** (mockToken1.decimals() / 3),
+                minimumDeposit: 50 * mock1Unit,
+                minimumWithdrawal: 1 * mock1Unit,
                 canDeposit: true,
                 canWithdraw: true,
                 enabled: true
@@ -131,8 +137,8 @@ abstract contract TestBaseDeposit is TestBaseGnosis {
         depositModule.enableGlobalAssetPolicy(
             address(mockToken2),
             AssetPolicy({
-                minimumDeposit: 10 ** (mockToken2.decimals() / 3),
-                minimumWithdrawal: 10 ** (mockToken2.decimals() / 3),
+                minimumDeposit: 50 * mock2Unit,
+                minimumWithdrawal: 1 * mock2Unit,
                 canDeposit: true,
                 canWithdraw: true,
                 enabled: true

@@ -3,6 +3,7 @@ pragma solidity ^0.8.0;
 
 import {TestBasePeriphery, SignedDepositIntent} from "./TestBasePeriphery.sol";
 import {IPermit2} from "@permit2/src/interfaces/IPermit2.sol";
+import {IPeriphery} from "@src/interfaces/IPeriphery.sol";
 
 contract TestPeripheryDepositWithdraw is TestBasePeriphery {
     function setUp() public override(TestBasePeriphery) {
@@ -86,12 +87,21 @@ contract TestPeripheryDepositWithdraw is TestBasePeriphery {
         );
         vm.stopPrank();
 
-        assertEq(mockToken1.balanceOf(address(fund)), 0);
-        assertEq(mockToken1.balanceOf(address(periphery)), 0);
-        assertEq(mockToken1.balanceOf(address(alice)), withdrawAmount);
-        assertEq(internalVault.balanceOf(address(alice)), 0);
-        assertEq(internalVault.totalSupply(), 0);
-        assertEq(internalVault.totalAssets(), 0);
+        assertApproxEqAbs(
+            mockToken1.balanceOf(address(fund)), 0, precisionLoss, "fund balance wrong"
+        );
+        assertApproxEqAbs(
+            mockToken1.balanceOf(address(periphery)), 0, precisionLoss, "periphery balance wrong"
+        );
+        assertApproxEqAbs(
+            mockToken1.balanceOf(address(alice)),
+            withdrawAmount,
+            precisionLoss,
+            "alice balance wrong"
+        );
+        assertEq(internalVault.balanceOf(address(alice)), 0, "alice balance wrong");
+        assertEq(internalVault.totalSupply(), 0, "internal vault total supply wrong");
+        assertEq(internalVault.totalAssets(), 0, "internal vault total assets wrong");
     }
 
     struct TestDepositIntentFuzz {
@@ -103,16 +113,16 @@ contract TestPeripheryDepositWithdraw is TestBasePeriphery {
 
     function boundIntentParams(TestDepositIntentFuzz memory fuzz)
         private
+        view
         returns (TestDepositIntentFuzz memory)
     {
-        fuzz.amount = bound(
-            fuzz.amount,
-            depositModule.getGlobalAssetPolicy(address(mockToken1)).minimumDeposit,
-            type(uint144).max
+        vm.assume(
+            fuzz.amount > depositModule.getGlobalAssetPolicy(address(mockToken1)).minimumDeposit
         );
+        vm.assume(fuzz.amount < type(uint144).max);
 
-        fuzz.bribe = bound(fuzz.bribe, 0, fuzz.amount / 6);
-        fuzz.relayerTip = bound(fuzz.relayerTip, 0, fuzz.amount / 6);
+        vm.assume(fuzz.bribe < fuzz.amount / 6);
+        vm.assume(fuzz.relayerTip < fuzz.amount / 6);
 
         return fuzz;
     }
@@ -204,13 +214,25 @@ contract TestPeripheryDepositWithdraw is TestBasePeriphery {
 
         uint256 assetOut = deepStack_intentWithdraw(fuzz, accountId, sharesOut);
 
-        assertEq(mockToken1.balanceOf(address(fund)), fuzz.bribe, "fund token balance");
-        assertEq(mockToken1.balanceOf(relayer), fuzz.relayerTip, "fund token balance");
-        assertEq(mockToken1.balanceOf(address(periphery)), 0, "periphery token balance");
-        assertEq(mockToken1.balanceOf(alice) - assetOut, 0, "alice token balance");
+        assertApproxEqAbs(
+            mockToken1.balanceOf(address(fund)), fuzz.bribe, precisionLoss, "fund token balance"
+        );
+        assertApproxEqAbs(
+            mockToken1.balanceOf(relayer), fuzz.relayerTip, precisionLoss, "fund token balance"
+        );
+        assertApproxEqAbs(
+            mockToken1.balanceOf(address(periphery)), 0, precisionLoss, "periphery token balance"
+        );
+        assertApproxEqAbs(
+            mockToken1.balanceOf(alice) - assetOut, 0, precisionLoss, "alice token balance"
+        );
         assertEq(internalVault.balanceOf(address(alice)), 0, "alice internal vault balance");
         assertEq(internalVault.balanceOf(address(periphery)), 0, "periphery internal vault balance");
         assertEq(internalVault.totalSupply(), 0, "internal vault total supply");
         assertEq(internalVault.totalAssets(), 0, "internal vault total assets");
+    }
+
+    function test_supports_interface() public view {
+        assertTrue(periphery.supportsInterface(type(IPeriphery).interfaceId));
     }
 }

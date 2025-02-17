@@ -16,6 +16,7 @@ contract MockPriceOracle is BaseAdapter {
     /// @notice The price of the base asset in the quote asset.
     uint256 public price;
 
+    /// @param _decimals The decimals of the feed, already incorporated into the price.
     constructor(address _base, address _quote, uint256 _price, uint8 _decimals) {
         base = _base;
         quote = _quote;

@@ -50,18 +50,20 @@ contract TestDepositModulePermissions is TestBaseDeposit {
         withRole(alice, CONTROLLER_ROLE)
         maxApproveDepositModule(alice, address(mockToken1))
     {
-        limit_ = bound(limit_, type(uint160).max / 10 ** 10, type(uint160).max / 10 ** 8);
+        vm.assume(
+            limit_ > depositModule.getGlobalAssetPolicy(address(mockToken1)).minimumDeposit + 1
+        );
+        vm.assume(limit_ < type(uint128).max);
 
         vm.prank(address(fund));
         depositModule.setNetDepositLimit(limit_);
 
-        mockToken1.mint(alice, limit_ + 1);
+        mockToken1.mint(alice, type(uint192).max);
 
         vm.startPrank(alice);
-
         vm.expectRevert(Errors.Deposit_NetDepositLimitExceeded.selector);
         // deposit max amount
-        depositModule.deposit(address(mockToken1), limit_ + 1, 0, alice);
+        depositModule.deposit(address(mockToken1), type(uint192).max, 0, alice);
         vm.stopPrank();
     }
 

@@ -20,12 +20,12 @@ contract FundShareVault is ERC4626, ERC20Permit, Ownable {
     /// @param _unitOfAccount The underlying unit of account token
     /// @param _name The name of the vault shares token
     /// @param _symbol The symbol of the vault shares token
-    /// @param _decimalsOffset The decimal offset to mitigate share inflation attacks
+    /// @param __decimalsOffset The decimal offset to mitigate share inflation attacks
     constructor(
         address _unitOfAccount,
         string memory _name,
         string memory _symbol,
-        uint8 _decimalsOffset
+        uint8 __decimalsOffset
     )
         ERC4626(IERC20(_unitOfAccount))
         ERC20(_name, _symbol)
@@ -33,7 +33,7 @@ contract FundShareVault is ERC4626, ERC20Permit, Ownable {
         Ownable(msg.sender)
     {
         controller = msg.sender;
-        decimalsOffset = _decimalsOffset;
+        decimalsOffset = __decimalsOffset;
     }
 
     /// @notice Deposits assets into the vault
